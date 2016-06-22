@@ -1,0 +1,57 @@
+{{ $cfg := .cfg }}
+
+pid-file=/run/nghttpx.pid
+
+accesslog-file=/var/log/nghttpx/access.log
+daemon=yes
+
+include=/etc/nghttpx/nghttpx-backend.conf
+
+frontend=*,80;no-tls
+
+# API endpoints
+frontend=127.0.0.1,3001;api;no-tls
+
+{{ if .server.SSL }}
+frontend=*,443
+
+{{ $defaultCred := .server.DefaultTLSCred }}
+# checksum is required to detect changes in the generated configuration and force a reload
+# checksum: {{ $defaultCred.Checksum }}
+private-key-file={{ $defaultCred.Key }}
+certificate-file={{ $defaultCred.Cert }}
+
+{{ range $cred := .server.SubTLSCred }}
+# checksum: {{ $cred.Checksum }}
+subcert={{ $cred.Key }}:{{ $cred.Cert }}
+{{ end }}
+
+{{ else }}
+# just listen 443 to gain port 443, so that we can always bind that address.
+frontend=*,443;no-tls
+{{ end }}
+
+# for health check
+frontend=127.0.0.1,8080;healthmon;no-tls
+
+# from ConfigMap
+
+log-level={{ $cfg.LogLevel }}
+backend-read-timeout={{ $cfg.BackendReadTimeout }}
+backend-write-timeout={{ $cfg.BackendWriteTimeout }}
+ciphers={{ $cfg.Ciphers }}
+tls-proto-list={{ $cfg.TLSProtoList }}
+
+{{ if $cfg.NoOCSP }}
+no-ocsp=yes
+{{ end }}
+
+{{ if $cfg.AcceptProxyProtocol }}
+accept-proxy-protocol=yes
+{{ end }}
+
+workers={{ $cfg.Workers }}
+frontend-http2-window-bits={{ $cfg.FrontendHTTP2WindowBits }}
+frontend-http2-connection-window-bits={{ $cfg.FrontendHTTP2ConnectionWindowBits }}
+backend-http2-window-bits={{ $cfg.BackendHTTP2WindowBits }}
+backend-http2-connection-window-bits={{ $cfg.BackendHTTP2ConnectionWindowBits }}
