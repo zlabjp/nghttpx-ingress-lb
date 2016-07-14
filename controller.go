@@ -253,7 +253,6 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 
 func (lbc *loadBalancerController) addIngressNotification(obj interface{}) {
 	ing := obj.(*extensions.Ingress)
-	lbc.recorder.Eventf(ing, api.EventTypeNormal, "CREATE", fmt.Sprintf("%s/%s", ing.Namespace, ing.Name))
 	lbc.enqueueIngress(ing)
 	lbc.enqueue(ing)
 }
@@ -264,14 +263,12 @@ func (lbc *loadBalancerController) updateIngressNotification(old interface{}, cu
 	}
 
 	curIng := cur.(*extensions.Ingress)
-	lbc.recorder.Eventf(curIng, api.EventTypeNormal, "UPDATE", fmt.Sprintf("%s/%s", curIng.Namespace, curIng.Name))
 	lbc.enqueueIngress(curIng)
 	lbc.enqueue(curIng)
 }
 
 func (lbc *loadBalancerController) deleteIngressNotification(obj interface{}) {
 	ing := obj.(*extensions.Ingress)
-	lbc.recorder.Eventf(ing, api.EventTypeNormal, "DELETE", fmt.Sprintf("%s/%s", ing.Namespace, ing.Name))
 	lbc.enqueueIngress(ing)
 	lbc.enqueue(ing)
 }
@@ -298,8 +295,6 @@ func (lbc *loadBalancerController) addSecretNotification(obj interface{}) {
 		return
 	}
 
-	sKey := fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	lbc.recorder.Eventf(s, api.EventTypeNormal, "CREATE", sKey)
 	lbc.enqueue(s)
 }
 
@@ -313,8 +308,6 @@ func (lbc *loadBalancerController) updateSecretNotification(old, cur interface{}
 		return
 	}
 
-	sKey := fmt.Sprintf("%s/%s", curS.Namespace, curS.Name)
-	lbc.recorder.Eventf(curS, api.EventTypeNormal, "UPDATE", sKey)
 	lbc.enqueue(curS)
 }
 
@@ -324,15 +317,11 @@ func (lbc *loadBalancerController) deleteSecretNotification(obj interface{}) {
 		return
 	}
 
-	sKey := fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	lbc.recorder.Eventf(s, api.EventTypeNormal, "DELETE", sKey)
 	lbc.enqueue(s)
 }
 
 func (lbc *loadBalancerController) addConfigMapNotification(obj interface{}) {
 	c := obj.(*api.ConfigMap)
-	cKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
-	lbc.recorder.Eventf(c, api.EventTypeNormal, "CREATE", cKey)
 	lbc.enqueue(c)
 }
 
@@ -348,14 +337,11 @@ func (lbc *loadBalancerController) updateConfigMapNotification(old, cur interfac
 		return
 	}
 
-	lbc.recorder.Eventf(curC, api.EventTypeNormal, "UPDATE", cKey)
 	lbc.enqueue(curC)
 }
 
 func (lbc *loadBalancerController) deleteConfigMapNotification(obj interface{}) {
 	c := obj.(*api.ConfigMap)
-	cKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
-	lbc.recorder.Eventf(c, api.EventTypeNormal, "DELETE", cKey)
 	lbc.enqueue(c)
 }
 
@@ -571,8 +557,6 @@ func (lbc *loadBalancerController) updateIngressStatus(key string) {
 			retry = true
 			return
 		}
-
-		lbc.recorder.Eventf(currIng, api.EventTypeNormal, "CREATE", "ip: %v", lbc.podInfo.NodeIP)
 	}
 }
 
@@ -940,11 +924,9 @@ func (lbc *loadBalancerController) removeFromIngress(ings []interface{}) {
 			}
 
 			if _, err := ingClient.UpdateStatus(currIng); err != nil {
-				lbc.recorder.Eventf(currIng, api.EventTypeWarning, "UPDATE", "error: %v", err)
+				glog.Errorf("Couldn't update Ingress %+v: %v", currIng, err)
 				continue
 			}
-
-			lbc.recorder.Eventf(currIng, api.EventTypeNormal, "DELETE", "ip: %v", lbc.podInfo.NodeIP)
 		}
 	}
 }
