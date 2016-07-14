@@ -167,110 +167,41 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 	lbc.syncQueue = NewTaskQueue(lbc.sync)
 	lbc.ingQueue = NewTaskQueue(lbc.updateIngressStatus)
 
-	ingEventHandler := framework.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			addIng := obj.(*extensions.Ingress)
-			lbc.recorder.Eventf(addIng, api.EventTypeNormal, "CREATE", fmt.Sprintf("%s/%s", addIng.Namespace, addIng.Name))
-			lbc.ingQueue.enqueue(obj)
-			lbc.syncQueue.enqueue(obj)
-		},
-		DeleteFunc: func(obj interface{}) {
-			upIng := obj.(*extensions.Ingress)
-			lbc.recorder.Eventf(upIng, api.EventTypeNormal, "DELETE", fmt.Sprintf("%s/%s", upIng.Namespace, upIng.Name))
-			lbc.syncQueue.enqueue(obj)
-		},
-		UpdateFunc: func(old, cur interface{}) {
-			if !reflect.DeepEqual(old, cur) {
-				upIng := cur.(*extensions.Ingress)
-				lbc.recorder.Eventf(upIng, api.EventTypeNormal, "UPDATE", fmt.Sprintf("%s/%s", upIng.Namespace, upIng.Name))
-				lbc.ingQueue.enqueue(cur)
-				lbc.syncQueue.enqueue(cur)
-			}
-		},
-	}
-
-	secrEventHandler := framework.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			addSecr := obj.(*api.Secret)
-			if lbc.secrReferenced(addSecr.Namespace, addSecr.Name) {
-				secrKey := fmt.Sprintf("%s/%s", addSecr.Namespace, addSecr.Name)
-				lbc.recorder.Eventf(addSecr, api.EventTypeNormal, "CREATE", secrKey)
-				lbc.syncQueue.enqueue(obj)
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			delSecr := obj.(*api.Secret)
-			if lbc.secrReferenced(delSecr.Namespace, delSecr.Name) {
-				secrKey := fmt.Sprintf("%s/%s", delSecr.Namespace, delSecr.Name)
-				lbc.recorder.Eventf(delSecr, api.EventTypeNormal, "DELETE", secrKey)
-				lbc.syncQueue.enqueue(obj)
-			}
-		},
-		UpdateFunc: func(old, cur interface{}) {
-			if !reflect.DeepEqual(old, cur) {
-				upSecr := cur.(*api.Secret)
-				if lbc.secrReferenced(upSecr.Namespace, upSecr.Name) {
-					secrKey := fmt.Sprintf("%s/%s", upSecr.Namespace, upSecr.Name)
-					lbc.recorder.Eventf(upSecr, api.EventTypeNormal, "UPDATE", secrKey)
-					lbc.syncQueue.enqueue(cur)
-				}
-			}
-		},
-	}
-
-	eventHandler := framework.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			lbc.syncQueue.enqueue(obj)
-		},
-		DeleteFunc: func(obj interface{}) {
-			lbc.syncQueue.enqueue(obj)
-		},
-		UpdateFunc: func(old, cur interface{}) {
-			if !reflect.DeepEqual(old, cur) {
-				lbc.syncQueue.enqueue(cur)
-			}
-		},
-	}
-
-	mapEventHandler := framework.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			addCmap := obj.(*api.ConfigMap)
-			mapKey := fmt.Sprintf("%s/%s", addCmap.Namespace, addCmap.Name)
-			lbc.recorder.Eventf(addCmap, api.EventTypeNormal, "CREATE", mapKey)
-			lbc.syncQueue.enqueue(obj)
-		},
-		DeleteFunc: func(obj interface{}) {
-			upCmap := obj.(*api.ConfigMap)
-			mapKey := fmt.Sprintf("%s/%s", upCmap.Namespace, upCmap.Name)
-			lbc.recorder.Eventf(upCmap, api.EventTypeNormal, "DELETE", mapKey)
-			lbc.syncQueue.enqueue(obj)
-		},
-		UpdateFunc: func(old, cur interface{}) {
-			if !reflect.DeepEqual(old, cur) {
-				upCmap := cur.(*api.ConfigMap)
-				mapKey := fmt.Sprintf("%s/%s", upCmap.Namespace, upCmap.Name)
-				// updates to configuration configmaps can trigger an update
-				if mapKey == lbc.ngxConfigMap {
-					lbc.recorder.Eventf(upCmap, api.EventTypeNormal, "UPDATE", mapKey)
-					lbc.syncQueue.enqueue(cur)
-				}
-			}
-		},
-	}
-
 	lbc.ingLister.Store, lbc.ingController = framework.NewInformer(
 		&cache.ListWatch{
-			ListFunc:  ingressListFunc(lbc.client, namespace),
-			WatchFunc: ingressWatchFunc(lbc.client, namespace),
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return lbc.client.Extensions().Ingress(namespace).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return lbc.client.Extensions().Ingress(namespace).Watch(options)
+			},
 		},
-		&extensions.Ingress{}, resyncPeriod, ingEventHandler)
+		&extensions.Ingress{},
+		resyncPeriod,
+		framework.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addIngressNotification,
+			UpdateFunc: lbc.updateIngressNotification,
+			DeleteFunc: lbc.deleteIngressNotification,
+		},
+	)
 
 	lbc.endpLister.Store, lbc.endpController = framework.NewInformer(
 		&cache.ListWatch{
-			ListFunc:  endpointsListFunc(lbc.client, namespace),
-			WatchFunc: endpointsWatchFunc(lbc.client, namespace),
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return lbc.client.Endpoints(namespace).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return lbc.client.Endpoints(namespace).Watch(options)
+			},
 		},
-		&api.Endpoints{}, resyncPeriod, eventHandler)
+		&api.Endpoints{},
+		resyncPeriod,
+		framework.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addEndpointNotification,
+			UpdateFunc: lbc.updateEndpointNotification,
+			DeleteFunc: lbc.deleteEndpointNotification,
+		},
+	)
 
 	lbc.svcLister.Store, lbc.svcController = framework.NewInformer(
 		&cache.ListWatch{
@@ -281,31 +212,65 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 
 	lbc.secrLister.Store, lbc.secrController = framework.NewInformer(
 		&cache.ListWatch{
-			ListFunc:  secretsListFunc(lbc.client, namespace),
-			WatchFunc: secretsWatchFunc(lbc.client, namespace),
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return lbc.client.Secrets(namespace).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return lbc.client.Secrets(namespace).Watch(options)
+			},
 		},
-		&api.Secret{}, resyncPeriod, secrEventHandler)
+		&api.Secret{},
+		resyncPeriod,
+		framework.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addSecretNotification,
+			UpdateFunc: lbc.updateSecretNotification,
+			DeleteFunc: lbc.deleteSecretNotification,
+		},
+	)
 
 	lbc.mapLister.Store, lbc.mapController = framework.NewInformer(
 		&cache.ListWatch{
-			ListFunc:  mapListFunc(lbc.client, namespace),
-			WatchFunc: mapWatchFunc(lbc.client, namespace),
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return lbc.client.ConfigMaps(namespace).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return lbc.client.ConfigMaps(namespace).Watch(options)
+			},
 		},
-		&api.ConfigMap{}, resyncPeriod, mapEventHandler)
+		&api.ConfigMap{},
+		resyncPeriod,
+		framework.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addConfigMapNotification,
+			UpdateFunc: lbc.updateConfigMapNotification,
+			DeleteFunc: lbc.deleteConfigMapNotification,
+		},
+	)
 
 	return &lbc, nil
 }
 
-func ingressListFunc(c *client.Client, ns string) func(api.ListOptions) (runtime.Object, error) {
-	return func(opts api.ListOptions) (runtime.Object, error) {
-		return c.Extensions().Ingress(ns).List(opts)
-	}
+func (lbc *loadBalancerController) addIngressNotification(obj interface{}) {
+	addIng := obj.(*extensions.Ingress)
+	lbc.recorder.Eventf(addIng, api.EventTypeNormal, "CREATE", fmt.Sprintf("%s/%s", addIng.Namespace, addIng.Name))
+	lbc.ingQueue.enqueue(obj)
+	lbc.syncQueue.enqueue(obj)
 }
 
-func ingressWatchFunc(c *client.Client, ns string) func(options api.ListOptions) (watch.Interface, error) {
-	return func(options api.ListOptions) (watch.Interface, error) {
-		return c.Extensions().Ingress(ns).Watch(options)
+func (lbc *loadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
+	if reflect.DeepEqual(old, cur) {
+		return
 	}
+
+	upIng := cur.(*extensions.Ingress)
+	lbc.recorder.Eventf(upIng, api.EventTypeNormal, "UPDATE", fmt.Sprintf("%s/%s", upIng.Namespace, upIng.Name))
+	lbc.ingQueue.enqueue(cur)
+	lbc.syncQueue.enqueue(cur)
+}
+
+func (lbc *loadBalancerController) deleteIngressNotification(obj interface{}) {
+	upIng := obj.(*extensions.Ingress)
+	lbc.recorder.Eventf(upIng, api.EventTypeNormal, "DELETE", fmt.Sprintf("%s/%s", upIng.Namespace, upIng.Name))
+	lbc.syncQueue.enqueue(obj)
 }
 
 func serviceListFunc(c *client.Client, ns string) func(api.ListOptions) (runtime.Object, error) {
@@ -320,40 +285,87 @@ func serviceWatchFunc(c *client.Client, ns string) func(options api.ListOptions)
 	}
 }
 
-func endpointsListFunc(c *client.Client, ns string) func(api.ListOptions) (runtime.Object, error) {
-	return func(opts api.ListOptions) (runtime.Object, error) {
-		return c.Endpoints(ns).List(opts)
-	}
+func (lbc *loadBalancerController) addEndpointNotification(obj interface{}) {
+	lbc.syncQueue.enqueue(obj)
 }
 
-func endpointsWatchFunc(c *client.Client, ns string) func(options api.ListOptions) (watch.Interface, error) {
-	return func(options api.ListOptions) (watch.Interface, error) {
-		return c.Endpoints(ns).Watch(options)
+func (lbc *loadBalancerController) updateEndpointNotification(old, cur interface{}) {
+	if reflect.DeepEqual(old, cur) {
+		return
 	}
+
+	lbc.syncQueue.enqueue(cur)
 }
 
-func secretsListFunc(c *client.Client, ns string) func(api.ListOptions) (runtime.Object, error) {
-	return func(options api.ListOptions) (runtime.Object, error) {
-		return c.Secrets(ns).List(options)
-	}
+func (lbc *loadBalancerController) deleteEndpointNotification(obj interface{}) {
+	lbc.syncQueue.enqueue(obj)
 }
 
-func secretsWatchFunc(c *client.Client, ns string) func(api.ListOptions) (watch.Interface, error) {
-	return func(options api.ListOptions) (watch.Interface, error) {
-		return c.Secrets(ns).Watch(options)
+func (lbc *loadBalancerController) addSecretNotification(obj interface{}) {
+	addSecr := obj.(*api.Secret)
+	if !lbc.secrReferenced(addSecr.Namespace, addSecr.Name) {
+		return
 	}
+
+	secrKey := fmt.Sprintf("%s/%s", addSecr.Namespace, addSecr.Name)
+	lbc.recorder.Eventf(addSecr, api.EventTypeNormal, "CREATE", secrKey)
+	lbc.syncQueue.enqueue(obj)
 }
 
-func mapListFunc(c *client.Client, ns string) func(api.ListOptions) (runtime.Object, error) {
-	return func(options api.ListOptions) (runtime.Object, error) {
-		return c.ConfigMaps(ns).List(options)
+func (lbc *loadBalancerController) updateSecretNotification(old, cur interface{}) {
+	if reflect.DeepEqual(old, cur) {
+		return
 	}
+
+	upSecr := cur.(*api.Secret)
+	if !lbc.secrReferenced(upSecr.Namespace, upSecr.Name) {
+		return
+	}
+
+	secrKey := fmt.Sprintf("%s/%s", upSecr.Namespace, upSecr.Name)
+	lbc.recorder.Eventf(upSecr, api.EventTypeNormal, "UPDATE", secrKey)
+	lbc.syncQueue.enqueue(cur)
 }
 
-func mapWatchFunc(c *client.Client, ns string) func(api.ListOptions) (watch.Interface, error) {
-	return func(options api.ListOptions) (watch.Interface, error) {
-		return c.ConfigMaps(ns).Watch(options)
+func (lbc *loadBalancerController) deleteSecretNotification(obj interface{}) {
+	delSecr := obj.(*api.Secret)
+	if !lbc.secrReferenced(delSecr.Namespace, delSecr.Name) {
+		return
 	}
+
+	secrKey := fmt.Sprintf("%s/%s", delSecr.Namespace, delSecr.Name)
+	lbc.recorder.Eventf(delSecr, api.EventTypeNormal, "DELETE", secrKey)
+	lbc.syncQueue.enqueue(obj)
+}
+
+func (lbc *loadBalancerController) addConfigMapNotification(obj interface{}) {
+	addCmap := obj.(*api.ConfigMap)
+	mapKey := fmt.Sprintf("%s/%s", addCmap.Namespace, addCmap.Name)
+	lbc.recorder.Eventf(addCmap, api.EventTypeNormal, "CREATE", mapKey)
+	lbc.syncQueue.enqueue(obj)
+}
+
+func (lbc *loadBalancerController) updateConfigMapNotification(old, cur interface{}) {
+	if reflect.DeepEqual(old, cur) {
+		return
+	}
+
+	upCmap := cur.(*api.ConfigMap)
+	mapKey := fmt.Sprintf("%s/%s", upCmap.Namespace, upCmap.Name)
+	// updates to configuration configmaps can trigger an update
+	if mapKey != lbc.ngxConfigMap {
+		return
+	}
+
+	lbc.recorder.Eventf(upCmap, api.EventTypeNormal, "UPDATE", mapKey)
+	lbc.syncQueue.enqueue(cur)
+}
+
+func (lbc *loadBalancerController) deleteConfigMapNotification(obj interface{}) {
+	upCmap := obj.(*api.ConfigMap)
+	mapKey := fmt.Sprintf("%s/%s", upCmap.Namespace, upCmap.Name)
+	lbc.recorder.Eventf(upCmap, api.EventTypeNormal, "DELETE", mapKey)
+	lbc.syncQueue.enqueue(obj)
 }
 
 func (lbc *loadBalancerController) controllersInSync() bool {
