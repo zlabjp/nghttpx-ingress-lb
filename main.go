@@ -196,11 +196,5 @@ func handleSigterm(lbc *loadBalancerController) {
 	<-signalChan
 	glog.Infof("Received SIGTERM, shutting down")
 
-	exitCode := 0
-	if err := lbc.Stop(); err != nil {
-		glog.Infof("Error during shutdown %v", err)
-		exitCode = 1
-	}
-	glog.Infof("Exiting with %v", exitCode)
-	os.Exit(exitCode)
+	lbc.Stop()
 }

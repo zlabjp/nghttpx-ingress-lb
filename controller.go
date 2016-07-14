@@ -874,29 +874,22 @@ func (lbc *loadBalancerController) getEndpoints(s *api.Service, servicePort ints
 	return upsServers
 }
 
-// Stop stops the loadbalancer controller.
-func (lbc *loadBalancerController) Stop() error {
+// Stop commences shutting down the loadbalancer controller.
+func (lbc *loadBalancerController) Stop() {
 	// Stop is invoked from the http endpoint.
 	lbc.stopLock.Lock()
 	defer lbc.stopLock.Unlock()
 
 	// Only try draining the workqueue if we haven't already.
-	if !lbc.shutdown {
-		lbc.shutdown = true
-		close(lbc.stopCh)
-
-		glog.Infof("Shutting down controller queues")
-		ings := lbc.ingLister.Store.List()
-		glog.Infof("removing IP address %v from ingress rules", lbc.podInfo.NodeIP)
-		lbc.removeFromIngress(ings)
-
-		lbc.syncQueue.ShutDown()
-		lbc.ingQueue.ShutDown()
-
-		return nil
+	if lbc.shutdown {
+		glog.Infof("Shutting down is already in progress")
+		return
 	}
 
-	return fmt.Errorf("shutdown already in progress")
+	glog.Infof("Commencing shutting down")
+
+	lbc.shutdown = true
+	close(lbc.stopCh)
 }
 
 func (lbc *loadBalancerController) removeFromIngress(ings []interface{}) {
