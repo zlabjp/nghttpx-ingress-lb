@@ -268,7 +268,19 @@ func (lbc *loadBalancerController) updateIngressNotification(old interface{}, cu
 }
 
 func (lbc *loadBalancerController) deleteIngressNotification(obj interface{}) {
-	ing := obj.(*extensions.Ingress)
+	ing, ok := obj.(*extensions.Ingress)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			return
+		}
+		ing, ok = tombstone.Obj.(*extensions.Ingress)
+		if !ok {
+			glog.Errorf("Tombstone contained object that is not an Ingress %+v", obj)
+			return
+		}
+	}
 	lbc.enqueueIngress(ing)
 	lbc.enqueue(ing)
 }
@@ -286,7 +298,20 @@ func (lbc *loadBalancerController) updateEndpointNotification(old, cur interface
 }
 
 func (lbc *loadBalancerController) deleteEndpointNotification(obj interface{}) {
-	lbc.enqueue(obj.(*api.Endpoints))
+	ep, ok := obj.(*api.Endpoints)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			return
+		}
+		ep, ok = tombstone.Obj.(*api.Endpoints)
+		if !ok {
+			glog.Errorf("Tombstone contained object that is not Endpoints %+v", obj)
+			return
+		}
+	}
+	lbc.enqueue(ep)
 }
 
 func (lbc *loadBalancerController) addSecretNotification(obj interface{}) {
@@ -312,16 +337,31 @@ func (lbc *loadBalancerController) updateSecretNotification(old, cur interface{}
 }
 
 func (lbc *loadBalancerController) deleteSecretNotification(obj interface{}) {
-	s := obj.(*api.Secret)
+	s, ok := obj.(*api.Secret)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			return
+		}
+		s, ok = tombstone.Obj.(*api.Secret)
+		if !ok {
+			glog.Errorf("Tombstone contained object that is not a Secret %+v", obj)
+			return
+		}
+	}
 	if !lbc.secrReferenced(s.Namespace, s.Name) {
 		return
 	}
-
 	lbc.enqueue(s)
 }
 
 func (lbc *loadBalancerController) addConfigMapNotification(obj interface{}) {
 	c := obj.(*api.ConfigMap)
+	cKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
+	if cKey != lbc.ngxConfigMap {
+		return
+	}
 	lbc.enqueue(c)
 }
 
@@ -336,12 +376,27 @@ func (lbc *loadBalancerController) updateConfigMapNotification(old, cur interfac
 	if cKey != lbc.ngxConfigMap {
 		return
 	}
-
 	lbc.enqueue(curC)
 }
 
 func (lbc *loadBalancerController) deleteConfigMapNotification(obj interface{}) {
-	c := obj.(*api.ConfigMap)
+	c, ok := obj.(*api.ConfigMap)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			return
+		}
+		c, ok = tombstone.Obj.(*api.ConfigMap)
+		if !ok {
+			glog.Errorf("Tombstone contained object that is not a ConfigMap %+v", obj)
+			return
+		}
+	}
+	cKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
+	if cKey != lbc.ngxConfigMap {
+		return
+	}
 	lbc.enqueue(c)
 }
 
