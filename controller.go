@@ -40,10 +40,13 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/record"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
+	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/framework"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util/intstr"
+	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/util/workqueue"
 	"k8s.io/kubernetes/pkg/watch"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/nghttpx"
@@ -128,11 +131,8 @@ type loadBalancerController struct {
 
 	recorder record.EventRecorder
 
-	syncQueue *taskQueue
-
-	// taskQueue used to update the status of the Ingress rules.
-	// this avoids a sync execution in the ResourceEventHandlerFuncs
-	ingQueue *taskQueue
+	syncQueue workqueue.RateLimitingInterface
+	ingQueue  workqueue.RateLimitingInterface
 
 	// stopLock is used to enforce only a single call to Stop is active.
 	// Needed because we allow stopping through an http endpoint and
@@ -158,10 +158,9 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 		ngxConfigMap: ngxConfigMapName,
 		defaultSvc:   defaultSvc,
 		recorder:     eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
+		syncQueue:    workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		ingQueue:     workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 	}
-
-	lbc.syncQueue = NewTaskQueue(lbc.sync)
-	lbc.ingQueue = NewTaskQueue(lbc.updateIngressStatus)
 
 	lbc.ingLister.Store, lbc.ingController = framework.NewInformer(
 		&cache.ListWatch{
@@ -201,8 +200,12 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 
 	lbc.svcLister.Store, lbc.svcController = framework.NewInformer(
 		&cache.ListWatch{
-			ListFunc:  serviceListFunc(lbc.client, namespace),
-			WatchFunc: serviceWatchFunc(lbc.client, namespace),
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return lbc.client.Services(namespace).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return lbc.client.Services(namespace).Watch(options)
+			},
 		},
 		&api.Service{},
 		resyncPeriod,
@@ -249,10 +252,10 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 }
 
 func (lbc *loadBalancerController) addIngressNotification(obj interface{}) {
-	addIng := obj.(*extensions.Ingress)
-	lbc.recorder.Eventf(addIng, api.EventTypeNormal, "CREATE", fmt.Sprintf("%s/%s", addIng.Namespace, addIng.Name))
-	lbc.ingQueue.enqueue(obj)
-	lbc.syncQueue.enqueue(obj)
+	ing := obj.(*extensions.Ingress)
+	lbc.recorder.Eventf(ing, api.EventTypeNormal, "CREATE", fmt.Sprintf("%s/%s", ing.Namespace, ing.Name))
+	lbc.enqueueIngress(ing)
+	lbc.enqueue(ing)
 }
 
 func (lbc *loadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
@@ -260,32 +263,21 @@ func (lbc *loadBalancerController) updateIngressNotification(old interface{}, cu
 		return
 	}
 
-	upIng := cur.(*extensions.Ingress)
-	lbc.recorder.Eventf(upIng, api.EventTypeNormal, "UPDATE", fmt.Sprintf("%s/%s", upIng.Namespace, upIng.Name))
-	lbc.ingQueue.enqueue(cur)
-	lbc.syncQueue.enqueue(cur)
+	curIng := cur.(*extensions.Ingress)
+	lbc.recorder.Eventf(curIng, api.EventTypeNormal, "UPDATE", fmt.Sprintf("%s/%s", curIng.Namespace, curIng.Name))
+	lbc.enqueueIngress(curIng)
+	lbc.enqueue(curIng)
 }
 
 func (lbc *loadBalancerController) deleteIngressNotification(obj interface{}) {
-	upIng := obj.(*extensions.Ingress)
-	lbc.recorder.Eventf(upIng, api.EventTypeNormal, "DELETE", fmt.Sprintf("%s/%s", upIng.Namespace, upIng.Name))
-	lbc.syncQueue.enqueue(obj)
-}
-
-func serviceListFunc(c *client.Client, ns string) func(api.ListOptions) (runtime.Object, error) {
-	return func(opts api.ListOptions) (runtime.Object, error) {
-		return c.Services(ns).List(opts)
-	}
-}
-
-func serviceWatchFunc(c *client.Client, ns string) func(options api.ListOptions) (watch.Interface, error) {
-	return func(options api.ListOptions) (watch.Interface, error) {
-		return c.Services(ns).Watch(options)
-	}
+	ing := obj.(*extensions.Ingress)
+	lbc.recorder.Eventf(ing, api.EventTypeNormal, "DELETE", fmt.Sprintf("%s/%s", ing.Namespace, ing.Name))
+	lbc.enqueueIngress(ing)
+	lbc.enqueue(ing)
 }
 
 func (lbc *loadBalancerController) addEndpointNotification(obj interface{}) {
-	lbc.syncQueue.enqueue(obj)
+	lbc.enqueue(obj.(*api.Endpoints))
 }
 
 func (lbc *loadBalancerController) updateEndpointNotification(old, cur interface{}) {
@@ -293,22 +285,22 @@ func (lbc *loadBalancerController) updateEndpointNotification(old, cur interface
 		return
 	}
 
-	lbc.syncQueue.enqueue(cur)
+	lbc.enqueue(cur.(*api.Endpoints))
 }
 
 func (lbc *loadBalancerController) deleteEndpointNotification(obj interface{}) {
-	lbc.syncQueue.enqueue(obj)
+	lbc.enqueue(obj.(*api.Endpoints))
 }
 
 func (lbc *loadBalancerController) addSecretNotification(obj interface{}) {
-	addSecr := obj.(*api.Secret)
-	if !lbc.secrReferenced(addSecr.Namespace, addSecr.Name) {
+	s := obj.(*api.Secret)
+	if !lbc.secrReferenced(s.Namespace, s.Name) {
 		return
 	}
 
-	secrKey := fmt.Sprintf("%s/%s", addSecr.Namespace, addSecr.Name)
-	lbc.recorder.Eventf(addSecr, api.EventTypeNormal, "CREATE", secrKey)
-	lbc.syncQueue.enqueue(obj)
+	sKey := fmt.Sprintf("%s/%s", s.Namespace, s.Name)
+	lbc.recorder.Eventf(s, api.EventTypeNormal, "CREATE", sKey)
+	lbc.enqueue(s)
 }
 
 func (lbc *loadBalancerController) updateSecretNotification(old, cur interface{}) {
@@ -316,32 +308,32 @@ func (lbc *loadBalancerController) updateSecretNotification(old, cur interface{}
 		return
 	}
 
-	upSecr := cur.(*api.Secret)
-	if !lbc.secrReferenced(upSecr.Namespace, upSecr.Name) {
+	curS := cur.(*api.Secret)
+	if !lbc.secrReferenced(curS.Namespace, curS.Name) {
 		return
 	}
 
-	secrKey := fmt.Sprintf("%s/%s", upSecr.Namespace, upSecr.Name)
-	lbc.recorder.Eventf(upSecr, api.EventTypeNormal, "UPDATE", secrKey)
-	lbc.syncQueue.enqueue(cur)
+	sKey := fmt.Sprintf("%s/%s", curS.Namespace, curS.Name)
+	lbc.recorder.Eventf(curS, api.EventTypeNormal, "UPDATE", sKey)
+	lbc.enqueue(curS)
 }
 
 func (lbc *loadBalancerController) deleteSecretNotification(obj interface{}) {
-	delSecr := obj.(*api.Secret)
-	if !lbc.secrReferenced(delSecr.Namespace, delSecr.Name) {
+	s := obj.(*api.Secret)
+	if !lbc.secrReferenced(s.Namespace, s.Name) {
 		return
 	}
 
-	secrKey := fmt.Sprintf("%s/%s", delSecr.Namespace, delSecr.Name)
-	lbc.recorder.Eventf(delSecr, api.EventTypeNormal, "DELETE", secrKey)
-	lbc.syncQueue.enqueue(obj)
+	sKey := fmt.Sprintf("%s/%s", s.Namespace, s.Name)
+	lbc.recorder.Eventf(s, api.EventTypeNormal, "DELETE", sKey)
+	lbc.enqueue(s)
 }
 
 func (lbc *loadBalancerController) addConfigMapNotification(obj interface{}) {
-	addCmap := obj.(*api.ConfigMap)
-	mapKey := fmt.Sprintf("%s/%s", addCmap.Namespace, addCmap.Name)
-	lbc.recorder.Eventf(addCmap, api.EventTypeNormal, "CREATE", mapKey)
-	lbc.syncQueue.enqueue(obj)
+	c := obj.(*api.ConfigMap)
+	cKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
+	lbc.recorder.Eventf(c, api.EventTypeNormal, "CREATE", cKey)
+	lbc.enqueue(c)
 }
 
 func (lbc *loadBalancerController) updateConfigMapNotification(old, cur interface{}) {
@@ -349,22 +341,70 @@ func (lbc *loadBalancerController) updateConfigMapNotification(old, cur interfac
 		return
 	}
 
-	upCmap := cur.(*api.ConfigMap)
-	mapKey := fmt.Sprintf("%s/%s", upCmap.Namespace, upCmap.Name)
+	curC := cur.(*api.ConfigMap)
+	cKey := fmt.Sprintf("%s/%s", curC.Namespace, curC.Name)
 	// updates to configuration configmaps can trigger an update
-	if mapKey != lbc.ngxConfigMap {
+	if cKey != lbc.ngxConfigMap {
 		return
 	}
 
-	lbc.recorder.Eventf(upCmap, api.EventTypeNormal, "UPDATE", mapKey)
-	lbc.syncQueue.enqueue(cur)
+	lbc.recorder.Eventf(curC, api.EventTypeNormal, "UPDATE", cKey)
+	lbc.enqueue(curC)
 }
 
 func (lbc *loadBalancerController) deleteConfigMapNotification(obj interface{}) {
-	upCmap := obj.(*api.ConfigMap)
-	mapKey := fmt.Sprintf("%s/%s", upCmap.Namespace, upCmap.Name)
-	lbc.recorder.Eventf(upCmap, api.EventTypeNormal, "DELETE", mapKey)
-	lbc.syncQueue.enqueue(obj)
+	c := obj.(*api.ConfigMap)
+	cKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
+	lbc.recorder.Eventf(c, api.EventTypeNormal, "DELETE", cKey)
+	lbc.enqueue(c)
+}
+
+func (lbc *loadBalancerController) enqueue(obj runtime.Object) {
+	key, err := controller.KeyFunc(obj)
+	if err != nil {
+		glog.Errorf("Couldn't get key for object %+v: %v", obj, err)
+		return
+	}
+
+	lbc.syncQueue.Add(key)
+}
+
+func (lbc *loadBalancerController) enqueueIngress(ing *extensions.Ingress) {
+	key, err := controller.KeyFunc(ing)
+	if err != nil {
+		glog.Errorf("Couldn't get key for object %+v: %v", ing, err)
+		return
+	}
+
+	lbc.ingQueue.Add(key)
+}
+
+func (lbc *loadBalancerController) worker() {
+	for {
+		func() {
+			key, quit := lbc.syncQueue.Get()
+			if quit {
+				return
+			}
+
+			defer lbc.syncQueue.Done(key)
+			lbc.sync(key.(string))
+		}()
+	}
+}
+
+func (lbc *loadBalancerController) ingressWorker() {
+	for {
+		func() {
+			key, quit := lbc.ingQueue.Get()
+			if quit {
+				return
+			}
+
+			defer lbc.ingQueue.Done(key)
+			lbc.updateIngressStatus(key.(string))
+		}()
+	}
 }
 
 func (lbc *loadBalancerController) controllersInSync() bool {
@@ -462,9 +502,14 @@ func (lbc *loadBalancerController) checkSvcForUpdate(svc *api.Service) (map[stri
 }
 
 func (lbc *loadBalancerController) sync(key string) {
+	retry := false
+
+	defer retryOrForget(lbc.syncQueue, key, retry)
+
 	if !lbc.controllersInSync() {
+		glog.Infof("Deferring sync till endpoints controller has synced")
+		retry = true
 		time.Sleep(podStoreSyncedPollPeriod)
-		lbc.syncQueue.requeue(key, fmt.Errorf("deferring sync till endpoints controller has synced"))
 		return
 	}
 
@@ -481,19 +526,26 @@ func (lbc *loadBalancerController) sync(key string) {
 }
 
 func (lbc *loadBalancerController) updateIngressStatus(key string) {
+	retry := false
+
+	defer retryOrForget(lbc.ingQueue, key, retry)
+
 	if !lbc.controllersInSync() {
+		glog.Infof("Deferring sync till endpoints controller has synced")
+		retry = true
 		time.Sleep(podStoreSyncedPollPeriod)
-		lbc.ingQueue.requeue(key, fmt.Errorf("deferring sync till endpoints controller has synced"))
 		return
 	}
 
 	obj, ingExists, err := lbc.ingLister.Store.GetByKey(key)
 	if err != nil {
-		lbc.ingQueue.requeue(key, err)
+		glog.Errorf("Couldn't get ingress %v: %v", key, err)
+		retry = true
 		return
 	}
 
 	if !ingExists {
+		glog.Infof("Ingress %v has been deleted", key)
 		return
 	}
 
@@ -504,6 +556,7 @@ func (lbc *loadBalancerController) updateIngressStatus(key string) {
 	currIng, err := ingClient.Get(ing.Name)
 	if err != nil {
 		glog.Errorf("unexpected error searching Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
+		retry = true
 		return
 	}
 
@@ -514,7 +567,8 @@ func (lbc *loadBalancerController) updateIngressStatus(key string) {
 			IP: lbc.podInfo.NodeIP,
 		})
 		if _, err := ingClient.UpdateStatus(currIng); err != nil {
-			lbc.recorder.Eventf(currIng, api.EventTypeWarning, "UPDATE", "error: %v", err)
+			glog.Errorf("Couldn't update ingress %v: %v", key, err)
+			retry = true
 			return
 		}
 
@@ -852,8 +906,8 @@ func (lbc *loadBalancerController) Stop() error {
 		lbc.removeFromIngress(ings)
 
 		glog.Infof("Shutting down controller queues")
-		lbc.syncQueue.shutdown()
-		lbc.ingQueue.shutdown()
+		lbc.syncQueue.ShutDown()
+		lbc.ingQueue.ShutDown()
 
 		return nil
 	}
@@ -897,7 +951,7 @@ func (lbc *loadBalancerController) removeFromIngress(ings []interface{}) {
 
 // Run starts the loadbalancer controller.
 func (lbc *loadBalancerController) Run() {
-	glog.Infof("starting nghttpx loadbalancer controller")
+	glog.Infof("Starting nghttpx loadbalancer controller")
 	lbc.nghttpx.Start()
 
 	go lbc.ingController.Run(lbc.stopCh)
@@ -906,14 +960,28 @@ func (lbc *loadBalancerController) Run() {
 	go lbc.secrController.Run(lbc.stopCh)
 	go lbc.mapController.Run(lbc.stopCh)
 
-	go lbc.syncQueue.run(time.Second, lbc.stopCh)
-	go lbc.ingQueue.run(time.Second, lbc.stopCh)
+	go wait.Until(lbc.worker, time.Second, lbc.stopCh)
+	go wait.Until(lbc.ingressWorker, time.Second, lbc.stopCh)
 
 	<-lbc.stopCh
+
+	glog.Infof("Shutting down nghttpx loadbalancer controller")
+
+	lbc.syncQueue.ShutDown()
+	lbc.ingQueue.ShutDown()
 }
 
 func defaultPortBackendConfig() PortBackendConfig {
 	return PortBackendConfig{
 		Proto: "http/1.1",
 	}
+}
+
+func retryOrForget(q workqueue.RateLimitingInterface, key interface{}, requeue bool) {
+	if !requeue {
+		q.Forget(key)
+		return
+	}
+
+	q.AddRateLimited(key)
 }
