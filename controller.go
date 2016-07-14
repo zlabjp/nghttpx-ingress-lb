@@ -253,6 +253,7 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 
 func (lbc *loadBalancerController) addIngressNotification(obj interface{}) {
 	ing := obj.(*extensions.Ingress)
+	glog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
 	lbc.enqueueIngress(ing)
 	lbc.enqueue(ing)
 }
@@ -263,6 +264,7 @@ func (lbc *loadBalancerController) updateIngressNotification(old interface{}, cu
 	}
 
 	curIng := cur.(*extensions.Ingress)
+	glog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
 	lbc.enqueueIngress(curIng)
 	lbc.enqueue(curIng)
 }
@@ -281,12 +283,15 @@ func (lbc *loadBalancerController) deleteIngressNotification(obj interface{}) {
 			return
 		}
 	}
+	glog.V(4).Infof("Ingress %v/%v deleted", ing.Namespace, ing.Name)
 	lbc.enqueueIngress(ing)
 	lbc.enqueue(ing)
 }
 
 func (lbc *loadBalancerController) addEndpointNotification(obj interface{}) {
-	lbc.enqueue(obj.(*api.Endpoints))
+	ep := obj.(*api.Endpoints)
+	glog.V(4).Infof("Endpoints %v/%v added", ep.Namespace, ep.Name)
+	lbc.enqueue(ep)
 }
 
 func (lbc *loadBalancerController) updateEndpointNotification(old, cur interface{}) {
@@ -294,7 +299,9 @@ func (lbc *loadBalancerController) updateEndpointNotification(old, cur interface
 		return
 	}
 
-	lbc.enqueue(cur.(*api.Endpoints))
+	curEp := cur.(*api.Endpoints)
+	glog.V(4).Infof("Endpoints %v/%v updated", curEp.Namespace, curEp.Name)
+	lbc.enqueue(curEp)
 }
 
 func (lbc *loadBalancerController) deleteEndpointNotification(obj interface{}) {
@@ -311,6 +318,7 @@ func (lbc *loadBalancerController) deleteEndpointNotification(obj interface{}) {
 			return
 		}
 	}
+	glog.V(4).Infof("Endpoints %v/%v deleted", ep.Namespace, ep.Name)
 	lbc.enqueue(ep)
 }
 
@@ -320,6 +328,7 @@ func (lbc *loadBalancerController) addSecretNotification(obj interface{}) {
 		return
 	}
 
+	glog.V(4).Infof("Secret %v/%v added", s.Namespace, s.Name)
 	lbc.enqueue(s)
 }
 
@@ -333,6 +342,7 @@ func (lbc *loadBalancerController) updateSecretNotification(old, cur interface{}
 		return
 	}
 
+	glog.V(4).Infof("Secret %v/%v updated", curS.Namespace, curS.Name)
 	lbc.enqueue(curS)
 }
 
@@ -353,15 +363,17 @@ func (lbc *loadBalancerController) deleteSecretNotification(obj interface{}) {
 	if !lbc.secrReferenced(s.Namespace, s.Name) {
 		return
 	}
+	glog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
 	lbc.enqueue(s)
 }
 
 func (lbc *loadBalancerController) addConfigMapNotification(obj interface{}) {
 	c := obj.(*api.ConfigMap)
-	cKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
+	cKey := fmt.Sprintf("%v/%v", c.Namespace, c.Name)
 	if cKey != lbc.ngxConfigMap {
 		return
 	}
+	glog.V(4).Infof("ConfigMap %v added", cKey)
 	lbc.enqueue(c)
 }
 
@@ -371,11 +383,12 @@ func (lbc *loadBalancerController) updateConfigMapNotification(old, cur interfac
 	}
 
 	curC := cur.(*api.ConfigMap)
-	cKey := fmt.Sprintf("%s/%s", curC.Namespace, curC.Name)
+	cKey := fmt.Sprintf("%v/%v", curC.Namespace, curC.Name)
 	// updates to configuration configmaps can trigger an update
 	if cKey != lbc.ngxConfigMap {
 		return
 	}
+	glog.V(4).Infof("ConfigMap %v updated", cKey)
 	lbc.enqueue(curC)
 }
 
@@ -393,10 +406,11 @@ func (lbc *loadBalancerController) deleteConfigMapNotification(obj interface{}) 
 			return
 		}
 	}
-	cKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
+	cKey := fmt.Sprintf("%v/%v", c.Namespace, c.Name)
 	if cKey != lbc.ngxConfigMap {
 		return
 	}
+	glog.V(4).Infof("ConfigMap %v deleted", cKey)
 	lbc.enqueue(c)
 }
 
