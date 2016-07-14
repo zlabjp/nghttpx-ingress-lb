@@ -208,7 +208,10 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 			ListFunc:  serviceListFunc(lbc.client, namespace),
 			WatchFunc: serviceWatchFunc(lbc.client, namespace),
 		},
-		&api.Service{}, resyncPeriod, framework.ResourceEventHandlerFuncs{})
+		&api.Service{},
+		resyncPeriod,
+		framework.ResourceEventHandlerFuncs{},
+	)
 
 	lbc.secrLister.Store, lbc.secrController = framework.NewInformer(
 		&cache.ListWatch{
