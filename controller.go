@@ -57,10 +57,6 @@ const (
 	podStoreSyncedPollPeriod = 1 * time.Second
 )
 
-var (
-	keyFunc = framework.DeletionHandlingMetaNamespaceKeyFunc
-)
-
 type serviceAnnotation map[string]string
 
 // getPort returns the port defined in a named port

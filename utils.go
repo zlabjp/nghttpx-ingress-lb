@@ -35,6 +35,7 @@ import (
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/unversioned"
+	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 )
@@ -71,7 +72,7 @@ func (t *taskQueue) run(period time.Duration, stopCh <-chan struct{}) {
 
 // enqueue enqueues ns/name of the given api object in the task queue.
 func (t *taskQueue) enqueue(obj interface{}) {
-	key, err := keyFunc(obj)
+	key, err := controller.KeyFunc(obj)
 	if err != nil {
 		glog.Infof("could not get key for object %+v: %v", obj, err)
 		return
