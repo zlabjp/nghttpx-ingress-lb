@@ -539,7 +539,7 @@ func (lbc *loadBalancerController) updateIngressStatus(key string) {
 
 	ingClient := lbc.client.Extensions().Ingress(ing.Namespace)
 
-	currIng, err := ingClient.Get(ing.Name)
+	curIng, err := ingClient.Get(ing.Name)
 	if err != nil {
 		glog.Errorf("unexpected error searching Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 		retry = true
@@ -549,10 +549,10 @@ func (lbc *loadBalancerController) updateIngressStatus(key string) {
 	lbIPs := ing.Status.LoadBalancer.Ingress
 	if !lbc.isStatusIPDefined(lbIPs) {
 		glog.Infof("Updating loadbalancer %v/%v with IP %v", ing.Namespace, ing.Name, lbc.podInfo.NodeIP)
-		currIng.Status.LoadBalancer.Ingress = append(currIng.Status.LoadBalancer.Ingress, api.LoadBalancerIngress{
+		curIng.Status.LoadBalancer.Ingress = append(curIng.Status.LoadBalancer.Ingress, api.LoadBalancerIngress{
 			IP: lbc.podInfo.NodeIP,
 		})
-		if _, err := ingClient.UpdateStatus(currIng); err != nil {
+		if _, err := ingClient.UpdateStatus(curIng); err != nil {
 			glog.Errorf("Couldn't update ingress %v: %v", key, err)
 			retry = true
 			return
@@ -885,11 +885,11 @@ func (lbc *loadBalancerController) Stop() error {
 		lbc.shutdown = true
 		close(lbc.stopCh)
 
+		glog.Infof("Shutting down controller queues")
 		ings := lbc.ingLister.Store.List()
 		glog.Infof("removing IP address %v from ingress rules", lbc.podInfo.NodeIP)
 		lbc.removeFromIngress(ings)
 
-		glog.Infof("Shutting down controller queues")
 		lbc.syncQueue.ShutDown()
 		lbc.ingQueue.ShutDown()
 
@@ -900,33 +900,37 @@ func (lbc *loadBalancerController) Stop() error {
 }
 
 func (lbc *loadBalancerController) removeFromIngress(ings []interface{}) {
-	glog.Infof("updating %v Ingress rule/s", len(ings))
-	for _, cur := range ings {
-		ing := cur.(*extensions.Ingress)
+	glog.Infof("Updating %v Ingress rule(s)", len(ings))
+	for _, obj := range ings {
+		ing := obj.(*extensions.Ingress)
 
 		ingClient := lbc.client.Extensions().Ingress(ing.Namespace)
-		currIng, err := ingClient.Get(ing.Name)
+		curIng, err := ingClient.Get(ing.Name)
 		if err != nil {
 			glog.Errorf("unexpected error searching Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 			continue
 		}
 
-		lbIPs := ing.Status.LoadBalancer.Ingress
-		if len(lbIPs) > 0 && lbc.isStatusIPDefined(lbIPs) {
-			glog.Infof("Updating loadbalancer %v/%v. Removing IP %v", ing.Namespace, ing.Name, lbc.podInfo.NodeIP)
-
-			for idx, lbStatus := range currIng.Status.LoadBalancer.Ingress {
-				if lbStatus.IP == lbc.podInfo.NodeIP {
-					currIng.Status.LoadBalancer.Ingress = append(currIng.Status.LoadBalancer.Ingress[:idx],
-						currIng.Status.LoadBalancer.Ingress[idx+1:]...)
-					break
-				}
-			}
-
-			if _, err := ingClient.UpdateStatus(currIng); err != nil {
-				glog.Errorf("Couldn't update Ingress %+v: %v", currIng, err)
+		updated := false
+		for idx, lbStatus := range curIng.Status.LoadBalancer.Ingress {
+			if lbStatus.IP != lbc.podInfo.NodeIP {
 				continue
 			}
+
+			glog.Infof("Updating loadbalancer %v/%v. Removing IP %v", ing.Namespace, ing.Name, lbc.podInfo.NodeIP)
+
+			curIng.Status.LoadBalancer.Ingress = append(curIng.Status.LoadBalancer.Ingress[:idx],
+				curIng.Status.LoadBalancer.Ingress[idx+1:]...)
+			updated = true
+			break
+		}
+
+		if !updated {
+			continue
+		}
+
+		if _, err := ingClient.UpdateStatus(curIng); err != nil {
+			glog.Errorf("Couldn't update Ingress %+v: %v", curIng, err)
 		}
 	}
 }
@@ -951,6 +955,10 @@ func (lbc *loadBalancerController) Run() {
 
 	lbc.syncQueue.ShutDown()
 	lbc.ingQueue.ShutDown()
+
+	glog.Infof("Removing IP address %v from ingress rules", lbc.podInfo.NodeIP)
+	ings := lbc.ingLister.Store.List()
+	lbc.removeFromIngress(ings)
 }
 
 func defaultPortBackendConfig() PortBackendConfig {
