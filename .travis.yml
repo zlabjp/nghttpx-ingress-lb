@@ -1,0 +1,18 @@
+sudo: required
+language: go
+go:
+- 1.6
+services:
+- docker
+script:
+- make controller
+- docker build -t zlabjp/nghttpx-ingress-controller .
+after_success:
+- docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+- if [ ! -z "$TRAVIS_TAG" ]; then docker tag zlabjp/nghttpx-ingress-controller zlabjp/nghttpx-ingress-controller:"$TRAVIS_TAG" && docker push zlabjp/nghttpx-ingress-controller:"$TRAVIS_TAG"; fi
+- if [ "$TRAVIS_BRANCH" = "master" ]; then docker push zlabjp/nghttpx-ingress-controller; fi
+env:
+  global:
+  - secure: bA+K/DQ1EBirbMASj4JAkkr5qabKkBfRCrReWWcYyi2BcZgayKdvb5Y0wsYphwvR7P69Q97Qwb0I9SHazhLfMPaNJdvuHp46H9cZWdl9eZZhTtuJfS+YCLcpeyPgcY9bXX8dVniAQQjR9CLbdJj2gMmhbZAOdhSoVWsm8RmpbHgytH/9ixirVD3JhLl6C6gGJD9Yxe0fSJpM43at5seWW0rMuPoHXpNwGOJb883bVPm/tCYqO76eF/ejFJUhVUopUTOhPGm5/ignvEMep9p/bzYlNF3CPCPdV9Ad/k317ujKsuPdNbYi/oNP7CSVsPK8Y1hh2Gc8DisJM9HdfA2gU8cTDt+pV9G5HZEORuqAZFQBphNeeQEMYlpV+pFfW7WqiRpaGL+k8L4oBLV4M3gj//erXcAp2NFK8G2fSBkaMUVr0qbalzuzEn/+tcSKeBvK1Im3kMNE3zkHoCzUXLlYJZG+w+YRL/jZ5sw9zzRvqZRL8ZI/25BNIHINBDpqds7KAZdjEpxV8kqP/6bEM7LB32J0Pl3uXh0jIT1r+4/3+nfckejWq3jtFfrVF8S3+8VSLrMgdJCglDqgOKvbIe1llJQnTqZ+EfxKHAGAvaT3Q7GbpX1WXI9cXz55Ptj3qSXcHheZBsB1SwJB5xTbyEedpltr53IAKMDxgZ/RQ72GLEQ=
+  - secure: GfSgkVRhUVxoVMMwfzyuJD8wUsVwikS6MQQbBYHz7RW5g9itgcXxMe47AFK0e8yFdCONLPF4rLYR+qqBL73sMBfL3Z227i2sxuSBdMGmrvqFelZomZzWuu373vYqSS7/+1dFcFB2aBxt4escgHxiVXKwQ0DeVVkJ6WAvgDD0Z4SHSP4ZnVh/gxKJEalmEitS1vqw5dcy1zANgnMtYFW7u4RZedrVN/jVGW6T800Kyw5EYWSIaAu76DnZH6UJR24GMOnEEdcVzdwoMjAYHWzJn/4BpL2zE67KtOYJ9gzh45rRDsMk/HUVBiuYCu9tS9C5s99BPJrwShMi+GoPrA7mtRGS7IG6rkxHOQQ59Mc3ED+cY8RnL/4gA8eLhjt/kk96vPyRZkbUQ8GRUzczThcpZ7n9t6rh/AdFnTzAbaINT7dyqJPqhywEi3KCTtOnyJT1/Luw+PUJuP5chu5fj5KHjpgRV8IPjP519dGNHVD11rVy2em4li9b11yjRDOvW+i7KrgyzX+5lF1FD24x9ui3LGBnXonyYUXWHIRy0Me3rcPdx2hFw3E4cB7AjD1b64Nd4Mton6WjJP3DQ27c00lCoNLc7xr9Pp3Z59ybqFdgokki/7Wa/U+B6oose72P5VSeqs0esAfHF/bqrSlDyAvZWDf4iZ5K7j8p/G6I5rPoRCM=
+  - secure: o0vFW3DSwQvsJ/GnfEwUevl81IHr9Kfc0Soz08hKTPZBgx2ujZ4tbvk+Ys2ZOoIwhzU6ONrHsd8MqiCWf0ZvVdU/G5j+hF0eyL0jxcJDkBXggD2m/YuwUNdoho93zV6UqjquwWmiFJR1bxoSnQg+mEUbxToJMbNEsB7PISz0R3aM2bCqWq4+BGERIx1OkADzlpU3tEEu3uhgQlGS4C1FvqHFV6+E/NmZSAdoukNL0L8HzWJ/KV37Sk02u3bhzXThRjNKzMtMSeEnQhIhFQz+d+rJufLxH+hurdEk+cVOLeCqp1ZMz30DJXu8Q8J0U0xMunA1uJ3xwOsf7S+3+/J2cJvQYxVpJPvLMqWMqasC1zy4Dz7S5N1pYLa0QucBeC5s1p/24l3cP192aW4wek7Uhu23eHINcl8N/nZaPx/YaIFUqJ6advbR2K/0WLKvNe0pa37fTnT/ll1B+G19r9mf/2g+Cb9O/qC3DkmQTTN4poD9pqksgYWacBNMQdUK6V8S2sj0ewdmUvoQEpHN5esQIbEDpKA9hFbBLwwhYyFtg5c4B8kAQHONv2JHzIZxcFMokcUFQHWyTZZpH7FzOAcSCD28FEV76jXeaQXqirD9or1/JX1hcyWungBKJocgqQDWtGCMwkuLtBToqhmIt2bNyJG5A3o/+xX4b1tnCO60OWM=
