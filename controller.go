@@ -545,7 +545,7 @@ func (lbc *loadBalancerController) checkSvcForUpdate(svc *api.Service) (map[stri
 func (lbc *loadBalancerController) sync(key string) {
 	retry := false
 
-	defer retryOrForget(lbc.syncQueue, key, retry)
+	defer func() { retryOrForget(lbc.syncQueue, key, retry) }()
 
 	if !lbc.controllersInSync() {
 		glog.Infof("Deferring sync till endpoints controller has synced")
@@ -569,7 +569,7 @@ func (lbc *loadBalancerController) sync(key string) {
 func (lbc *loadBalancerController) updateIngressStatus(key string) {
 	retry := false
 
-	defer retryOrForget(lbc.ingQueue, key, retry)
+	defer func() { retryOrForget(lbc.ingQueue, key, retry) }()
 
 	if !lbc.controllersInSync() {
 		glog.Infof("Deferring sync till endpoints controller has synced")
