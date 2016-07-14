@@ -690,8 +690,7 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 					Path: path.Path,
 				}
 
-				glog.Infof("upstream name=%v", upsName)
-				glog.Infof("host=%v, path=%v", ups.Host, ups.Path)
+				glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
 
 				svcKey := fmt.Sprintf("%v/%v", ing.GetNamespace(), path.Backend.ServiceName)
 				svcObj, svcExists, err := lbc.svcLister.Store.GetByKey(svcKey)
