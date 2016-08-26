@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -71,21 +71,10 @@ type ClusterCondition struct {
 	Message string `json:"message,omitempty"`
 }
 
-// Cluster metadata
-type ClusterMeta struct {
-	// Release version of the cluster.
-	Version string `json:"version,omitempty"`
-}
-
 // ClusterStatus is information about the current status of a cluster updated by cluster controller peridocally.
 type ClusterStatus struct {
 	// Conditions is an array of current cluster conditions.
 	Conditions []ClusterCondition `json:"conditions,omitempty"`
-	// Capacity represents the total resources of the cluster
-	Capacity api.ResourceList `json:"capacity,omitempty"`
-	// Allocatable represents the total resources of a cluster that are available for scheduling.
-	Allocatable api.ResourceList `json:"allocatable,omitempty"`
-	ClusterMeta `json:",inline"`
 	// Zones is the list of avaliability zones in which the nodes of the cluster exist, e.g. 'us-east1-a'.
 	// These will always be in the same region.
 	Zones []string `json:"zones,omitempty"`
@@ -93,7 +82,8 @@ type ClusterStatus struct {
 	Region string `json:"region,omitempty"`
 }
 
-// +genclient=true,nonNamespaced=true
+// +genclient=true
+// +nonNamespaced=true
 
 // Information about a registered cluster in a federated kubernetes setup. Clusters are not namespaced and have unique names in the federation.
 type Cluster struct {
@@ -117,4 +107,33 @@ type ClusterList struct {
 
 	// List of Cluster objects.
 	Items []Cluster `json:"items"`
+}
+
+// Temporary/alpha stuctures to support custom replica assignments within FederatedReplicaSet.
+
+// A set of preferences that can be added to federated version of ReplicaSet as a json-serialized annotation.
+// The preferences allow the user to express in which culsters he wants to put his replicas within the
+// mentiond FederatedReplicaSet.
+type FederatedReplicaSetPreferences struct {
+	// If set to true then already scheduled and running replicas may be moved to other clusters to
+	// in order to bring cluster replicasets towards a desired state. Otherwise, if set to false,
+	// up and running replicas will not be moved.
+	Rebalance bool `json:"rebalance,omitempty"`
+
+	// A mapping between cluser names and preferences regarding local replicasets in these clusters.
+	// "*" (if provided) applies to all clusters if an explicit mapping is not provided. If there is no
+	// "*" that clusters without explicit preferences should not have any replicas scheduled.
+	Clusters map[string]ClusterReplicaSetPreferences `json:"clusters,omitempty"`
+}
+
+// Preferences regarding number of replicas assigned to a cluster replicaset within a federated replicaset.
+type ClusterReplicaSetPreferences struct {
+	// Minimum number of replicas that should be assigned to this Local ReplicaSet. 0 by default.
+	MinReplicas int64 `json:"maxReplicas,omitempty"`
+
+	// Maximum number of replicas that should be assigned to this Local ReplicaSet. Unbounded if no value provided (default).
+	MaxReplicas *int64 `json:"maxReplicas,omitempty"`
+
+	// A number expressing the preference to put an additional replica to this LocalReplicaSet. 0 by default.
+	Weight int64
 }

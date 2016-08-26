@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -487,7 +487,7 @@ func (NetworkPolicyList) SwaggerDoc() map[string]string {
 
 var map_NetworkPolicyPeer = map[string]string{
 	"podSelector":       "This is a label selector which selects Pods in this namespace. This field follows standard label selector semantics. If not provided, this selector selects no pods. If present but empty, this selector selects all pods in this namespace.",
-	"namespaceSelector": "Selects Namespaces using cluster scoped-labels.  This matches all pods in all namespaces selected by this label selector. This field follows standard label selector semantics. If omited, this selector selects no namespaces. If present but empty, this selector selects all namespaces.",
+	"namespaceSelector": "Selects Namespaces using cluster scoped-labels.  This matches all pods in all namespaces selected by this label selector. This field follows standard label selector semantics. If omitted, this selector selects no namespaces. If present but empty, this selector selects all namespaces.",
 }
 
 func (NetworkPolicyPeer) SwaggerDoc() map[string]string {
@@ -672,6 +672,27 @@ var map_ScaleStatus = map[string]string{
 
 func (ScaleStatus) SwaggerDoc() map[string]string {
 	return map_ScaleStatus
+}
+
+var map_StorageClass = map[string]string{
+	"":            "StorageClass describes the parameters for a class of storage for which PersistentVolumes can be dynamically provisioned.\n\nStorageClasses are non-namespaced; the name of the storage class according to etcd is in ObjectMeta.Name.",
+	"metadata":    "Standard object's metadata. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
+	"provisioner": "Provisioner indicates the type of the provisioner.",
+	"parameters":  "Parameters holds the parameters for the provisioner that should create volumes of this storage class.",
+}
+
+func (StorageClass) SwaggerDoc() map[string]string {
+	return map_StorageClass
+}
+
+var map_StorageClassList = map[string]string{
+	"":         "StorageClassList is a collection of storage classes.",
+	"metadata": "Standard list metadata More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
+	"items":    "Items is the list of StorageClasses",
+}
+
+func (StorageClassList) SwaggerDoc() map[string]string {
+	return map_StorageClassList
 }
 
 var map_SubresourceReference = map[string]string{
