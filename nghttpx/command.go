@@ -36,13 +36,11 @@ import (
 	"k8s.io/kubernetes/pkg/healthz"
 )
 
-// Start starts a initial nghttpx process.  We are running nghttpx in
-// daemon mode, so running command will finish soon.  In order to
-// avoid the configuration file is overwritten by immediate event
-// notification, we block the execution until the command finishes.
+// Start starts a nghttpx process, and wait.  When nghttpx exits,
+// return, and kills controller.
 func (ngx *Manager) Start() {
 	glog.Info("Starting nghttpx process...")
-	cmd := exec.Command("/nghttpx-start.sh")
+	cmd := exec.Command("/usr/local/bin/nghttpx")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -51,8 +49,6 @@ func (ngx *Manager) Start() {
 
 	if err := cmd.Wait(); err != nil {
 		glog.Errorf("nghttpx error: %v", err)
-	} else {
-		glog.Info("initial nghttpx exited successfully")
 	}
 }
 
@@ -77,11 +73,12 @@ func (ngx *Manager) CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressC
 
 	switch changed {
 	case mainConfigChanged:
-		cmd := "/nghttpx-reload.sh"
+		cmd := "killall"
+		args := []string{"-HUP", "nghttpx"}
 		glog.Info("change in configuration detected. Reloading...")
-		out, err := exec.Command(cmd).CombinedOutput()
+		out, err := exec.Command(cmd, args...).CombinedOutput()
 		if err != nil {
-			glog.Errorf("failed to execute %v: %v", cmd, string(out))
+			glog.Errorf("failed to execute %v %v: %v", cmd, args, string(out))
 		}
 	case backendConfigChanged:
 		if err := ngx.issueBackendReplaceRequest(); err != nil {
@@ -169,7 +166,7 @@ func (ngx *Manager) issueBackendReplaceRequest() error {
 	}
 
 	if glog.V(3) {
-		glog.Infof("API request %v returned response body: %v", backendReplaceURI,string(respBody))
+		glog.Infof("API request %v returned response body: %v", backendReplaceURI, string(respBody))
 	}
 
 	glog.Infof("API request %v has completed successfully", backendReplaceURI)

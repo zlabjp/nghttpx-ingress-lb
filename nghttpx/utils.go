@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 
 	"github.com/golang/glog"
@@ -77,11 +78,25 @@ func (ngx *Manager) needsReload(filename string, data *bytes.Buffer) (bool, erro
 
 	res := data.Bytes()
 	if !bytes.Equal(src, res) {
-		err = ioutil.WriteFile(filename, res, 0644)
+		// First write into temporary file in the same
+		// directory of filename.  Then replace filename with
+		// temporary file.  In Linux, this is atomic
+		// operation.
+		dir := filepath.Join(filepath.Dir(filename))
+		tempFile, err := ioutil.TempFile(dir, "nghttpx")
 		if err != nil {
 			return false, err
 		}
-
+		tempFile.Close()
+		defer func() {
+			os.Remove(tempFile.Name())
+		}()
+		if err := ioutil.WriteFile(tempFile.Name(), res, 0644); err != nil {
+			return false, err
+		}
+		if err := os.Rename(tempFile.Name(), filename); err != nil {
+			return false, err
+		}
 		dData, err := diff(src, res)
 		if err != nil {
 			glog.Errorf("error computing diff: %s", err)

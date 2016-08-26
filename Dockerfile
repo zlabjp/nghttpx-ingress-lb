@@ -22,7 +22,7 @@ FROM ubuntu:16.04
 RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev bison \
         zlib1g libssl1.0.0 libev4 libjemalloc1 \
-        diffutils ca-certificates \
+        diffutils ca-certificates psmisc \
         --no-install-recommends && \
     git clone -b v1.14.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \

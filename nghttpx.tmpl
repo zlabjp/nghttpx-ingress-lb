@@ -1,9 +1,6 @@
 {{ $cfg := .cfg }}
 
-pid-file=/run/nghttpx.pid
-
 accesslog-file=/var/log/nghttpx/access.log
-daemon=yes
 
 include=/etc/nghttpx/nghttpx-backend.conf
 

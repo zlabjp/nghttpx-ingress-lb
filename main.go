@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/hashicorp/go-reap"
 	"github.com/spf13/pflag"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/nghttpx"
@@ -145,7 +144,6 @@ func main() {
 		glog.Fatalf("%v", err)
 	}
 
-	go reap.ReapChildren(nil, nil, nil, nil)
 	go registerHandlers(lbc)
 	go handleSigterm(lbc)
 
