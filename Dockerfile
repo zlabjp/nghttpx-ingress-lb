@@ -44,8 +44,6 @@ COPY nghttpx-ingress-controller /
 COPY nghttpx.tmpl /
 COPY nghttpx-backend.tmpl /
 COPY default.conf /etc/nghttpx/nghttpx.conf
-COPY nghttpx-start.sh /
-COPY nghttpx-reload.sh /
 
 WORKDIR /
 
