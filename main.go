@@ -148,6 +148,11 @@ func main() {
 	go handleSigterm(lbc)
 
 	lbc.Run()
+
+	for {
+		glog.Infof("Waiting for pod deletion...")
+		time.Sleep(30 * time.Second)
+	}
 }
 
 // podInfo contains runtime information about the pod
