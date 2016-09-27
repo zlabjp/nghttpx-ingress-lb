@@ -43,12 +43,15 @@ const (
 	defaultRktAPIServiceEndpoint = "localhost:15441"
 
 	AutoDetectCloudProvider = "auto-detect"
+
+	defaultIPTablesMasqueradeBit = 14
+	defaultIPTablesDropBit       = 15
 )
 
 var zeroDuration = unversioned.Duration{}
 
-func addDefaultingFuncs(scheme *kruntime.Scheme) {
-	scheme.AddDefaultingFuncs(
+func addDefaultingFuncs(scheme *kruntime.Scheme) error {
+	return scheme.AddDefaultingFuncs(
 		SetDefaults_KubeProxyConfiguration,
 		SetDefaults_KubeSchedulerConfiguration,
 		SetDefaults_LeaderElectionConfiguration,
@@ -246,9 +249,6 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 	if obj.MinimumGCAge == zeroDuration {
 		obj.MinimumGCAge = unversioned.Duration{Duration: 0}
 	}
-	if obj.NetworkPluginDir == "" {
-		obj.NetworkPluginDir = "/usr/libexec/kubernetes/kubelet-plugins/net/exec/"
-	}
 	if obj.NonMasqueradeCIDR == "" {
 		obj.NonMasqueradeCIDR = "10.0.0.0/8"
 	}
@@ -336,6 +336,17 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 	}
 	if obj.KubeReserved == nil {
 		obj.KubeReserved = make(map[string]string)
+	}
+	if obj.MakeIPTablesUtilChains == nil {
+		obj.MakeIPTablesUtilChains = boolVar(true)
+	}
+	if obj.IPTablesMasqueradeBit == nil {
+		temp := int32(defaultIPTablesMasqueradeBit)
+		obj.IPTablesMasqueradeBit = &temp
+	}
+	if obj.IPTablesDropBit == nil {
+		temp := int32(defaultIPTablesDropBit)
+		obj.IPTablesDropBit = &temp
 	}
 }
 
