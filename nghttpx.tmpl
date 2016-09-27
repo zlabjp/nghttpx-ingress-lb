@@ -48,7 +48,7 @@ accept-proxy-protocol=yes
 {{ end }}
 
 workers={{ $cfg.Workers }}
-frontend-http2-window-bits={{ $cfg.FrontendHTTP2WindowBits }}
-frontend-http2-connection-window-bits={{ $cfg.FrontendHTTP2ConnectionWindowBits }}
-backend-http2-window-bits={{ $cfg.BackendHTTP2WindowBits }}
-backend-http2-connection-window-bits={{ $cfg.BackendHTTP2ConnectionWindowBits }}
+frontend-http2-window-size={{ $cfg.FrontendHTTP2WindowSize }}
+frontend-http2-connection-window-size={{ $cfg.FrontendHTTP2ConnectionWindowSize }}
+backend-http2-window-size={{ $cfg.BackendHTTP2WindowSize }}
+backend-http2-connection-window-size={{ $cfg.BackendHTTP2ConnectionWindowSize }}
