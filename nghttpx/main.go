@@ -87,27 +87,24 @@ type nghttpxConfiguration struct {
 	// Set the number of worker threads.
 	Workers string `structs:"workers,omitempty"`
 
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--frontend-http2-window-bits
+	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--frontend-http2-window-size
 	// Sets the per-stream initial window size of HTTP/2 SPDY
-	// frontend connection. For HTTP/2, the size is 2**<N>-1. For
-	// SPDY, the size is 2**<N>.
-	FrontendHTTP2WindowBits int `structs:"frontend-http2-window-bits,omitempty"`
+	// frontend connection.
+	FrontendHTTP2WindowSize int32 `structs:"frontend-http2-window-size,omitempty"`
 
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--frontend-http2-connection-window-bits
+	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--frontend-http2-connection-window-size
 	// Sets the per-connection window size of HTTP/2 and SPDY
-	// frontend connection. For HTTP/2, the size is 2**<N>-1. For
-	// SPDY, the size is 2**<N>.
-	FrontendHTTP2ConnectionWindowBits int `structs:"frontend-http2-connection-window-bits,omitempty"`
+	// frontend connection.
+	FrontendHTTP2ConnectionWindowSize int32 `structs:"frontend-http2-connection-window-size,omitempty"`
 
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--backend-http2-window-bits
-	// Sets the initial window size of HTTP/2 backend connection
-	// to 2**<N>-1.
-	BackendHTTP2WindowBits int `structs:"backend-http2-window-bits,omitempty"`
+	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--backend-http2-window-size
+	// Sets the initial window size of HTTP/2 backend connection.
+	BackendHTTP2WindowSize int32 `structs:"backend-http2-window-size,omitempty"`
 
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--backend-http2-connection-window-bits
+	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--backend-http2-connection-window-size
 	// Sets the per-connection window size of HTTP/2 backend
-	// connection to 2**<N>-1.
-	BackendHTTP2ConnectionWindowBits int `structs:"backend-http2-connection-window-bits,omitempty"`
+	// connection.
+	BackendHTTP2ConnectionWindowSize int32 `structs:"backend-http2-connection-window-size,omitempty"`
 }
 
 // Manager ...
@@ -144,10 +141,10 @@ func newDefaultNghttpxCfg() nghttpxConfiguration {
 		NoOCSP:                            true,
 		AcceptProxyProtocol:               false,
 		Workers:                           strconv.Itoa(runtime.NumCPU()),
-		FrontendHTTP2WindowBits:           16,
-		FrontendHTTP2ConnectionWindowBits: 16,
-		BackendHTTP2WindowBits:            16,
-		BackendHTTP2ConnectionWindowBits:  30,
+		FrontendHTTP2WindowSize:           65535,
+		FrontendHTTP2ConnectionWindowSize: 65535,
+		BackendHTTP2WindowSize:            65535,
+		BackendHTTP2ConnectionWindowSize:  2147483647,
 	}
 
 	if glog.V(5) {
