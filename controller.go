@@ -261,10 +261,6 @@ func (lbc *loadBalancerController) addIngressNotification(obj interface{}) {
 }
 
 func (lbc *loadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
-	if reflect.DeepEqual(old, cur) {
-		return
-	}
-
 	curIng := cur.(*extensions.Ingress)
 	glog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
 	lbc.enqueueIngress(curIng)
