@@ -26,6 +26,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -87,6 +88,9 @@ var (
 )
 
 func main() {
+	// We use math/rand to choose interval of resync
+	rand.Seed(time.Now().UTC().UnixNano())
+
 	var kubeClient *unversioned.Client
 	flags.AddGoFlagSet(flag.CommandLine)
 	flags.Parse(os.Args)

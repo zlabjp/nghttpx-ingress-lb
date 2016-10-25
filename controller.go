@@ -26,6 +26,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"sort"
 	"strconv"
@@ -57,6 +58,8 @@ const (
 	namedPortAnnotation      = "ingress.kubernetes.io/named-ports"
 	backendConfigAnnotation  = "ingress.zlab.co.jp/backend-config"
 	podStoreSyncedPollPeriod = 1 * time.Second
+	// Minimum resync period for resources other than Ingress
+	minDepResyncPeriod = 12 * time.Hour
 )
 
 type serviceAnnotation map[string]string
@@ -189,7 +192,7 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 			},
 		},
 		&api.Endpoints{},
-		resyncPeriod,
+		depResyncPeriod(),
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addEndpointNotification,
 			UpdateFunc: lbc.updateEndpointNotification,
@@ -207,7 +210,7 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 			},
 		},
 		&api.Service{},
-		resyncPeriod,
+		depResyncPeriod(),
 		cache.ResourceEventHandlerFuncs{},
 	)
 
@@ -221,7 +224,7 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 			},
 		},
 		&api.Secret{},
-		resyncPeriod,
+		depResyncPeriod(),
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addSecretNotification,
 			UpdateFunc: lbc.updateSecretNotification,
@@ -239,7 +242,7 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 			},
 		},
 		&api.ConfigMap{},
-		resyncPeriod,
+		depResyncPeriod(),
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addConfigMapNotification,
 			UpdateFunc: lbc.updateConfigMapNotification,
@@ -1034,4 +1037,12 @@ func retryOrForget(q workqueue.RateLimitingInterface, key interface{}, requeue b
 	}
 
 	q.AddRateLimited(key)
+}
+
+// depResyncPeriod returns duration between resync for resources other than Ingress.
+//
+// Inspired by Kubernetes apiserver: k8s.io/kubernetes/cmd/kube-controller-manager/app/controllermanager.go
+func depResyncPeriod() time.Duration {
+	factor := rand.Float64() + 1
+	return time.Duration(float64(minDepResyncPeriod.Nanoseconds()) * factor)
 }
