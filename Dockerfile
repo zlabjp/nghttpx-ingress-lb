@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
         zlib1g libssl1.0.0 libev4 libjemalloc1 \
         diffutils ca-certificates psmisc \
         --no-install-recommends && \
-    git clone -b v1.15.0 https://github.com/nghttp2/nghttp2.git && \
+    git clone -b v1.16.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     git submodule update --init && autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
