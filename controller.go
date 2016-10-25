@@ -41,7 +41,6 @@ import (
 	"k8s.io/kubernetes/pkg/client/record"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/controller"
-	"k8s.io/kubernetes/pkg/controller/framework"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util/intstr"
@@ -114,11 +113,11 @@ func (ia ingressAnnotation) getBackendConfig() map[string]map[string]PortBackend
 // from the loadbalancer
 type loadBalancerController struct {
 	client         *client.Client
-	ingController  *framework.Controller
-	endpController *framework.Controller
-	svcController  *framework.Controller
-	secrController *framework.Controller
-	mapController  *framework.Controller
+	ingController  *cache.Controller
+	endpController *cache.Controller
+	svcController  *cache.Controller
+	secrController *cache.Controller
+	mapController  *cache.Controller
 	ingLister      StoreToIngressLister
 	svcLister      cache.StoreToServiceLister
 	endpLister     cache.StoreToEndpointsLister
@@ -162,7 +161,7 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 		ingQueue:     workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 	}
 
-	lbc.ingLister.Store, lbc.ingController = framework.NewInformer(
+	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return lbc.client.Extensions().Ingress(namespace).List(options)
@@ -173,14 +172,14 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 		},
 		&extensions.Ingress{},
 		resyncPeriod,
-		framework.ResourceEventHandlerFuncs{
+		cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addIngressNotification,
 			UpdateFunc: lbc.updateIngressNotification,
 			DeleteFunc: lbc.deleteIngressNotification,
 		},
 	)
 
-	lbc.endpLister.Store, lbc.endpController = framework.NewInformer(
+	lbc.endpLister.Store, lbc.endpController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return lbc.client.Endpoints(namespace).List(options)
@@ -191,14 +190,14 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 		},
 		&api.Endpoints{},
 		resyncPeriod,
-		framework.ResourceEventHandlerFuncs{
+		cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addEndpointNotification,
 			UpdateFunc: lbc.updateEndpointNotification,
 			DeleteFunc: lbc.deleteEndpointNotification,
 		},
 	)
 
-	lbc.svcLister.Store, lbc.svcController = framework.NewInformer(
+	lbc.svcLister.Store, lbc.svcController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return lbc.client.Services(namespace).List(options)
@@ -209,10 +208,10 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 		},
 		&api.Service{},
 		resyncPeriod,
-		framework.ResourceEventHandlerFuncs{},
+		cache.ResourceEventHandlerFuncs{},
 	)
 
-	lbc.secrLister.Store, lbc.secrController = framework.NewInformer(
+	lbc.secrLister.Store, lbc.secrController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return lbc.client.Secrets(namespace).List(options)
@@ -223,14 +222,14 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 		},
 		&api.Secret{},
 		resyncPeriod,
-		framework.ResourceEventHandlerFuncs{
+		cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addSecretNotification,
 			UpdateFunc: lbc.updateSecretNotification,
 			DeleteFunc: lbc.deleteSecretNotification,
 		},
 	)
 
-	lbc.mapLister.Store, lbc.mapController = framework.NewInformer(
+	lbc.mapLister.Store, lbc.mapController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return lbc.client.ConfigMaps(namespace).List(options)
@@ -241,7 +240,7 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 		},
 		&api.ConfigMap{},
 		resyncPeriod,
-		framework.ResourceEventHandlerFuncs{
+		cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addConfigMapNotification,
 			UpdateFunc: lbc.updateConfigMapNotification,
 			DeleteFunc: lbc.deleteConfigMapNotification,
