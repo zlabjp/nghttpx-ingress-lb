@@ -274,11 +274,16 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	r.setLastSyncResourceVersion(resourceVersion)
 
 	resyncerrc := make(chan error, 1)
+	cancelCh := make(chan struct{})
+	defer close(cancelCh)
 	go func() {
 		for {
 			select {
 			case <-resyncCh:
 			case <-stopCh:
+				return
+			case <-cancelCh:
+				glog.V(4).Infof("ListAndWatch returns; resync goroutine exists now")
 				return
 			}
 			glog.V(4).Infof("%s: forcing resync", r.name)
