@@ -174,9 +174,24 @@ spec:
 ## Custom nghttpx configuration
 
 Using a ConfigMap it is possible to customize the defaults in nghttpx.
-Currently, subset of settings are available.
-Please check `nghttpx-ingress-controller --dump-nghttpx-configuration` to dump the configurable settings.
-In addition to the dumped settings, `accept-proxy-protocol` option is also available as boolean flag.
+All nghttpx options can be used to customize behavior of nghttpx.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nghttpx-ingress-lb
+data:
+  nghttpx-conf: |
+    log-level=INFO
+```
+
+nghttpx ingress controller, by default, overrides the following default configuration:
+
+- `workers`: set to the number of cores that the nghttpx ingress
+  controller runs.
+
+User can override `workers` using ConfigMap.
 
 ## Troubleshooting
 

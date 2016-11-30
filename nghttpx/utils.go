@@ -33,29 +33,13 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/mitchellh/mapstructure"
 	"k8s.io/kubernetes/pkg/api"
 )
 
 // ReadConfig obtains the configuration defined by the user merged with the defaults.
 func (ngx *Manager) ReadConfig(config *api.ConfigMap) nghttpxConfiguration {
-	if len(config.Data) == 0 {
-		return newDefaultNghttpxCfg()
-	}
-
 	cfg := newDefaultNghttpxCfg()
-
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		TagName:          "structs",
-		Result:           &cfg,
-		WeaklyTypedInput: true,
-	})
-
-	err = decoder.Decode(config.Data)
-	if err != nil {
-		glog.Infof("%v", err)
-	}
-
+	cfg.ExtraConfig = config.Data["nghttpx-conf"]
 	return cfg
 }
 
