@@ -204,10 +204,6 @@
 			"Rev": "465937c80b3c07a7c7ad20cc934898646a91c1de"
 		},
 		{
-			"ImportPath": "github.com/fatih/structs",
-			"Rev": "d2e1722acaab51fc7fc55686706d08bbf9e4fafb"
-		},
-		{
 			"ImportPath": "github.com/ghodss/yaml",
 			"Rev": "73d445a93680fa1a78ae23a5839bad48f32ba1ee"
 		},
@@ -281,10 +277,6 @@
 		{
 			"ImportPath": "github.com/matttproud/golang_protobuf_extensions/pbutil",
 			"Rev": "fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a"
-		},
-		{
-			"ImportPath": "github.com/mitchellh/mapstructure",
-			"Rev": "740c764bc6149d3f1806231418adb9f52c11bcbf"
 		},
 		{
 			"ImportPath": "github.com/pborman/uuid",
