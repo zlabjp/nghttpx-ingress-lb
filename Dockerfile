@@ -24,8 +24,12 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
         zlib1g libssl1.0.0 libev4 libjemalloc1 \
         diffutils ca-certificates psmisc \
         --no-install-recommends && \
-    git clone -b v1.17.0 https://github.com/nghttp2/nghttp2.git && \
+    git clone https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
+    git config user.email "nghttpx-build-bot@example.com" && \
+    git config user.name "nghttpx-build-bot" && \
+    git checkout v1.17.0 && \
+    git cherry-pick 85ba33c08f464016e7fdcc3c764e31d640299b34 && \
     git submodule update --init && autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
     make install-strip && \
