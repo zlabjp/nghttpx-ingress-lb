@@ -18,10 +18,10 @@ controller: controller.go clean
 		-o nghttpx-ingress-controller
 
 container: controller
-	sudo docker build -t "${PREFIX}:${TAG}" .
+	docker build -t "${PREFIX}:${TAG}" .
 
 push: container
-	sudo docker push "${PREFIX}:${TAG}"
+	docker push "${PREFIX}:${TAG}"
 
 clean:
 	rm -f nghttpx-ingress-controller
