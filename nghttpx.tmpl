@@ -31,24 +31,10 @@ frontend=*,443;no-tls
 # for health check
 frontend=127.0.0.1,8080;healthmon;no-tls
 
+# default configuration by controller
+log-level={{ $cfg.LogLevel }}
+workers={{ $cfg.Workers }}
+
 # from ConfigMap
 
-log-level={{ $cfg.LogLevel }}
-backend-read-timeout={{ $cfg.BackendReadTimeout }}
-backend-write-timeout={{ $cfg.BackendWriteTimeout }}
-ciphers={{ $cfg.Ciphers }}
-tls-proto-list={{ $cfg.TLSProtoList }}
-
-{{ if $cfg.NoOCSP }}
-no-ocsp=yes
-{{ end }}
-
-{{ if $cfg.AcceptProxyProtocol }}
-accept-proxy-protocol=yes
-{{ end }}
-
-workers={{ $cfg.Workers }}
-frontend-http2-window-size={{ $cfg.FrontendHTTP2WindowSize }}
-frontend-http2-connection-window-size={{ $cfg.FrontendHTTP2ConnectionWindowSize }}
-backend-http2-window-size={{ $cfg.BackendHTTP2WindowSize }}
-backend-http2-connection-window-size={{ $cfg.BackendHTTP2ConnectionWindowSize }}
+{{ $cfg.ExtraConfig }}

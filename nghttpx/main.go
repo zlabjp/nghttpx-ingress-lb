@@ -24,7 +24,6 @@ limitations under the License.
 package nghttpx
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 	"strconv"
@@ -33,10 +32,6 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/fatih/structs"
-	"github.com/ghodss/yaml"
-
-	"k8s.io/kubernetes/pkg/api"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/util/flowcontrol"
 )
@@ -46,65 +41,17 @@ var (
 	sslDirectory = "/etc/nghttpx-ssl"
 )
 
+// nghttpxConfiguration is set of configuration we apply to nghttpx instance.
 type nghttpxConfiguration struct {
 	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-L
 	// Set the severity level of log output. <LEVEL> must be one
 	// of INFO, NOTICE, WARN, ERROR and FATAL.
-	LogLevel string `structs:"log-level,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--backend-read-timeout
-	// Specify read timeout for backend connection.
-	BackendReadTimeout string `structs:"backend-read-timeout,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--backend-write-timeout
-	// Specify write timeout for backend connection.
-	BackendWriteTimeout string `structs:"backend-write-timeout,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--ciphers
-	// Set allowed cipher list. The format of the string is described in OpenSSL ciphers(1).
-	Ciphers string `structs:"ciphers,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--tls-proto-list
-	// Comma delimited list of SSL/TLS protocol to be enabled. The
-	// following protocols are available: TLSv1.2, TLSv1.1 and
-	// TLSv1.0. The name matching is done in case-insensitive
-	// manner. The parameter must be delimited by a single comma
-	// only and any white spaces are treated as a part of protocol
-	// string. If the protocol list advertised by client does not
-	// overlap this list, you will receive the error message
-	// "unknown protocol".
-	TLSProtoList string `structs:"tls-proto-list,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--no-ocsp
-	// Disable OCSP stapling.
-	NoOCSP bool `structs:"no-ocsp,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--accept-proxy-protocol
-	// Accept PROXY protocol version 1 on frontend connection.
-	AcceptProxyProtocol bool `structs:"accept-proxy-protocol,omitempty"`
-
+	LogLevel string
 	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-n
 	// Set the number of worker threads.
-	Workers string `structs:"workers,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--frontend-http2-window-size
-	// Sets the per-stream initial window size of HTTP/2 SPDY
-	// frontend connection.
-	FrontendHTTP2WindowSize int32 `structs:"frontend-http2-window-size,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--frontend-http2-connection-window-size
-	// Sets the per-connection window size of HTTP/2 and SPDY
-	// frontend connection.
-	FrontendHTTP2ConnectionWindowSize int32 `structs:"frontend-http2-connection-window-size,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--backend-http2-window-size
-	// Sets the initial window size of HTTP/2 backend connection.
-	BackendHTTP2WindowSize int32 `structs:"backend-http2-window-size,omitempty"`
-
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--backend-http2-connection-window-size
-	// Sets the per-connection window size of HTTP/2 backend
-	// connection.
-	BackendHTTP2ConnectionWindowSize int32 `structs:"backend-http2-connection-window-size,omitempty"`
+	Workers string
+	// ExtraConfig is the extra configurations in a format that nghttpx accepts in --conf.
+	ExtraConfig string
 }
 
 // Manager ...
@@ -133,18 +80,8 @@ type Manager struct {
 // in the file default-conf.json
 func newDefaultNghttpxCfg() nghttpxConfiguration {
 	cfg := nghttpxConfiguration{
-		LogLevel:                          "NOTICE",
-		BackendReadTimeout:                "1m",
-		BackendWriteTimeout:               "30s",
-		Ciphers:                           "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256",
-		TLSProtoList:                      "TLSv1.2",
-		NoOCSP:                            true,
-		AcceptProxyProtocol:               false,
-		Workers:                           strconv.Itoa(runtime.NumCPU()),
-		FrontendHTTP2WindowSize:           65535,
-		FrontendHTTP2ConnectionWindowSize: 65535,
-		BackendHTTP2WindowSize:            65535,
-		BackendHTTP2ConnectionWindowSize:  2147483647,
+		LogLevel: "NOTICE",
+		Workers:  strconv.Itoa(runtime.NumCPU()),
 	}
 
 	if glog.V(5) {
@@ -178,26 +115,4 @@ func (nghttpx *Manager) createCertsDir(base string) {
 		}
 		glog.Fatalf("Couldn't create directory %v: %v", base, err)
 	}
-}
-
-// ConfigMapAsString returns a ConfigMap with the default nghttpx
-// configuration to be used a guide to provide a custom configuration
-func ConfigMapAsString() string {
-	cfg := &api.ConfigMap{}
-	cfg.Name = "custom-name"
-	cfg.Namespace = "a-valid-namespace"
-	cfg.Data = make(map[string]string)
-
-	data := structs.Map(newDefaultNghttpxCfg())
-	for k, v := range data {
-		cfg.Data[k] = fmt.Sprintf("%v", v)
-	}
-
-	out, err := yaml.Marshal(cfg)
-	if err != nil {
-		glog.Warningf("Unexpected error creating default configuration: %v", err)
-		return ""
-	}
-
-	return string(out)
 }

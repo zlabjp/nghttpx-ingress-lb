@@ -37,8 +37,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 
-	"github.com/zlabjp/nghttpx-ingress-lb/nghttpx"
-
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned"
@@ -77,8 +75,7 @@ var (
 
 	healthzPort = flags.Int("healthz-port", healthPort, "port for healthz endpoint.")
 
-	buildCfg = flags.Bool("dump-nghttpx-configuration", false, `Returns a ConfigMap with the default nghttpx conguration.
-		This can be used as a guide to create a custom configuration.`)
+	buildCfg = flags.Bool("dump-nghttpx-configuration", false, `Deprecated`)
 
 	profiling = flags.Bool("profiling", true, `Enable profiling via web interface host:port/debug/pprof/`)
 
@@ -94,12 +91,13 @@ func main() {
 	var kubeClient *unversioned.Client
 	flags.AddGoFlagSet(flag.CommandLine)
 	flags.Parse(os.Args)
+
 	clientConfig := kubectl_util.DefaultClientConfig(flags)
 
 	glog.Infof("Using build: %v - %v", gitRepo, version)
 
 	if *buildCfg {
-		fmt.Printf("Example of ConfigMap to customize nghttpx configuration:\n%v", nghttpx.ConfigMapAsString())
+		fmt.Println("dump-nghttpx-configuration was deprecated.")
 		os.Exit(0)
 	}
 

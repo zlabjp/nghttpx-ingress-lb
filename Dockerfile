@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
         zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev bison \
         zlib1g libssl1.0.0 libev4 libjemalloc1 \
         diffutils ca-certificates psmisc \
+        python \
         --no-install-recommends && \
     git clone https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
