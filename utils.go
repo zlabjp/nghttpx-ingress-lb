@@ -34,7 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/client/cache"
-	"k8s.io/kubernetes/pkg/client/unversioned"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/util/wait"
 )
 
@@ -53,22 +53,27 @@ type StoreToMapLister struct {
 	cache.Store
 }
 
+// StoreToServiceLister makes a Store that lists Services.
+type StoreToServiceLister struct {
+	cache.Store
+}
+
 // getPodDetails  returns runtime information about the pod: name, namespace and IP of the node
-func getPodDetails(kubeClient *unversioned.Client, allowInternalIP bool) (*podInfo, error) {
+func getPodDetails(clientset internalclientset.Interface, allowInternalIP bool) (*podInfo, error) {
 	podName := os.Getenv("POD_NAME")
 	podNs := os.Getenv("POD_NAMESPACE")
 
-	err := waitForPodRunning(kubeClient, podNs, podName, time.Millisecond*200, time.Second*30)
+	err := waitForPodRunning(clientset, podNs, podName, time.Millisecond*200, time.Second*30)
 	if err != nil {
 		return nil, err
 	}
 
-	pod, _ := kubeClient.Pods(podNs).Get(podName)
+	pod, _ := clientset.Core().Pods(podNs).Get(podName)
 	if pod == nil {
 		return nil, fmt.Errorf("Unable to get POD information")
 	}
 
-	node, err := kubeClient.Nodes().Get(pod.Spec.NodeName)
+	node, err := clientset.Core().Nodes().Get(pod.Spec.NodeName)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +108,7 @@ func getPodDetails(kubeClient *unversioned.Client, allowInternalIP bool) (*podIn
 	}, nil
 }
 
-func isValidService(kubeClient *unversioned.Client, name string) error {
+func isValidService(clientset internalclientset.Interface, name string) error {
 	if name == "" {
 		return fmt.Errorf("empty string is not a valid service name")
 	}
@@ -113,7 +118,7 @@ func isValidService(kubeClient *unversioned.Client, name string) error {
 		return fmt.Errorf("invalid name format (namespace/name) in service '%v'", name)
 	}
 
-	_, err := kubeClient.Services(parts[0]).Get(parts[1])
+	_, err := clientset.Core().Services(parts[0]).Get(parts[1])
 	return err
 }
 
@@ -163,7 +168,7 @@ func parseNsName(input string) (string, string, error) {
 	return nsName[0], nsName[1], nil
 }
 
-func waitForPodRunning(kubeClient *unversioned.Client, ns, podName string, interval, timeout time.Duration) error {
+func waitForPodRunning(clientset internalclientset.Interface, ns, podName string, interval, timeout time.Duration) error {
 	condition := func(pod *api.Pod) (bool, error) {
 		if pod.Status.Phase == api.PodRunning {
 			return true, nil
@@ -173,14 +178,14 @@ func waitForPodRunning(kubeClient *unversioned.Client, ns, podName string, inter
 
 	glog.Infof("ns=%v, podName=%v", ns, podName)
 
-	return waitForPodCondition(kubeClient, ns, podName, condition, interval, timeout)
+	return waitForPodCondition(clientset, ns, podName, condition, interval, timeout)
 }
 
 // waitForPodCondition waits for a pod in state defined by a condition (func)
-func waitForPodCondition(kubeClient *unversioned.Client, ns, podName string, condition func(pod *api.Pod) (bool, error),
+func waitForPodCondition(clientset internalclientset.Interface, ns, podName string, condition func(pod *api.Pod) (bool, error),
 	interval, timeout time.Duration) error {
 	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		pod, err := kubeClient.Pods(ns).Get(podName)
+		pod, err := clientset.Core().Pods(ns).Get(podName)
 		if err != nil {
 			if apierrs.IsNotFound(err) {
 				return false, nil

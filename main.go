@@ -38,8 +38,8 @@ import (
 	"github.com/spf13/pflag"
 
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/client/restclient"
-	"k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/healthz"
 	kubectl_util "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )
@@ -88,7 +88,6 @@ func main() {
 	// We use math/rand to choose interval of resync
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	var kubeClient *unversioned.Client
 	flags.AddGoFlagSet(flag.CommandLine)
 	flags.Parse(os.Args)
 
@@ -106,31 +105,32 @@ func main() {
 	}
 
 	var err error
+	var config *restclient.Config
 	if *inCluster {
-		myconfig, err := restclient.InClusterConfig()
-		if err == nil {
-			glog.Infof("apiserver host = %v", myconfig.Host)
+		config, err = restclient.InClusterConfig()
+		if err != nil {
+			glog.Fatalf("Could not get clientConfig: %v", err)
 		}
-		kubeClient, err = unversioned.NewInCluster()
 	} else {
-		config, connErr := clientConfig.ClientConfig()
-		if connErr != nil {
+		config, err = clientConfig.ClientConfig()
+		if err != nil {
 			glog.Fatalf("error connecting to the client: %v", err)
 		}
-		kubeClient, err = unversioned.New(config)
 	}
+
+	clientset, err := internalclientset.NewForConfig(config)
 	if err != nil {
-		glog.Fatalf("failed to create client: %v", err)
+		glog.Fatalf("Failed to create clientset: %v", err)
 	}
 
 	runtimePodInfo := &podInfo{NodeIP: "127.0.0.1"}
 	if *inCluster {
-		runtimePodInfo, err = getPodDetails(kubeClient, *allowInternalIP)
+		runtimePodInfo, err = getPodDetails(clientset, *allowInternalIP)
 		if err != nil {
 			glog.Fatalf("unexpected error getting runtime information: %v", err)
 		}
 	}
-	if err := isValidService(kubeClient, *defaultSvc); err != nil {
+	if err := isValidService(clientset, *defaultSvc); err != nil {
 		glog.Fatalf("no service with name %v found: %v", *defaultSvc, err)
 	}
 	glog.Infof("Validated %v as the default backend", *defaultSvc)
@@ -141,7 +141,7 @@ func main() {
 		}
 	}
 
-	lbc, err := newLoadBalancerController(kubeClient, *resyncPeriod, *defaultSvc, *watchNamespace, *ngxConfigMap, runtimePodInfo)
+	lbc, err := newLoadBalancerController(clientset, *resyncPeriod, *defaultSvc, *watchNamespace, *ngxConfigMap, runtimePodInfo)
 	if err != nil {
 		glog.Fatalf("%v", err)
 	}
