@@ -43,10 +43,6 @@ var (
 
 // nghttpxConfiguration is set of configuration we apply to nghttpx instance.
 type nghttpxConfiguration struct {
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-L
-	// Set the severity level of log output. <LEVEL> must be one
-	// of INFO, NOTICE, WARN, ERROR and FATAL.
-	LogLevel string
 	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-n
 	// Set the number of worker threads.
 	Workers string
@@ -80,12 +76,7 @@ type Manager struct {
 // in the file default-conf.json
 func newDefaultNghttpxCfg() nghttpxConfiguration {
 	cfg := nghttpxConfiguration{
-		LogLevel: "NOTICE",
-		Workers:  strconv.Itoa(runtime.NumCPU()),
-	}
-
-	if glog.V(5) {
-		cfg.LogLevel = "INFO"
+		Workers: strconv.Itoa(runtime.NumCPU()),
 	}
 
 	return cfg
