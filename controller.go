@@ -39,8 +39,9 @@ import (
 	podutil "k8s.io/kubernetes/pkg/api/pod"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/cache"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	unversionedcore "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
 	"k8s.io/kubernetes/pkg/client/record"
-	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -115,14 +116,14 @@ func (ia ingressAnnotation) getBackendConfig() map[string]map[string]PortBackend
 // loadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
 type loadBalancerController struct {
-	client         *client.Client
+	clientset      internalclientset.Interface
 	ingController  *cache.Controller
 	endpController *cache.Controller
 	svcController  *cache.Controller
 	secrController *cache.Controller
 	mapController  *cache.Controller
 	ingLister      StoreToIngressLister
-	svcLister      cache.StoreToServiceLister
+	svcLister      StoreToServiceLister
 	endpLister     cache.StoreToEndpointsLister
 	secrLister     StoreToSecretLister
 	mapLister      StoreToMapLister
@@ -145,18 +146,18 @@ type loadBalancerController struct {
 }
 
 // newLoadBalancerController creates a controller for nghttpx loadbalancer
-func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Duration, defaultSvc,
+func newLoadBalancerController(clientset internalclientset.Interface, resyncPeriod time.Duration, defaultSvc,
 	namespace, ngxConfigMapName string, runtimeInfo *podInfo) (*loadBalancerController, error) {
 
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
-	eventBroadcaster.StartRecordingToSink(kubeClient.Events(namespace))
+	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: clientset.Core().Events(namespace)})
 
 	lbc := loadBalancerController{
-		client:       kubeClient,
+		clientset:    clientset,
 		stopCh:       make(chan struct{}),
 		podInfo:      runtimeInfo,
-		nghttpx:      nghttpx.NewManager(kubeClient),
+		nghttpx:      nghttpx.NewManager(),
 		ngxConfigMap: ngxConfigMapName,
 		defaultSvc:   defaultSvc,
 		recorder:     eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
@@ -167,10 +168,10 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.client.Extensions().Ingress(namespace).List(options)
+				return lbc.clientset.Extensions().Ingresses(namespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.client.Extensions().Ingress(namespace).Watch(options)
+				return lbc.clientset.Extensions().Ingresses(namespace).Watch(options)
 			},
 		},
 		&extensions.Ingress{},
@@ -185,10 +186,10 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 	lbc.endpLister.Store, lbc.endpController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.client.Endpoints(namespace).List(options)
+				return lbc.clientset.Core().Endpoints(namespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.client.Endpoints(namespace).Watch(options)
+				return lbc.clientset.Core().Endpoints(namespace).Watch(options)
 			},
 		},
 		&api.Endpoints{},
@@ -203,10 +204,10 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 	lbc.svcLister.Store, lbc.svcController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.client.Services(namespace).List(options)
+				return lbc.clientset.Core().Services(namespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.client.Services(namespace).Watch(options)
+				return lbc.clientset.Core().Services(namespace).Watch(options)
 			},
 		},
 		&api.Service{},
@@ -217,10 +218,10 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 	lbc.secrLister.Store, lbc.secrController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.client.Secrets(namespace).List(options)
+				return lbc.clientset.Core().Secrets(namespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.client.Secrets(namespace).Watch(options)
+				return lbc.clientset.Core().Secrets(namespace).Watch(options)
 			},
 		},
 		&api.Secret{},
@@ -235,10 +236,10 @@ func newLoadBalancerController(kubeClient *client.Client, resyncPeriod time.Dura
 	lbc.mapLister.Store, lbc.mapController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.client.ConfigMaps(namespace).List(options)
+				return lbc.clientset.Core().ConfigMaps(namespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.client.ConfigMaps(namespace).Watch(options)
+				return lbc.clientset.Core().ConfigMaps(namespace).Watch(options)
 			},
 		},
 		&api.ConfigMap{},
@@ -475,7 +476,7 @@ func (lbc *loadBalancerController) getConfigMap(cfgName string) *api.ConfigMap {
 
 	ns, name, _ := parseNsName(cfgName)
 	// TODO: check why lbc.mapLister.Store.GetByKey(mapKey) is not stable (random content)
-	if cfg, err := lbc.client.ConfigMaps(ns).Get(name); err != nil {
+	if cfg, err := lbc.clientset.Core().ConfigMaps(ns).Get(name); err != nil {
 		glog.V(3).Infof("configmap not found %v : %v", cfgName, err)
 		return &api.ConfigMap{}
 	} else {
@@ -490,7 +491,7 @@ func (lbc *loadBalancerController) getConfigMap(cfgName string) *api.ConfigMap {
 func (lbc *loadBalancerController) checkSvcForUpdate(svc *api.Service) (map[string]string, error) {
 	// get the pods associated with the service
 	// TODO: switch this to a watch
-	pods, err := lbc.client.Pods(svc.Namespace).List(api.ListOptions{
+	pods, err := lbc.clientset.Core().Pods(svc.Namespace).List(api.ListOptions{
 		LabelSelector: labels.Set(svc.Spec.Selector).AsSelector(),
 	})
 
@@ -532,7 +533,7 @@ func (lbc *loadBalancerController) checkSvcForUpdate(svc *api.Service) (map[stri
 	if len(namedPorts) > 0 && !reflect.DeepEqual(curNamedPort, namedPorts) {
 		data, _ := json.Marshal(namedPorts)
 
-		newSvc, err := lbc.client.Services(svc.Namespace).Get(svc.Name)
+		newSvc, err := lbc.clientset.Core().Services(svc.Namespace).Get(svc.Name)
 		if err != nil {
 			return namedPorts, fmt.Errorf("error getting service %v/%v: %v", svc.Namespace, svc.Name, err)
 		}
@@ -543,7 +544,7 @@ func (lbc *loadBalancerController) checkSvcForUpdate(svc *api.Service) (map[stri
 
 		newSvc.ObjectMeta.Annotations[namedPortAnnotation] = string(data)
 		glog.Infof("updating service %v with new named port mappings", svc.Name)
-		_, err = lbc.client.Services(svc.Namespace).Update(newSvc)
+		_, err = lbc.clientset.Core().Services(svc.Namespace).Update(newSvc)
 		if err != nil {
 			return namedPorts, fmt.Errorf("error syncing service %v/%v: %v", svc.Namespace, svc.Name, err)
 		}
@@ -604,7 +605,7 @@ func (lbc *loadBalancerController) updateIngressStatus(key string) {
 
 	ing := obj.(*extensions.Ingress)
 
-	ingClient := lbc.client.Extensions().Ingress(ing.Namespace)
+	ingClient := lbc.clientset.Extensions().Ingresses(ing.Namespace)
 
 	curIng, err := ingClient.Get(ing.Name)
 	if err != nil {
@@ -963,7 +964,7 @@ func (lbc *loadBalancerController) removeFromIngress(ings []interface{}) {
 	for _, obj := range ings {
 		ing := obj.(*extensions.Ingress)
 
-		ingClient := lbc.client.Extensions().Ingress(ing.Namespace)
+		ingClient := lbc.clientset.Extensions().Ingresses(ing.Namespace)
 		curIng, err := ingClient.Get(ing.Name)
 		if err != nil {
 			glog.Errorf("unexpected error searching Ingress %v/%v: %v", ing.Namespace, ing.Name, err)

@@ -32,7 +32,6 @@ import (
 
 	"github.com/golang/glog"
 
-	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/util/flowcontrol"
 )
 
@@ -92,7 +91,7 @@ func newDefaultNghttpxCfg() nghttpxConfiguration {
 }
 
 // NewManager ...
-func NewManager(kubeClient *client.Client) *Manager {
+func NewManager() *Manager {
 	ngx := &Manager{
 		ConfigFile:        "/etc/nghttpx/nghttpx.conf",
 		BackendConfigFile: "/etc/nghttpx/nghttpx-backend.conf",
