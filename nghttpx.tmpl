@@ -1,6 +1,7 @@
 {{ $cfg := .cfg }}
 
 accesslog-file=/var/log/nghttpx/access.log
+errorlog-file=/var/log/nghttpx/error.log
 
 include=/etc/nghttpx/nghttpx-backend.conf
 
@@ -32,7 +33,6 @@ frontend=*,443;no-tls
 frontend=127.0.0.1,8080;healthmon;no-tls
 
 # default configuration by controller
-log-level={{ $cfg.LogLevel }}
 workers={{ $cfg.Workers }}
 
 # from ConfigMap

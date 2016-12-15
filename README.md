@@ -219,9 +219,6 @@ I0316 12:24:37.610073       1 command.go:69] change in configuration detected. R
 ```
 
 - `--v=3` shows details about the service, Ingress rule, endpoint changes and it dumps the nghttpx configuration in JSON format
-- `--v=5` configures nghttpx to output INFO level log
-
-
 
 ## Limitations
 
