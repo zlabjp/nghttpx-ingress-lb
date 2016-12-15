@@ -1,6 +1,7 @@
 {{ $cfg := .cfg }}
 
 accesslog-file=/var/log/nghttpx/access.log
+errorlog-file=/var/log/nghttpx/error.log
 
 include=/etc/nghttpx/nghttpx-backend.conf
 
