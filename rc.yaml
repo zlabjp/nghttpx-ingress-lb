@@ -97,4 +97,4 @@ spec:
         args:
         - /nghttpx-ingress-controller
         - --default-backend-service=default/default-http-backend
-
+        - --logtostderr
