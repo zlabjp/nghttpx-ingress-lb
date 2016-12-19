@@ -27,7 +27,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rsa"
-	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
@@ -77,7 +77,7 @@ func (nghttpx *Manager) AddOrUpdateCertAndKey(name string, cert []byte, key []by
 }
 
 func checksum(cert []byte, key []byte) string {
-	h := sha1.New()
+	h := sha256.New()
 	h.Write(cert)
 	h.Write(key)
 	return hex.EncodeToString(h.Sum(nil))
