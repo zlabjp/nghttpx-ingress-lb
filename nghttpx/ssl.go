@@ -34,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/golang/glog"
 )
@@ -57,8 +58,8 @@ func writeFile(path string, content []byte) error {
 // specified name, and returns the path to key, and certificate files,
 // and checksum of them concatenated.
 func (nghttpx *Manager) AddOrUpdateCertAndKey(name string, cert []byte, key []byte) (TLSCred, error) {
-	keyFileName := sslDirectory + "/" + name + ".key"
-	certFileName := sslDirectory + "/" + name + ".crt"
+	keyFileName := filepath.Join(sslDirectory, fmt.Sprintf("%v.key", name))
+	certFileName := filepath.Join(sslDirectory, fmt.Sprintf("%v.crt", name))
 
 	if err := writeFile(keyFileName, key); err != nil {
 		return TLSCred{}, err
