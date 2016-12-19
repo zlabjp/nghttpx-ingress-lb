@@ -28,7 +28,7 @@ Before deploying the controller to production you might want to run it outside t
 
 ```console
 $ make controller
-$ mkdir /etc/nghttpx-ssl
+$ mkdir /etc/nghttpx-tls
 $ ./nghttpx-ingress-controller --running-in-cluster=false --default-backend-service=kube-system/default-http-backend
 ```
 

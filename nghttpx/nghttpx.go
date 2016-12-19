@@ -81,11 +81,11 @@ type TLSCred struct {
 
 // Server describes an nghttpx server
 type Server struct {
-	SSL               bool
+	TLS               bool
 	DefaultTLSCred    TLSCred
 	SubTLSCred        []TLSCred
-	SSLCertificate    string
-	SSLCertificateKey string
+	TLSCertificate    string
+	TLSCertificateKey string
 }
 
 // NewDefaultServer return an UpstreamServer to be use as default server that returns 503.

@@ -678,7 +678,7 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 	server := &nghttpx.Server{}
 
 	if len(pems) > 0 {
-		server.SSL = true
+		server.TLS = true
 		server.DefaultTLSCred = pems[0]
 		server.SubTLSCred = pems[1:]
 	}
@@ -838,12 +838,12 @@ func (lbc *loadBalancerController) getPemsFromIngress(data []interface{}) []nght
 			}
 
 			if _, err := nghttpx.CommonNames(cert); err != nil {
-				glog.Errorf("No valid SSL certificate found in secret %v: %v", secretKey, err)
+				glog.Errorf("No valid TLS certificate found in secret %v: %v", secretKey, err)
 				continue
 			}
 
 			if err := nghttpx.CheckPrivateKey(key); err != nil {
-				glog.Errorf("No valid SSL private key found in secret %v: %v", secretKey, err)
+				glog.Errorf("No valid TLS private key found in secret %v: %v", secretKey, err)
 				continue
 			}
 

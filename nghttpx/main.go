@@ -36,8 +36,8 @@ import (
 )
 
 var (
-	// Base directory that contains the mounted secrets with SSL certificates, keys and
-	sslDirectory = "/etc/nghttpx-ssl"
+	// Base directory that contains the mounted secrets with TLS certificates, keys and
+	tlsDirectory = "/etc/nghttpx-tls"
 )
 
 // nghttpxConfiguration is set of configuration we apply to nghttpx instance.
@@ -90,7 +90,7 @@ func NewManager() *Manager {
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.1, 1),
 	}
 
-	ngx.createCertsDir(sslDirectory)
+	ngx.createCertsDir(tlsDirectory)
 
 	ngx.loadTemplate()
 

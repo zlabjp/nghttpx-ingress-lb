@@ -10,7 +10,7 @@ frontend=*,80;no-tls
 # API endpoints
 frontend=127.0.0.1,3001;api;no-tls
 
-{{ if .server.SSL }}
+{{ if .server.TLS }}
 frontend=*,443
 
 {{ $defaultCred := .server.DefaultTLSCred }}
