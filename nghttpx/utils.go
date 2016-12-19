@@ -29,7 +29,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 
 	"github.com/golang/glog"
 
@@ -121,33 +120,4 @@ func diff(b1, b2 []byte) (data []byte, err error) {
 		err = nil
 	}
 	return
-}
-
-func merge(dst, src map[string]interface{}) map[string]interface{} {
-	for key, srcVal := range src {
-		if dstVal, ok := dst[key]; ok {
-			srcMap, srcMapOk := toMap(srcVal)
-			dstMap, dstMapOk := toMap(dstVal)
-			if srcMapOk && dstMapOk {
-				srcVal = merge(dstMap, srcMap)
-			}
-		}
-		dst[key] = srcVal
-	}
-
-	return dst
-}
-
-func toMap(iface interface{}) (map[string]interface{}, bool) {
-	value := reflect.ValueOf(iface)
-	if value.Kind() == reflect.Map {
-		m := map[string]interface{}{}
-		for _, k := range value.MapKeys() {
-			m[k.String()] = value.MapIndex(k).Interface()
-		}
-
-		return m, true
-	}
-
-	return map[string]interface{}{}, false
 }

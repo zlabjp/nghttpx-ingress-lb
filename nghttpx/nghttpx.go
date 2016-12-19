@@ -88,39 +88,7 @@ type Server struct {
 	SSLCertificateKey string
 }
 
-// Location describes an nghttpx location
-type Location struct {
-	Path     string
-	Upstream Upstream
-}
-
-// LocationByPath sorts location by path
-type LocationByPath []*Location
-
-func (c LocationByPath) Len() int      { return len(c) }
-func (c LocationByPath) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
-func (c LocationByPath) Less(i, j int) bool {
-	return c[i].Path < c[j].Path
-}
-
 // NewDefaultServer return an UpstreamServer to be use as default server that returns 503.
 func NewDefaultServer() UpstreamServer {
 	return UpstreamServer{Address: "127.0.0.1", Port: "8181"}
-}
-
-// NewUpstream creates an upstream without servers.
-func NewUpstream(name string) *Upstream {
-	return &Upstream{
-		Name:     name,
-		Backends: []UpstreamServer{},
-	}
-}
-
-func NewDefaultUpstream(name string) *Upstream {
-	return &Upstream{
-		Name:     name,
-		Host:     "",
-		Path:     "",
-		Backends: []UpstreamServer{NewDefaultServer()},
-	}
 }
