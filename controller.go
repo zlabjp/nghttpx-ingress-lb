@@ -706,7 +706,7 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 					normalizedPath = path.Path
 				}
 				// The format of upsName is similar to backend option syntax of nghttpx.
-				upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.GetNamespace(), path.Backend.ServiceName, path.Backend.ServicePort.String(), rule.Host, normalizedPath)
+				upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, path.Backend.ServiceName, path.Backend.ServicePort.String(), rule.Host, normalizedPath)
 				ups := &nghttpx.Upstream{
 					Name: upsName,
 					Host: rule.Host,
@@ -715,7 +715,7 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 
 				glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
 
-				svcKey := fmt.Sprintf("%v/%v", ing.GetNamespace(), path.Backend.ServiceName)
+				svcKey := fmt.Sprintf("%v/%v", ing.Namespace, path.Backend.ServiceName)
 				svcObj, svcExists, err := lbc.svcLister.Store.GetByKey(svcKey)
 				if err != nil {
 					glog.Infof("error getting service %v from the cache: %v", svcKey, err)
