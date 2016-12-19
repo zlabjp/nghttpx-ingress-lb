@@ -54,7 +54,6 @@ import (
 )
 
 const (
-	defUpstreamName          = "upstream-default-backend"
 	defServerName            = "_"
 	namedPortAnnotation      = "ingress.kubernetes.io/named-ports"
 	backendConfigAnnotation  = "ingress.zlab.co.jp/backend-config"
@@ -640,7 +639,7 @@ func (lbc *loadBalancerController) isStatusIPDefined(lbings []api.LoadBalancerIn
 
 func (lbc *loadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 	upstream := &nghttpx.Upstream{
-		Name: defUpstreamName,
+		Name: lbc.defaultSvc,
 	}
 	svcKey := lbc.defaultSvc
 	svcObj, svcExists, err := lbc.svcLister.Store.GetByKey(svcKey)
@@ -696,7 +695,8 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 			}
 
 			for _, path := range rule.HTTP.Paths {
-				upsName := fmt.Sprintf("%v-%v-%v-%v-%v", ing.GetNamespace(), path.Backend.ServiceName, path.Backend.ServicePort.String(), rule.Host, path.Path)
+				// The format of upsName is similar to backend option syntax of nghttpx.
+				upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.GetNamespace(), path.Backend.ServiceName, path.Backend.ServicePort.String(), rule.Host, path.Path)
 				ups := &nghttpx.Upstream{
 					Name: upsName,
 					Host: rule.Host,
