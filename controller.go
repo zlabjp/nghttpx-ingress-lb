@@ -30,6 +30,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -695,12 +696,21 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 			}
 
 			for _, path := range rule.HTTP.Paths {
+				var normalizedPath string
+				if path.Path == "" {
+					normalizedPath = "/"
+				} else if !strings.HasPrefix(path.Path, "/") {
+					glog.Infof("Ingress %v/%v, host %v has Path which does not start /: %v", ing.Namespace, ing.Name, rule.Host, path.Path)
+					continue
+				} else {
+					normalizedPath = path.Path
+				}
 				// The format of upsName is similar to backend option syntax of nghttpx.
-				upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.GetNamespace(), path.Backend.ServiceName, path.Backend.ServicePort.String(), rule.Host, path.Path)
+				upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.GetNamespace(), path.Backend.ServiceName, path.Backend.ServicePort.String(), rule.Host, normalizedPath)
 				ups := &nghttpx.Upstream{
 					Name: upsName,
 					Host: rule.Host,
-					Path: path.Path,
+					Path: normalizedPath,
 				}
 
 				glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
