@@ -87,18 +87,6 @@ func (ngx *Manager) CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressC
 	}
 }
 
-// shellOut executes a command and returns its combined standard output and standard
-// error in case of an error in the execution
-func (ngx *Manager) shellOut(cmd string) error {
-	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
-	if err != nil {
-		glog.Errorf("failed to execute %v: %v", cmd, string(out))
-		return err
-	}
-
-	return nil
-}
-
 // check to verify Manager implements HealthzChecker interface
 var _ healthz.HealthzChecker = Manager{}
 
