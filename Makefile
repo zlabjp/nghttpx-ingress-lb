@@ -28,3 +28,7 @@ clean:
 
 vet:
 	go tool vet -printfuncs Infof,Warningf,Errorf,Fatalf,Exitf *.go nghttpx/*.go
+
+fmt:
+	go fmt *.go
+	go fmt nghttpx/*.go
