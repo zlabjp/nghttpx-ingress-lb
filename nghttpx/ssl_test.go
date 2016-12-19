@@ -27,6 +27,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -51,20 +52,23 @@ func TestAddOrUpdateCertAndKey(t *testing.T) {
 	ngx := &Manager{}
 
 	name := fmt.Sprintf("test-%v", time.Now().UnixNano())
-	pemPath, err := ngx.AddOrUpdateCertAndKey(name, string(dCrt), string(dKey))
+	tlsCred, err := ngx.AddOrUpdateCertAndKey(name, dCrt, dKey)
 	if err != nil {
-		t.Fatalf("unexpected error checking SSL certificate: %v", err)
+		t.Fatalf("unexpected error writing TLS key pair: %v", err)
 	}
 
-	if pemPath == "" {
-		t.Fatalf("expected path to pem file but returned empty")
+	if got, want := tlsCred.Key, filepath.Join(sslDirectory, fmt.Sprintf("%v.key", name)); got != want {
+		t.Errorf("tlsCred.Key = %v, want %v", got, want)
+	}
+	if got, want := tlsCred.Cert, filepath.Join(sslDirectory, fmt.Sprintf("%v.crt", name)); got != want {
+		t.Errorf("tlsCred.Crt = %v, want %v", got, want)
 	}
 
-	cnames, err := ngx.CheckSSLCertificate(pemPath)
-	if err != nil {
-		t.Fatalf("unexpected error checking SSL certificate: %v", err)
+	if err := CheckPrivateKey(dKey); err != nil {
+		t.Fatalf("unexpected error checking TLS private key: %v", err)
 	}
 
+	cnames, err := CommonNames(dCrt)
 	if len(cnames) == 0 {
 		t.Fatalf("expected at least one cname but none returned")
 	}
