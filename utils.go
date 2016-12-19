@@ -151,8 +151,9 @@ func waitForPodCondition(clientset internalclientset.Interface, ns, podName stri
 		pod, err := clientset.Core().Pods(ns).Get(podName)
 		if err != nil {
 			if apierrs.IsNotFound(err) {
-				return false, nil
+				return false, err
 			}
+			return false, nil
 		}
 
 		done, err := condition(pod)
