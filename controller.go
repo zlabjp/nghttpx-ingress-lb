@@ -116,21 +116,21 @@ func (ia ingressAnnotation) getBackendConfig() map[string]map[string]PortBackend
 // loadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
 type loadBalancerController struct {
-	clientset      internalclientset.Interface
-	ingController  *cache.Controller
-	endpController *cache.Controller
-	svcController  *cache.Controller
-	secrController *cache.Controller
-	mapController  *cache.Controller
-	ingLister      StoreToIngressLister
-	svcLister      StoreToServiceLister
-	endpLister     cache.StoreToEndpointsLister
-	secrLister     StoreToSecretLister
-	mapLister      StoreToMapLister
-	nghttpx        *nghttpx.Manager
-	podInfo        *podInfo
-	defaultSvc     string
-	ngxConfigMap   string
+	clientset        internalclientset.Interface
+	ingController    *cache.Controller
+	endpController   *cache.Controller
+	svcController    *cache.Controller
+	secretController *cache.Controller
+	mapController    *cache.Controller
+	ingLister        StoreToIngressLister
+	svcLister        StoreToServiceLister
+	endpLister       cache.StoreToEndpointsLister
+	secretLister     StoreToSecretLister
+	mapLister        StoreToMapLister
+	nghttpx          *nghttpx.Manager
+	podInfo          *podInfo
+	defaultSvc       string
+	ngxConfigMap     string
 
 	recorder record.EventRecorder
 
@@ -215,7 +215,7 @@ func newLoadBalancerController(clientset internalclientset.Interface, resyncPeri
 		cache.ResourceEventHandlerFuncs{},
 	)
 
-	lbc.secrLister.Store, lbc.secrController = cache.NewInformer(
+	lbc.secretLister.Store, lbc.secretController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return lbc.clientset.Core().Secrets(namespace).List(options)
@@ -323,7 +323,7 @@ func (lbc *loadBalancerController) deleteEndpointNotification(obj interface{}) {
 
 func (lbc *loadBalancerController) addSecretNotification(obj interface{}) {
 	s := obj.(*api.Secret)
-	if !lbc.secrReferenced(s.Namespace, s.Name) {
+	if !lbc.secretReferenced(s.Namespace, s.Name) {
 		return
 	}
 
@@ -337,7 +337,7 @@ func (lbc *loadBalancerController) updateSecretNotification(old, cur interface{}
 	}
 
 	curS := cur.(*api.Secret)
-	if !lbc.secrReferenced(curS.Namespace, curS.Name) {
+	if !lbc.secretReferenced(curS.Namespace, curS.Name) {
 		return
 	}
 
@@ -359,7 +359,7 @@ func (lbc *loadBalancerController) deleteSecretNotification(obj interface{}) {
 			return
 		}
 	}
-	if !lbc.secrReferenced(s.Namespace, s.Name) {
+	if !lbc.secretReferenced(s.Namespace, s.Name) {
 		return
 	}
 	glog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
@@ -465,7 +465,7 @@ func (lbc *loadBalancerController) controllersInSync() bool {
 	return lbc.ingController.HasSynced() &&
 		lbc.svcController.HasSynced() &&
 		lbc.endpController.HasSynced() &&
-		lbc.secrController.HasSynced() &&
+		lbc.secretController.HasSynced() &&
 		lbc.mapController.HasSynced()
 }
 
@@ -816,7 +816,7 @@ func (lbc *loadBalancerController) getPemsFromIngress(data []interface{}) []nght
 		for _, tls := range ing.Spec.TLS {
 			secretName := tls.SecretName
 			secretKey := fmt.Sprintf("%s/%s", ing.Namespace, secretName)
-			secretInterface, exists, err := lbc.secrLister.Store.GetByKey(secretKey)
+			secretInterface, exists, err := lbc.secretLister.Store.GetByKey(secretKey)
 			if err != nil {
 				glog.Warningf("Error retriveing secret %v for ing %v: %v", secretKey, ing.Name, err)
 				continue
@@ -860,7 +860,7 @@ func (lbc *loadBalancerController) getPemsFromIngress(data []interface{}) []nght
 	return pems
 }
 
-func (lbc *loadBalancerController) secrReferenced(namespace, name string) bool {
+func (lbc *loadBalancerController) secretReferenced(namespace, name string) bool {
 	for _, ingIf := range lbc.ingLister.Store.List() {
 		ing := ingIf.(*extensions.Ingress)
 		if ing.Namespace != namespace {
@@ -1013,7 +1013,7 @@ func (lbc *loadBalancerController) Run() {
 	go lbc.ingController.Run(lbc.stopCh)
 	go lbc.endpController.Run(lbc.stopCh)
 	go lbc.svcController.Run(lbc.stopCh)
-	go lbc.secrController.Run(lbc.stopCh)
+	go lbc.secretController.Run(lbc.stopCh)
 	go lbc.mapController.Run(lbc.stopCh)
 
 	go wait.Until(lbc.worker, time.Second, lbc.stopCh)
