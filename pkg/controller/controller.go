@@ -21,7 +21,7 @@ limitations under the License.
  * file that was distributed with this source code.
  */
 
-package main
+package controller
 
 import (
 	"encoding/json"
@@ -51,7 +51,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/workqueue"
 	"k8s.io/kubernetes/pkg/watch"
 
-	"github.com/zlabjp/nghttpx-ingress-lb/nghttpx"
+	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
 
 const (
@@ -113,9 +113,9 @@ func (ia ingressAnnotation) getBackendConfig() map[string]map[string]PortBackend
 	return config
 }
 
-// loadBalancerController watches the kubernetes api and adds/removes services
+// LoadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
-type loadBalancerController struct {
+type LoadBalancerController struct {
 	clientset        internalclientset.Interface
 	ingController    *cache.Controller
 	endpController   *cache.Controller
@@ -128,7 +128,7 @@ type loadBalancerController struct {
 	secretLister     StoreToSecretLister
 	mapLister        StoreToMapLister
 	nghttpx          *nghttpx.Manager
-	podInfo          *podInfo
+	podInfo          *PodInfo
 	defaultSvc       string
 	ngxConfigMap     string
 
@@ -145,15 +145,15 @@ type loadBalancerController struct {
 	stopCh   chan struct{}
 }
 
-// newLoadBalancerController creates a controller for nghttpx loadbalancer
-func newLoadBalancerController(clientset internalclientset.Interface, resyncPeriod time.Duration, defaultSvc,
-	namespace, ngxConfigMapName string, runtimeInfo *podInfo) (*loadBalancerController, error) {
+// NewLoadBalancerController creates a controller for nghttpx loadbalancer
+func NewLoadBalancerController(clientset internalclientset.Interface, resyncPeriod time.Duration, defaultSvc,
+	namespace, ngxConfigMapName string, runtimeInfo *PodInfo) (*LoadBalancerController, error) {
 
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
 	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: clientset.Core().Events(namespace)})
 
-	lbc := loadBalancerController{
+	lbc := LoadBalancerController{
 		clientset:    clientset,
 		stopCh:       make(chan struct{}),
 		podInfo:      runtimeInfo,
@@ -254,21 +254,21 @@ func newLoadBalancerController(clientset internalclientset.Interface, resyncPeri
 	return &lbc, nil
 }
 
-func (lbc *loadBalancerController) addIngressNotification(obj interface{}) {
+func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
 	ing := obj.(*extensions.Ingress)
 	glog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
 	lbc.enqueueIngress(ing)
 	lbc.enqueue(ing)
 }
 
-func (lbc *loadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
+func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
 	curIng := cur.(*extensions.Ingress)
 	glog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
 	lbc.enqueueIngress(curIng)
 	lbc.enqueue(curIng)
 }
 
-func (lbc *loadBalancerController) deleteIngressNotification(obj interface{}) {
+func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 	ing, ok := obj.(*extensions.Ingress)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -287,13 +287,13 @@ func (lbc *loadBalancerController) deleteIngressNotification(obj interface{}) {
 	lbc.enqueue(ing)
 }
 
-func (lbc *loadBalancerController) addEndpointNotification(obj interface{}) {
+func (lbc *LoadBalancerController) addEndpointNotification(obj interface{}) {
 	ep := obj.(*api.Endpoints)
 	glog.V(4).Infof("Endpoints %v/%v added", ep.Namespace, ep.Name)
 	lbc.enqueue(ep)
 }
 
-func (lbc *loadBalancerController) updateEndpointNotification(old, cur interface{}) {
+func (lbc *LoadBalancerController) updateEndpointNotification(old, cur interface{}) {
 	if reflect.DeepEqual(old, cur) {
 		return
 	}
@@ -303,7 +303,7 @@ func (lbc *loadBalancerController) updateEndpointNotification(old, cur interface
 	lbc.enqueue(curEp)
 }
 
-func (lbc *loadBalancerController) deleteEndpointNotification(obj interface{}) {
+func (lbc *LoadBalancerController) deleteEndpointNotification(obj interface{}) {
 	ep, ok := obj.(*api.Endpoints)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -321,7 +321,7 @@ func (lbc *loadBalancerController) deleteEndpointNotification(obj interface{}) {
 	lbc.enqueue(ep)
 }
 
-func (lbc *loadBalancerController) addSecretNotification(obj interface{}) {
+func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
 	s := obj.(*api.Secret)
 	if !lbc.secretReferenced(s.Namespace, s.Name) {
 		return
@@ -331,7 +331,7 @@ func (lbc *loadBalancerController) addSecretNotification(obj interface{}) {
 	lbc.enqueue(s)
 }
 
-func (lbc *loadBalancerController) updateSecretNotification(old, cur interface{}) {
+func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}) {
 	if reflect.DeepEqual(old, cur) {
 		return
 	}
@@ -345,7 +345,7 @@ func (lbc *loadBalancerController) updateSecretNotification(old, cur interface{}
 	lbc.enqueue(curS)
 }
 
-func (lbc *loadBalancerController) deleteSecretNotification(obj interface{}) {
+func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 	s, ok := obj.(*api.Secret)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -366,7 +366,7 @@ func (lbc *loadBalancerController) deleteSecretNotification(obj interface{}) {
 	lbc.enqueue(s)
 }
 
-func (lbc *loadBalancerController) addConfigMapNotification(obj interface{}) {
+func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 	c := obj.(*api.ConfigMap)
 	cKey := fmt.Sprintf("%v/%v", c.Namespace, c.Name)
 	if cKey != lbc.ngxConfigMap {
@@ -376,7 +376,7 @@ func (lbc *loadBalancerController) addConfigMapNotification(obj interface{}) {
 	lbc.enqueue(c)
 }
 
-func (lbc *loadBalancerController) updateConfigMapNotification(old, cur interface{}) {
+func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interface{}) {
 	if reflect.DeepEqual(old, cur) {
 		return
 	}
@@ -391,7 +391,7 @@ func (lbc *loadBalancerController) updateConfigMapNotification(old, cur interfac
 	lbc.enqueue(curC)
 }
 
-func (lbc *loadBalancerController) deleteConfigMapNotification(obj interface{}) {
+func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) {
 	c, ok := obj.(*api.ConfigMap)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -413,7 +413,7 @@ func (lbc *loadBalancerController) deleteConfigMapNotification(obj interface{}) 
 	lbc.enqueue(c)
 }
 
-func (lbc *loadBalancerController) enqueue(obj runtime.Object) {
+func (lbc *LoadBalancerController) enqueue(obj runtime.Object) {
 	key, err := controller.KeyFunc(obj)
 	if err != nil {
 		glog.Errorf("Couldn't get key for object %+v: %v", obj, err)
@@ -423,7 +423,7 @@ func (lbc *loadBalancerController) enqueue(obj runtime.Object) {
 	lbc.syncQueue.Add(key)
 }
 
-func (lbc *loadBalancerController) enqueueIngress(ing *extensions.Ingress) {
+func (lbc *LoadBalancerController) enqueueIngress(ing *extensions.Ingress) {
 	key, err := controller.KeyFunc(ing)
 	if err != nil {
 		glog.Errorf("Couldn't get key for object %+v: %v", ing, err)
@@ -433,7 +433,7 @@ func (lbc *loadBalancerController) enqueueIngress(ing *extensions.Ingress) {
 	lbc.ingQueue.Add(key)
 }
 
-func (lbc *loadBalancerController) worker() {
+func (lbc *LoadBalancerController) worker() {
 	for {
 		func() {
 			key, quit := lbc.syncQueue.Get()
@@ -447,7 +447,7 @@ func (lbc *loadBalancerController) worker() {
 	}
 }
 
-func (lbc *loadBalancerController) ingressWorker() {
+func (lbc *LoadBalancerController) ingressWorker() {
 	for {
 		func() {
 			key, quit := lbc.ingQueue.Get()
@@ -461,7 +461,7 @@ func (lbc *loadBalancerController) ingressWorker() {
 	}
 }
 
-func (lbc *loadBalancerController) controllersInSync() bool {
+func (lbc *LoadBalancerController) controllersInSync() bool {
 	return lbc.ingController.HasSynced() &&
 		lbc.svcController.HasSynced() &&
 		lbc.endpController.HasSynced() &&
@@ -469,12 +469,12 @@ func (lbc *loadBalancerController) controllersInSync() bool {
 		lbc.mapController.HasSynced()
 }
 
-func (lbc *loadBalancerController) getConfigMap(cfgName string) *api.ConfigMap {
+func (lbc *LoadBalancerController) getConfigMap(cfgName string) *api.ConfigMap {
 	if cfgName == "" {
 		return &api.ConfigMap{}
 	}
 
-	ns, name, _ := parseNsName(cfgName)
+	ns, name, _ := ParseNSName(cfgName)
 	// TODO: check why lbc.mapLister.Store.GetByKey(mapKey) is not stable (random content)
 	if cfg, err := lbc.clientset.Core().ConfigMaps(ns).Get(name); err != nil {
 		glog.V(3).Infof("configmap not found %v : %v", cfgName, err)
@@ -488,7 +488,7 @@ func (lbc *loadBalancerController) getConfigMap(cfgName string) *api.ConfigMap {
 // named port. If the annotation in the service does not exists or is not equals
 // to the port mapping obtained from the pod the service must be updated to reflect
 // the current state
-func (lbc *loadBalancerController) checkSvcForUpdate(svc *api.Service) (map[string]string, error) {
+func (lbc *LoadBalancerController) checkSvcForUpdate(svc *api.Service) (map[string]string, error) {
 	// get the pods associated with the service
 	// TODO: switch this to a watch
 	pods, err := lbc.clientset.Core().Pods(svc.Namespace).List(api.ListOptions{
@@ -555,7 +555,7 @@ func (lbc *loadBalancerController) checkSvcForUpdate(svc *api.Service) (map[stri
 	return namedPorts, nil
 }
 
-func (lbc *loadBalancerController) sync(key string) {
+func (lbc *LoadBalancerController) sync(key string) {
 	retry := false
 
 	defer func() { retryOrForget(lbc.syncQueue, key, retry) }()
@@ -579,7 +579,7 @@ func (lbc *loadBalancerController) sync(key string) {
 	})
 }
 
-func (lbc *loadBalancerController) updateIngressStatus(key string) {
+func (lbc *LoadBalancerController) updateIngressStatus(key string) {
 	retry := false
 
 	defer func() { retryOrForget(lbc.ingQueue, key, retry) }()
@@ -628,7 +628,7 @@ func (lbc *loadBalancerController) updateIngressStatus(key string) {
 	}
 }
 
-func (lbc *loadBalancerController) isStatusIPDefined(lbings []api.LoadBalancerIngress) bool {
+func (lbc *LoadBalancerController) isStatusIPDefined(lbings []api.LoadBalancerIngress) bool {
 	for _, lbing := range lbings {
 		if lbing.IP == lbc.podInfo.NodeIP {
 			return true
@@ -638,7 +638,7 @@ func (lbc *loadBalancerController) isStatusIPDefined(lbings []api.LoadBalancerIn
 	return false
 }
 
-func (lbc *loadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
+func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 	upstream := &nghttpx.Upstream{
 		Name: lbc.defaultSvc,
 	}
@@ -672,7 +672,7 @@ func (lbc *loadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 }
 
 // in nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
-func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*nghttpx.Upstream, *nghttpx.Server) {
+func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*nghttpx.Upstream, *nghttpx.Server) {
 	pems := lbc.getPemsFromIngress(data)
 
 	server := &nghttpx.Server{}
@@ -807,7 +807,7 @@ func (lbc *loadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 	return upstreams, server
 }
 
-func (lbc *loadBalancerController) getPemsFromIngress(data []interface{}) []nghttpx.TLSCred {
+func (lbc *LoadBalancerController) getPemsFromIngress(data []interface{}) []nghttpx.TLSCred {
 	pems := []nghttpx.TLSCred{}
 
 	for _, ingIf := range data {
@@ -860,7 +860,7 @@ func (lbc *loadBalancerController) getPemsFromIngress(data []interface{}) []nght
 	return pems
 }
 
-func (lbc *loadBalancerController) secretReferenced(namespace, name string) bool {
+func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool {
 	for _, ingIf := range lbc.ingLister.Store.List() {
 		ing := ingIf.(*extensions.Ingress)
 		if ing.Namespace != namespace {
@@ -878,7 +878,7 @@ func (lbc *loadBalancerController) secretReferenced(namespace, name string) bool
 // getEndpoints returns a list of <endpoint ip>:<port> for a given
 // service/target port combination.  portBackendConfig is additional
 // per-port configuration for backend, which must not be nil.
-func (lbc *loadBalancerController) getEndpoints(s *api.Service, servicePort intstr.IntOrString, proto api.Protocol, portBackendConfig *PortBackendConfig) []nghttpx.UpstreamServer {
+func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort intstr.IntOrString, proto api.Protocol, portBackendConfig *PortBackendConfig) []nghttpx.UpstreamServer {
 	glog.V(3).Infof("getting endpoints for service %v/%v and port %v", s.Namespace, s.Name, servicePort.String())
 	ep, err := lbc.endpLister.GetServiceEndpoints(s)
 	if err != nil {
@@ -952,7 +952,7 @@ func (lbc *loadBalancerController) getEndpoints(s *api.Service, servicePort ints
 }
 
 // Stop commences shutting down the loadbalancer controller.
-func (lbc *loadBalancerController) Stop() {
+func (lbc *LoadBalancerController) Stop() {
 	// Stop is invoked from the http endpoint.
 	lbc.stopLock.Lock()
 	defer lbc.stopLock.Unlock()
@@ -969,7 +969,7 @@ func (lbc *loadBalancerController) Stop() {
 	close(lbc.stopCh)
 }
 
-func (lbc *loadBalancerController) removeFromIngress(ings []interface{}) {
+func (lbc *LoadBalancerController) removeFromIngress(ings []interface{}) {
 	glog.Infof("Updating %v Ingress rule(s)", len(ings))
 	for _, obj := range ings {
 		ing := obj.(*extensions.Ingress)
@@ -1006,7 +1006,7 @@ func (lbc *loadBalancerController) removeFromIngress(ings []interface{}) {
 }
 
 // Run starts the loadbalancer controller.
-func (lbc *loadBalancerController) Run() {
+func (lbc *LoadBalancerController) Run() {
 	glog.Infof("Starting nghttpx loadbalancer controller")
 	go lbc.nghttpx.Start()
 
@@ -1029,6 +1029,10 @@ func (lbc *loadBalancerController) Run() {
 	glog.Infof("Removing IP address %v from ingress rules", lbc.podInfo.NodeIP)
 	ings := lbc.ingLister.Store.List()
 	lbc.removeFromIngress(ings)
+}
+
+func (lbc *LoadBalancerController) Nghttpx() *nghttpx.Manager {
+	return lbc.nghttpx
 }
 
 func defaultPortBackendConfig() PortBackendConfig {

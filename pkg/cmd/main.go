@@ -42,6 +42,8 @@ import (
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/healthz"
 	kubectl_util "k8s.io/kubernetes/pkg/kubectl/cmd/util"
+
+	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
 )
 
 const (
@@ -123,25 +125,25 @@ func main() {
 		glog.Fatalf("Failed to create clientset: %v", err)
 	}
 
-	runtimePodInfo := &podInfo{NodeIP: "127.0.0.1"}
+	runtimePodInfo := &controller.PodInfo{NodeIP: "127.0.0.1"}
 	if *inCluster {
-		runtimePodInfo, err = getPodDetails(clientset, *allowInternalIP)
+		runtimePodInfo, err = controller.GetPodDetails(clientset, *allowInternalIP)
 		if err != nil {
 			glog.Fatalf("unexpected error getting runtime information: %v", err)
 		}
 	}
-	if err := isValidService(clientset, *defaultSvc); err != nil {
+	if err := controller.IsValidService(clientset, *defaultSvc); err != nil {
 		glog.Fatalf("no service with name %v found: %v", *defaultSvc, err)
 	}
 	glog.Infof("Validated %v as the default backend", *defaultSvc)
 
 	if *ngxConfigMap != "" {
-		if _, _, err := parseNsName(*ngxConfigMap); err != nil {
+		if _, _, err := controller.ParseNSName(*ngxConfigMap); err != nil {
 			glog.Fatalf("could not parse configmap name %v: %v", *ngxConfigMap, err)
 		}
 	}
 
-	lbc, err := newLoadBalancerController(clientset, *resyncPeriod, *defaultSvc, *watchNamespace, *ngxConfigMap, runtimePodInfo)
+	lbc, err := controller.NewLoadBalancerController(clientset, *resyncPeriod, *defaultSvc, *watchNamespace, *ngxConfigMap, runtimePodInfo)
 	if err != nil {
 		glog.Fatalf("%v", err)
 	}
@@ -157,16 +159,9 @@ func main() {
 	}
 }
 
-// podInfo contains runtime information about the pod
-type podInfo struct {
-	PodName      string
-	PodNamespace string
-	NodeIP       string
-}
-
-func registerHandlers(lbc *loadBalancerController) {
+func registerHandlers(lbc *controller.LoadBalancerController) {
 	mux := http.NewServeMux()
-	healthz.InstallHandler(mux, lbc.nghttpx)
+	healthz.InstallHandler(mux, lbc.Nghttpx())
 
 	http.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -190,7 +185,7 @@ func registerHandlers(lbc *loadBalancerController) {
 	glog.Fatal(server.ListenAndServe())
 }
 
-func handleSigterm(lbc *loadBalancerController) {
+func handleSigterm(lbc *controller.LoadBalancerController) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM)
 	<-signalChan

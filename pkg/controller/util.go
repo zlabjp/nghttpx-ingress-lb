@@ -21,7 +21,7 @@ limitations under the License.
  * file that was distributed with this source code.
  */
 
-package main
+package controller
 
 import (
 	"fmt"
@@ -58,8 +58,15 @@ type StoreToServiceLister struct {
 	cache.Store
 }
 
-// getPodDetails  returns runtime information about the pod: name, namespace and IP of the node
-func getPodDetails(clientset internalclientset.Interface, allowInternalIP bool) (*podInfo, error) {
+// podInfo contains runtime information about the pod
+type PodInfo struct {
+	PodName      string
+	PodNamespace string
+	NodeIP       string
+}
+
+// GetPodDetails  returns runtime information about the pod: name, namespace and IP of the node
+func GetPodDetails(clientset internalclientset.Interface, allowInternalIP bool) (*PodInfo, error) {
 	podName := os.Getenv("POD_NAME")
 	podNs := os.Getenv("POD_NAMESPACE")
 
@@ -101,14 +108,14 @@ func getPodDetails(clientset internalclientset.Interface, allowInternalIP bool) 
 		return nil, fmt.Errorf("no external IP found")
 	}
 
-	return &podInfo{
+	return &PodInfo{
 		PodName:      podName,
 		PodNamespace: podNs,
 		NodeIP:       externalIP,
 	}, nil
 }
 
-func isValidService(clientset internalclientset.Interface, name string) error {
+func IsValidService(clientset internalclientset.Interface, name string) error {
 	if name == "" {
 		return fmt.Errorf("empty string is not a valid service name")
 	}
@@ -122,7 +129,7 @@ func isValidService(clientset internalclientset.Interface, name string) error {
 	return err
 }
 
-func parseNsName(input string) (string, string, error) {
+func ParseNSName(input string) (string, string, error) {
 	nsName := strings.Split(input, "/")
 	if len(nsName) != 2 {
 		return "", "", fmt.Errorf("invalid format (namespace/name) found in '%v'", input)
