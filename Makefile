@@ -25,3 +25,6 @@ push: container
 
 clean:
 	rm -f nghttpx-ingress-controller
+
+vet:
+	go tool vet -printfuncs Infof,Warningf,Errorf,Fatalf,Exitf *.go nghttpx/*.go
