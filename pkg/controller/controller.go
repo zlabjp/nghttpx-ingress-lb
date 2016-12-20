@@ -847,7 +847,7 @@ func (lbc *LoadBalancerController) getPemsFromIngress(data []interface{}) []nght
 				continue
 			}
 
-			tlsCred, err := lbc.nghttpx.AddOrUpdateCertAndKey(fmt.Sprintf("%v-%v", ing.Namespace, secretName), cert, key)
+			tlsCred, err := lbc.nghttpx.AddOrUpdateCertAndKey(fmt.Sprintf("%v_%v", ing.Namespace, secretName), cert, key)
 			if err != nil {
 				glog.Errorf("Could not create private key and certificate files %v: %v", secretKey, err)
 				continue
@@ -856,6 +856,8 @@ func (lbc *LoadBalancerController) getPemsFromIngress(data []interface{}) []nght
 			pems = append(pems, tlsCred)
 		}
 	}
+
+	sort.Sort(nghttpx.TLSCredKeyLess(pems))
 
 	return pems
 }

@@ -79,6 +79,14 @@ type TLSCred struct {
 	Checksum string
 }
 
+type TLSCredKeyLess []TLSCred
+
+func (c TLSCredKeyLess) Len() int      { return len(c) }
+func (c TLSCredKeyLess) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
+func (c TLSCredKeyLess) Less(i, j int) bool {
+	return c[i].Key < c[j].Key
+}
+
 // Server describes an nghttpx server
 type Server struct {
 	TLS               bool
