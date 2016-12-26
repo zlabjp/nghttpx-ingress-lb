@@ -204,18 +204,14 @@ In particular:
 - `--v=2` shows details using `diff` about the changes in the configuration in nghttpx
 
 ```
-I0316 12:24:37.581267       1 utils.go:148] nghttpx configuration diff a//etc/nghttpx/nghttpx.conf b//etc/nghttpx/nghttpx.conf
-I0316 12:24:37.581356       1 utils.go:149] --- /tmp/922554809  2016-03-16 12:24:37.000000000 +0000
-+++ /tmp/079811012  2016-03-16 12:24:37.000000000 +0000
-@@ -235,7 +235,6 @@
-
-     upstream default-echoheadersx {
-         least_conn;
--        server 10.2.112.124:5000;
-         server 10.2.208.50:5000;
-
-     }
-I0316 12:24:37.610073       1 command.go:69] change in configuration detected. Reloading...
+I1226 09:31:32.305044       1 utils.go:91] nghttpx configuration diff a//etc/nghttpx/nghttpx-backend.conf b//etc/nghttpx/nghttpx-backend.conf
+I1226 09:31:32.305078       1 utils.go:92] --- /tmp/132090794	 2016-12-26 09:31:32.000000000 +0000
++++ /tmp/476970241	    2016-12-26 09:31:32.000000000 +0000
+@@ -0,0 +1,3 @@
++# kube-system/default-http-backend,8080;/
++backend=10.2.50.3,8080;/;proto=http/1.1
++
+I1226 09:31:32.305093       1 command.go:78] change in configuration detected. Reloading...
 ```
 
 - `--v=3` shows details about the service, Ingress rule, endpoint changes and it dumps the nghttpx configuration in JSON format
