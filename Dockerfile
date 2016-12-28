@@ -20,24 +20,20 @@
 FROM ubuntu:16.04
 
 RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
-        zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev bison \
-        zlib1g libssl1.0.0 libev4 libjemalloc1 \
+        zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison \
+        zlib1g libssl1.0.0 libev4 libjemalloc1 libc-ares2 \
         diffutils ca-certificates psmisc \
         python \
         --no-install-recommends && \
-    git clone https://github.com/nghttp2/nghttp2.git && \
+    git clone -b v1.18.0 --depth 1 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
-    git config user.email "nghttpx-build-bot@example.com" && \
-    git config user.name "nghttpx-build-bot" && \
-    git checkout v1.17.0 && \
-    git cherry-pick 85ba33c08f464016e7fdcc3c764e31d640299b34 && \
     git submodule update --init && autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
     make install-strip && \
     cd .. && \
     rm -rf nghttp2 && \
     apt-get -y purge git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
-        zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev bison && \
+        zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison && \
     apt-get -y autoremove --purge && \
     apt-get clean
 
