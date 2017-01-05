@@ -65,7 +65,7 @@ func (ngx *Manager) needsReload(filename string, data *bytes.Buffer) (bool, erro
 		// directory of filename.  Then replace filename with
 		// temporary file.  In Linux, this is atomic
 		// operation.
-		dir := filepath.Join(filepath.Dir(filename))
+		dir := filepath.Dir(filename)
 		tempFile, err := ioutil.TempFile(dir, "nghttpx")
 		if err != nil {
 			return false, err
