@@ -99,15 +99,19 @@ func diff(b1, b2 []byte) (data []byte, err error) {
 	if err != nil {
 		return
 	}
-	defer os.Remove(f1.Name())
-	defer f1.Close()
+	defer func() {
+		f1.Close()
+		os.Remove(f1.Name())
+	}()
 
 	f2, err := ioutil.TempFile("", "")
 	if err != nil {
 		return
 	}
-	defer os.Remove(f2.Name())
-	defer f2.Close()
+	defer func() {
+		f2.Close()
+		os.Remove(f2.Name())
+	}()
 
 	f1.Write(b1)
 	f2.Write(b2)
