@@ -88,20 +88,10 @@ func (npm serviceAnnotation) getPortMappings() map[string]string {
 
 type ingressAnnotation map[string]string
 
-// backend configuration obtained from ingress annotation, specified per service port
-type PortBackendConfig struct {
-	// backend application protocol.  At the moment, this should be either "h2" or "http/1.1".
-	Proto string `json:"proto,omitempty"`
-	// true if backend connection requires TLS
-	TLS bool `json:"tls,omitempty"`
-	// SNI hostname for backend TLS connection
-	SNI string `json:"sni,omitempty"`
-}
-
-func (ia ingressAnnotation) getBackendConfig() map[string]map[string]PortBackendConfig {
+func (ia ingressAnnotation) getBackendConfig() map[string]map[string]nghttpx.PortBackendConfig {
 	data := ia[backendConfigAnnotation]
 	// the first key specifies service name, and secondary key specifies port name.
-	var config map[string]map[string]PortBackendConfig
+	var config map[string]map[string]nghttpx.PortBackendConfig
 	if data == "" {
 		return config
 	}
@@ -880,7 +870,7 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 // getEndpoints returns a list of <endpoint ip>:<port> for a given
 // service/target port combination.  portBackendConfig is additional
 // per-port configuration for backend, which must not be nil.
-func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort intstr.IntOrString, proto api.Protocol, portBackendConfig *PortBackendConfig) []nghttpx.UpstreamServer {
+func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort intstr.IntOrString, proto api.Protocol, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
 	glog.V(3).Infof("getting endpoints for service %v/%v and port %v", s.Namespace, s.Name, servicePort.String())
 	ep, err := lbc.endpLister.GetServiceEndpoints(s)
 	if err != nil {
@@ -1037,8 +1027,8 @@ func (lbc *LoadBalancerController) Nghttpx() *nghttpx.Manager {
 	return lbc.nghttpx
 }
 
-func defaultPortBackendConfig() PortBackendConfig {
-	return PortBackendConfig{
+func defaultPortBackendConfig() nghttpx.PortBackendConfig {
+	return nghttpx.PortBackendConfig{
 		Proto: "http/1.1",
 	}
 }

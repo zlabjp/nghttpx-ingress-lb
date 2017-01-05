@@ -100,3 +100,13 @@ type Server struct {
 func NewDefaultServer() UpstreamServer {
 	return UpstreamServer{Address: "127.0.0.1", Port: "8181"}
 }
+
+// backend configuration obtained from ingress annotation, specified per service port
+type PortBackendConfig struct {
+	// backend application protocol.  At the moment, this should be either "h2" or "http/1.1".
+	Proto string `json:"proto,omitempty"`
+	// true if backend connection requires TLS
+	TLS bool `json:"tls,omitempty"`
+	// SNI hostname for backend TLS connection
+	SNI string `json:"sni,omitempty"`
+}
