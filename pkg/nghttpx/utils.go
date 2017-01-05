@@ -60,41 +60,38 @@ func (ngx *Manager) needsReload(filename string, data *bytes.Buffer) (bool, erro
 	}
 
 	res := data.Bytes()
-	if !bytes.Equal(src, res) {
-		// First write into temporary file in the same
-		// directory of filename.  Then replace filename with
-		// temporary file.  In Linux, this is atomic
-		// operation.
-		dir := filepath.Dir(filename)
-		tempFile, err := ioutil.TempFile(dir, "nghttpx")
-		if err != nil {
-			return false, err
-		}
-		tempFile.Close()
-		defer func() {
-			os.Remove(tempFile.Name())
-		}()
-		if err := ioutil.WriteFile(tempFile.Name(), res, 0644); err != nil {
-			return false, err
-		}
-		if err := os.Rename(tempFile.Name(), filename); err != nil {
-			return false, err
-		}
+	if bytes.Equal(src, res) {
+		return false, nil
+	}
+
+	// First write into temporary file in the same
+	// directory of filename.  Then replace filename with
+	// temporary file.  In Linux, this is atomic
+	// operation.
+	dir := filepath.Dir(filename)
+	tempFile, err := ioutil.TempFile(dir, "nghttpx")
+	if err != nil {
+		return false, err
+	}
+	tempFile.Close()
+	if err := ioutil.WriteFile(tempFile.Name(), res, 0644); err != nil {
+		os.Remove(tempFile.Name())
+		return false, err
+	}
+	if err := os.Rename(tempFile.Name(), filename); err != nil {
+		return false, err
+	}
+	if glog.V(2) {
 		dData, err := diff(src, res)
 		if err != nil {
 			glog.Errorf("error computing diff: %s", err)
 			return true, nil
 		}
-
-		if glog.V(2) {
-			glog.Infof("nghttpx configuration diff a/%s b/%s\n", filename, filename)
-			glog.Infof("%v", string(dData))
-		}
-
-		return len(dData) > 0, nil
+		glog.Infof("nghttpx configuration diff a/%s b/%s\n", filename, filename)
+		glog.Infof("%v", string(dData))
 	}
 
-	return false, nil
+	return true, nil
 }
 
 func diff(b1, b2 []byte) (data []byte, err error) {
