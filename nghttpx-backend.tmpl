@@ -1,6 +1,6 @@
 {{ range $upstream := .upstreams -}}
 # {{ $upstream.Name }}
 {{ range $backend := $upstream.Backends -}}
-backend={{ $backend.Address }},{{ $backend.Port }};{{ $upstream.Host }}{{ $upstream.Path }};proto={{ $backend.Protocol }}{{ if $backend.TLS }};tls{{ end }}{{ if $backend.SNI }};sni={{ $backend.SNI }}{{ end }}
+backend={{ $backend.Address }},{{ $backend.Port }};{{ $upstream.Host }}{{ $upstream.Path }};proto={{ $backend.Protocol }}{{ if $backend.TLS }};tls{{ end }}{{ if $backend.SNI }};sni={{ $backend.SNI }}{{ end }}{{ if $backend.DNS }};dns{{ end }}
 {{ end -}}
 {{ end }}

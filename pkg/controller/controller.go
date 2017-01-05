@@ -933,6 +933,7 @@ func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort ints
 					Protocol: portBackendConfig.Proto,
 					TLS:      portBackendConfig.TLS,
 					SNI:      portBackendConfig.SNI,
+					DNS:      portBackendConfig.DNS,
 				}
 				upsServers = append(upsServers, ups)
 			}

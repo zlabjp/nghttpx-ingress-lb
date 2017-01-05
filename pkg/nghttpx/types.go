@@ -53,6 +53,7 @@ type UpstreamServer struct {
 	Protocol string
 	TLS      bool
 	SNI      string
+	DNS      bool
 }
 
 // UpstreamServerByAddrPort sorts upstream servers by address and port
@@ -109,4 +110,6 @@ type PortBackendConfig struct {
 	TLS bool `json:"tls,omitempty"`
 	// SNI hostname for backend TLS connection
 	SNI string `json:"sni,omitempty"`
+	// DNS is true if backend hostname is resolved dynamically rather than start up or configuration reloading.
+	DNS bool `json:"dns,omitempty"`
 }
