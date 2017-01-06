@@ -36,6 +36,8 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/util/wait"
+
+	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
 
 // StoreToIngressLister makes a Store that lists Ingress.
@@ -173,4 +175,24 @@ func waitForPodCondition(clientset internalclientset.Interface, ns, podName stri
 
 		return false, nil
 	})
+}
+
+// fixupBackendConfig validates config, and fixes the invalid values inside it.  svc and port is service name and port that config is
+// associated to.
+func fixupBackendConfig(config nghttpx.PortBackendConfig, svc, port string) nghttpx.PortBackendConfig {
+	glog.Infof("use port backend configuration for service %v: %+v", svc, config)
+	switch config.Proto {
+	case "h2", "http/1.1":
+	default:
+		glog.Errorf("unrecognized backend protocol %v for service %v, port %v", config.Proto, svc, port)
+		config.Proto = "http/1.1"
+	}
+	switch config.Affinity {
+	case "", nghttpx.AffinityNone, nghttpx.AffinityIP:
+		// OK
+	default:
+		glog.Errorf("unsupported affinity method %v for service %v, port %v", config.Affinity, svc, port)
+		config.Affinity = ""
+	}
+	return config
 }

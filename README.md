@@ -154,6 +154,10 @@ is the JSON dictionary, and can contain the following key value pairs:
 * `dns`: Specify whether backend host name should be resolved
   dynamically.
 
+* `affinity`: Specify session affinity method.  Specifying `ip`
+  enables client IP based session affinity.  Specifying `none` or
+  omitting this key disables session affinity.
+
 The following example specifies HTTP/2 as backend connection for
 service "greeter", and service port "50051":
 

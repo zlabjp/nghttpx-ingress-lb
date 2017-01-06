@@ -46,6 +46,13 @@ func (c UpstreamByNameServers) Less(i, j int) bool {
 	return c[i].Name < c[j].Name
 }
 
+type Affinity string
+
+const (
+	AffinityNone = "none"
+	AffinityIP   = "ip"
+)
+
 // UpstreamServer describes a server in an nghttpx upstream
 type UpstreamServer struct {
 	Address  string
@@ -54,6 +61,7 @@ type UpstreamServer struct {
 	TLS      bool
 	SNI      string
 	DNS      bool
+	Affinity Affinity
 }
 
 // UpstreamServerByAddrPort sorts upstream servers by address and port
@@ -112,4 +120,6 @@ type PortBackendConfig struct {
 	SNI string `json:"sni,omitempty"`
 	// DNS is true if backend hostname is resolved dynamically rather than start up or configuration reloading.
 	DNS bool `json:"dns,omitempty"`
+	// Affinity is session affinity method nghttpx supports.  See affinity parameter in backend option of nghttpx.
+	Affinity Affinity `json:"affinity,omitempty"`
 }
