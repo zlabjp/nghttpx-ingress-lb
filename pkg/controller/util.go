@@ -191,11 +191,13 @@ func fixupBackendConfig(config nghttpx.PortBackendConfig, svc, port string) nght
 		config.Proto = nghttpx.ProtocolH1
 	}
 	switch config.Affinity {
-	case "", nghttpx.AffinityNone, nghttpx.AffinityIP:
+	case nghttpx.AffinityNone, nghttpx.AffinityIP:
 		// OK
+	case "":
+		config.Affinity = nghttpx.AffinityNone
 	default:
 		glog.Errorf("unsupported affinity method %v for service %v, port %v", config.Affinity, svc, port)
-		config.Affinity = ""
+		config.Affinity = nghttpx.AffinityNone
 	}
 	return config
 }
