@@ -10,7 +10,7 @@ ifndef VERSION
   VERSION := git-$(shell git rev-parse --short HEAD)
 endif
 
-.PHONY: controller container push clean vet fmt
+.PHONY: controller container push clean vet fmt check
 
 controller: clean
 	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags \
@@ -32,3 +32,6 @@ vet:
 
 fmt:
 	go fmt github.com/zlabjp/nghttpx-ingress-lb/pkg/...
+
+check:
+	go test github.com/zlabjp/nghttpx-ingress-lb/pkg/...
