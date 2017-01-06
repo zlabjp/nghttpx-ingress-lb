@@ -728,13 +728,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 					if strconv.Itoa(int(servicePort.Port)) == bp || servicePort.TargetPort.String() == bp || servicePort.Name == bp {
 						portBackendConfig, ok := svcBackendConfig[bp]
 						if ok {
-							glog.Infof("use port backend configuration for service %v: %+v", svcKey, svcBackendConfig)
-							switch portBackendConfig.Proto {
-							case "h2", "http/1.1":
-							default:
-								glog.Errorf("unrecognized backend protocol %v for service %v, port %v", portBackendConfig.Proto, svcKey, bp)
-								portBackendConfig.Proto = "http/1.1"
-							}
+							portBackendConfig = fixupBackendConfig(portBackendConfig, svcKey, bp)
 						} else {
 							portBackendConfig = defaultPortBackendConfig()
 						}
@@ -933,6 +927,8 @@ func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort ints
 					Protocol: portBackendConfig.Proto,
 					TLS:      portBackendConfig.TLS,
 					SNI:      portBackendConfig.SNI,
+					DNS:      portBackendConfig.DNS,
+					Affinity: portBackendConfig.Affinity,
 				}
 				upsServers = append(upsServers, ups)
 			}
