@@ -122,3 +122,28 @@ func diff(b1, b2 []byte) (data []byte, err error) {
 	}
 	return
 }
+
+// FixupPortBackendConfig validates config, and fixes the invalid values inside it.  svc and port is service name and port that config is
+// associated to.
+func FixupPortBackendConfig(config PortBackendConfig, svc, port string) PortBackendConfig {
+	glog.Infof("use port backend configuration for service %v: %+v", svc, config)
+	switch config.Proto {
+	case ProtocolH2, ProtocolH1:
+		// OK
+	case "":
+		config.Proto = ProtocolH1
+	default:
+		glog.Errorf("unrecognized backend protocol %v for service %v, port %v", config.Proto, svc, port)
+		config.Proto = ProtocolH1
+	}
+	switch config.Affinity {
+	case AffinityNone, AffinityIP:
+		// OK
+	case "":
+		config.Affinity = AffinityNone
+	default:
+		glog.Errorf("unsupported affinity method %v for service %v, port %v", config.Affinity, svc, port)
+		config.Affinity = AffinityNone
+	}
+	return config
+}

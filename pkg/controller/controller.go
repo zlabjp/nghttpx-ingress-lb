@@ -728,7 +728,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 					if strconv.Itoa(int(servicePort.Port)) == bp || servicePort.TargetPort.String() == bp || servicePort.Name == bp {
 						portBackendConfig, ok := svcBackendConfig[bp]
 						if ok {
-							portBackendConfig = fixupBackendConfig(portBackendConfig, svcKey, bp)
+							portBackendConfig = nghttpx.FixupPortBackendConfig(portBackendConfig, svcKey, bp)
 						} else {
 							portBackendConfig = defaultPortBackendConfig()
 						}
