@@ -53,11 +53,20 @@ const (
 	AffinityIP   = "ip"
 )
 
+type Protocol string
+
+const (
+	// HTTP/2 protocol
+	ProtocolH2 = "h2"
+	// HTTP/1.1 protocol
+	ProtocolH1 = "http/1.1"
+)
+
 // UpstreamServer describes a server in an nghttpx upstream
 type UpstreamServer struct {
 	Address  string
 	Port     string
-	Protocol string
+	Protocol Protocol
 	TLS      bool
 	SNI      string
 	DNS      bool
@@ -112,8 +121,8 @@ func NewDefaultServer() UpstreamServer {
 
 // backend configuration obtained from ingress annotation, specified per service port
 type PortBackendConfig struct {
-	// backend application protocol.  At the moment, this should be either "h2" or "http/1.1".
-	Proto string `json:"proto,omitempty"`
+	// backend application protocol.  At the moment, this should be either ProtocolH2 or ProtocolH1.
+	Proto Protocol `json:"proto,omitempty"`
 	// true if backend connection requires TLS
 	TLS bool `json:"tls,omitempty"`
 	// SNI hostname for backend TLS connection

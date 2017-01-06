@@ -1025,7 +1025,7 @@ func (lbc *LoadBalancerController) Nghttpx() *nghttpx.Manager {
 
 func defaultPortBackendConfig() nghttpx.PortBackendConfig {
 	return nghttpx.PortBackendConfig{
-		Proto: "http/1.1",
+		Proto: nghttpx.ProtocolH1,
 	}
 }
 

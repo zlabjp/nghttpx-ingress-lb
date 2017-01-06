@@ -182,10 +182,13 @@ func waitForPodCondition(clientset internalclientset.Interface, ns, podName stri
 func fixupBackendConfig(config nghttpx.PortBackendConfig, svc, port string) nghttpx.PortBackendConfig {
 	glog.Infof("use port backend configuration for service %v: %+v", svc, config)
 	switch config.Proto {
-	case "h2", "http/1.1":
+	case nghttpx.ProtocolH2, nghttpx.ProtocolH1:
+		// OK
+	case "":
+		config.Proto = nghttpx.ProtocolH1
 	default:
 		glog.Errorf("unrecognized backend protocol %v for service %v, port %v", config.Proto, svc, port)
-		config.Proto = "http/1.1"
+		config.Proto = nghttpx.ProtocolH1
 	}
 	switch config.Affinity {
 	case "", nghttpx.AffinityNone, nghttpx.AffinityIP:
