@@ -10,7 +10,7 @@ ifndef VERSION
   VERSION := git-$(shell git rev-parse --short HEAD)
 endif
 
-.PHONY: controller container push clean
+.PHONY: controller container push clean vet fmt
 
 controller: clean
 	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags \
