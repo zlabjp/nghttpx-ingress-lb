@@ -178,6 +178,9 @@ spec:
           servicePort: 50051
 ```
 
+Note that Ingress allows regular expression in
+`.spec.rules[*].http.paths[*].path`, but nghttpx does not support it.
+
 ## Custom nghttpx configuration
 
 Using a ConfigMap it is possible to customize the defaults in nghttpx.
@@ -228,6 +231,8 @@ I1226 09:31:32.305093       1 command.go:78] change in configuration detected. R
 - When no TLS is configured, ingress controller still listen on port 443 for cleartext HTTP.
 - TLS configuration is not bound to the specific service.  In general,
   all proxied services are accessible via both TLS and cleartext HTTP.
+- Ingress allows regular expression in
+  `.spec.rules[*].http.paths[*].path`, but nghttpx does not support it.
 
 ## Building from source
 
