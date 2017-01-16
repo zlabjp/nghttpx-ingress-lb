@@ -124,6 +124,14 @@ spec:
 
 Check the [example](examples/tls/README.md)
 
+## Logs
+
+The access and error log of nghttpx are written to
+/var/log/nghttpx/access.log and /var/log/nghttpx/error.log
+respectively.  They can be configured using accesslog-file and
+errorlog-file options respectively.  No log file rotation is
+configured by default.
+
 ## Additional backend connection configuration
 
 nghttpx supports additional backend connection configuration via
