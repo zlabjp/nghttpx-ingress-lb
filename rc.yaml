@@ -79,6 +79,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
+            # when changing this port, also specify it using --healthz-port in nghttpx-ingress-controller args.
             port: 10249
             scheme: HTTP
           initialDelaySeconds: 30
