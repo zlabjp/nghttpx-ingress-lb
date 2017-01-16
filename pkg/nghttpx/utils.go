@@ -147,3 +147,11 @@ func FixupPortBackendConfig(config PortBackendConfig, svc, port string) PortBack
 	}
 	return config
 }
+
+// DefaultPortBackendConfig returns default PortBackendConfig
+func DefaultPortBackendConfig() PortBackendConfig {
+	return PortBackendConfig{
+		Proto:    ProtocolH1,
+		Affinity: AffinityNone,
+	}
+}

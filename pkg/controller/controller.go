@@ -648,7 +648,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 
 	svc := svcObj.(*api.Service)
 
-	portBackendConfig := defaultPortBackendConfig()
+	portBackendConfig := nghttpx.DefaultPortBackendConfig()
 
 	endps := lbc.getEndpoints(svc, svc.Spec.Ports[0].TargetPort, api.ProtocolTCP, &portBackendConfig)
 	if len(endps) == 0 {
@@ -730,7 +730,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 						if ok {
 							portBackendConfig = nghttpx.FixupPortBackendConfig(portBackendConfig, svcKey, bp)
 						} else {
-							portBackendConfig = defaultPortBackendConfig()
+							portBackendConfig = nghttpx.DefaultPortBackendConfig()
 						}
 
 						endps := lbc.getEndpoints(svc, servicePort.TargetPort, api.ProtocolTCP, &portBackendConfig)
@@ -1021,12 +1021,6 @@ func (lbc *LoadBalancerController) Run() {
 
 func (lbc *LoadBalancerController) Nghttpx() *nghttpx.Manager {
 	return lbc.nghttpx
-}
-
-func defaultPortBackendConfig() nghttpx.PortBackendConfig {
-	return nghttpx.PortBackendConfig{
-		Proto: nghttpx.ProtocolH1,
-	}
 }
 
 func retryOrForget(q workqueue.RateLimitingInterface, key interface{}, requeue bool) {
