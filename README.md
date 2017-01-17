@@ -125,8 +125,6 @@ spec:
     servicePort: 80
 ```
 
-Check the [example](examples/tls/README.md)
-
 ## Logs
 
 The access and error log of nghttpx are written to
