@@ -116,7 +116,13 @@ type Server struct {
 
 // NewDefaultServer return an UpstreamServer to be use as default server that returns 503.
 func NewDefaultServer() UpstreamServer {
-	return UpstreamServer{Address: "127.0.0.1", Port: "8181"}
+	return UpstreamServer{
+		Address:  "127.0.0.1",
+		Port:     "8181",
+		// Update DefaultPortBackendConfig() too.
+		Protocol: ProtocolH1,
+		Affinity: AffinityNone,
+	}
 }
 
 // backend configuration obtained from ingress annotation, specified per service port

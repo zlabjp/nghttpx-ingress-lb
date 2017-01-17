@@ -150,6 +150,7 @@ func FixupPortBackendConfig(config PortBackendConfig, svc, port string) PortBack
 
 // DefaultPortBackendConfig returns default PortBackendConfig
 func DefaultPortBackendConfig() PortBackendConfig {
+	// Update NewDefaultServer() too.
 	return PortBackendConfig{
 		Proto:    ProtocolH1,
 		Affinity: AffinityNone,
