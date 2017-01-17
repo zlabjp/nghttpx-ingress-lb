@@ -107,6 +107,9 @@ metadata:
 type: Opaque
 ```
 
+You can create this kind of secret using `kubectl create secret tls`
+subcommand.
+
 Referencing this secret in an Ingress will tell the Ingress controller to secure the channel from the client to the loadbalancer using TLS:
 
 ```yaml
