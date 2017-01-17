@@ -843,7 +843,7 @@ func (lbc *LoadBalancerController) getPemsFromIngress(data []interface{}) []nght
 
 	sort.Sort(nghttpx.TLSCredKeyLess(pems))
 
-	return pems
+	return nghttpx.RemoveDuplicatePems(pems)
 }
 
 func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool {

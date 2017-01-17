@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -75,5 +76,49 @@ func TestAddOrUpdateCertAndKey(t *testing.T) {
 
 	if cnames[0] != "echoheaders" {
 		t.Fatalf("expected cname echoheaders but %v returned", cnames[0])
+	}
+}
+
+// TestRemoveDuplicatePems tests RemoveDuplicatePems function.  We make sure that duplicates are removed from supplied input array.
+func TestRemoveDuplicatePems(t *testing.T) {
+	tests := []struct {
+		in  []TLSCred
+		out []TLSCred
+	}{
+		{},
+		{
+			in: []TLSCred{
+				{
+					Key: "alpha",
+				},
+			},
+			out: []TLSCred{
+				{
+					Key: "alpha",
+				},
+			},
+		},
+		{
+			in: []TLSCred{
+				{Key: "alpha"}, {Key: "bravo"}, {Key: "charlie"}, {Key: "delta"},
+			},
+			out: []TLSCred{
+				{Key: "alpha"}, {Key: "bravo"}, {Key: "charlie"}, {Key: "delta"},
+			},
+		},
+		{
+			in: []TLSCred{
+				{Key: "alpha"}, {Key: "alpha"}, {Key: "bravo"}, {Key: "charlie"}, {Key: "charlie"}, {Key: "delta"}, {Key: "delta"},
+			},
+			out: []TLSCred{
+				{Key: "alpha"}, {Key: "bravo"}, {Key: "charlie"}, {Key: "delta"},
+			},
+		},
+	}
+
+	for i, tt := range tests {
+		if got, want := RemoveDuplicatePems(tt.in), tt.out; !reflect.DeepEqual(got, want) {
+			t.Errorf("#%v: RemoveDuplicatePems(%q) = %q, want %q", i, tt.in, got, want)
+		}
 	}
 }

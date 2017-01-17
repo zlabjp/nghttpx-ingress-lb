@@ -147,3 +147,22 @@ func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
 
 	return nil, errors.New("Failed to parse private key")
 }
+
+// RemoveDuplicatePems removes duplicates from pems.  It assumes that pems are sorted using TLSCredKeyLess.
+func RemoveDuplicatePems(pems []TLSCred) []TLSCred {
+	if len(pems) == 0 {
+		return pems
+	}
+	left := pems[1:]
+	j := 0
+	for i, _ := range left {
+		if pems[j].Key == left[i].Key {
+			continue
+		}
+		j++
+		if j <= i {
+			pems[j] = left[i]
+		}
+	}
+	return pems[:j+1]
+}
