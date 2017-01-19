@@ -24,11 +24,13 @@ limitations under the License.
 package nghttpx
 
 import (
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
 	"sync"
 	"text/template"
+	"time"
 
 	"github.com/golang/glog"
 
@@ -57,6 +59,8 @@ type Manager struct {
 	BackendConfigFile string
 	// DoneCh signals when nghttpx finishes
 	DoneCh chan struct{}
+	// httpClient is used to issue backend API request to nghttpx
+	httpClient *http.Client
 
 	reloadRateLimiter flowcontrol.RateLimiter
 
@@ -91,6 +95,9 @@ func NewManager() *Manager {
 		reloadLock:        &sync.Mutex{},
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.1, 1),
 		DoneCh:            make(chan struct{}),
+		httpClient: &http.Client{
+			Timeout: time.Second * 30,
+		},
 	}
 
 	ngx.createCertsDir(tlsDirectory)

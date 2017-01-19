@@ -30,7 +30,6 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
-	"time"
 
 	"github.com/golang/glog"
 
@@ -143,11 +142,6 @@ func (ngx *Manager) issueBackendReplaceRequest() error {
 
 	defer in.Close()
 
-	// The default Go HTTP client does not have timeout.
-	c := &http.Client{
-		Timeout: time.Second * 30,
-	}
-
 	req, err := http.NewRequest("PUT", backendReplaceURI, in)
 	if err != nil {
 		return fmt.Errorf("Could not create API request %v: %v", backendReplaceURI, err)
@@ -155,7 +149,7 @@ func (ngx *Manager) issueBackendReplaceRequest() error {
 
 	req.Header.Add("Content-Type", "text/plain")
 
-	resp, err := c.Do(req)
+	resp, err := ngx.httpClient.Do(req)
 
 	if err != nil {
 		return fmt.Errorf("Could not issue PUT %v: %v", backendReplaceURI, err)
