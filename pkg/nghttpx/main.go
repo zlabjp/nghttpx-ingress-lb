@@ -55,6 +55,8 @@ type Manager struct {
 	ConfigFile string
 	// nghttpx backend configuration file path
 	BackendConfigFile string
+	// DoneCh signals when nghttpx finishes
+	DoneCh chan struct{}
 
 	reloadRateLimiter flowcontrol.RateLimiter
 
@@ -88,6 +90,7 @@ func NewManager() *Manager {
 		BackendConfigFile: "/etc/nghttpx/nghttpx-backend.conf",
 		reloadLock:        &sync.Mutex{},
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.1, 1),
+		DoneCh:            make(chan struct{}),
 	}
 
 	ngx.createCertsDir(tlsDirectory)
