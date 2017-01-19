@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"syscall"
 	"time"
 
 	"github.com/golang/glog"
@@ -36,20 +37,38 @@ import (
 	"k8s.io/kubernetes/pkg/healthz"
 )
 
-// Start starts a nghttpx process, and wait.  When nghttpx exits,
-// return, and kills controller.
-func (ngx *Manager) Start() {
+// Start starts a nghttpx process, and wait.  When nghttpx exits, close ngx.DoneCh to notify that nghttpx has finished.
+func (ngx *Manager) Start(stopCh <-chan struct{}) {
 	glog.Info("Starting nghttpx process...")
 	cmd := exec.Command("/usr/local/bin/nghttpx")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		glog.Errorf("nghttpx error: %v", err)
+		glog.Errorf("nghttpx didn't started successfully: %v", err)
+		return
 	}
 
-	if err := cmd.Wait(); err != nil {
-		glog.Errorf("nghttpx error: %v", err)
+	waitDoneCh := make(chan struct{})
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			glog.Errorf("nghttpx didn't complete successfully: %v", err)
+		}
+		close(waitDoneCh)
+	}()
+
+	select {
+	case <-waitDoneCh:
+		glog.Infof("nghttpx exited")
+	case <-stopCh:
+		glog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", cmd.Process.Pid)
+		if err := cmd.Process.Signal(syscall.SIGQUIT); err != nil {
+			glog.Errorf("Could not send signal to nghttpx process (PID %v): %v", cmd.Process.Pid, err)
+		}
+		<-waitDoneCh
+		glog.Infof("nghttpx exited")
 	}
+
+	close(ngx.DoneCh)
 }
 
 // CheckAndReload verify if the nghttpx configuration changed and sends a reload

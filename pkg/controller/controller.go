@@ -996,7 +996,7 @@ func (lbc *LoadBalancerController) removeFromIngress(ings []interface{}) {
 // Run starts the loadbalancer controller.
 func (lbc *LoadBalancerController) Run() {
 	glog.Infof("Starting nghttpx loadbalancer controller")
-	go lbc.nghttpx.Start()
+	go lbc.nghttpx.Start(lbc.stopCh)
 
 	go lbc.ingController.Run(lbc.stopCh)
 	go lbc.endpController.Run(lbc.stopCh)
