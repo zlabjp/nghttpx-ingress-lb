@@ -36,7 +36,7 @@ import (
 	"k8s.io/kubernetes/pkg/healthz"
 )
 
-// Start starts a nghttpx process, and wait.  When nghttpx exits, close ngx.DoneCh to notify that nghttpx has finished.
+// Start starts a nghttpx process, and wait.
 func (ngx *Manager) Start(stopCh <-chan struct{}) {
 	glog.Info("Starting nghttpx process...")
 	cmd := exec.Command("/usr/local/bin/nghttpx")
@@ -66,8 +66,6 @@ func (ngx *Manager) Start(stopCh <-chan struct{}) {
 		<-waitDoneCh
 		glog.Infof("nghttpx exited")
 	}
-
-	close(ngx.DoneCh)
 }
 
 // CheckAndReload verify if the nghttpx configuration changed and sends a reload

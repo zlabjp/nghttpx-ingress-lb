@@ -153,10 +153,9 @@ func main() {
 
 	lbc.Run()
 
-	glog.Infof("Waiting for nghttpx to shut down...")
-	select {
-	case <-lbc.Nghttpx().DoneCh:
-		glog.Infof("Done")
+	for {
+		glog.Infof("Waiting for pod deletion...")
+		time.Sleep(30 * time.Second)
 	}
 }
 

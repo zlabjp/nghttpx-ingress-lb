@@ -57,8 +57,6 @@ type Manager struct {
 	ConfigFile string
 	// nghttpx backend configuration file path
 	BackendConfigFile string
-	// DoneCh signals when nghttpx finishes
-	DoneCh chan struct{}
 	// httpClient is used to issue backend API request to nghttpx
 	httpClient *http.Client
 
@@ -94,7 +92,6 @@ func NewManager() *Manager {
 		BackendConfigFile: "/etc/nghttpx/nghttpx-backend.conf",
 		reloadLock:        &sync.Mutex{},
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.1, 1),
-		DoneCh:            make(chan struct{}),
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
 		},
