@@ -72,7 +72,7 @@ func (ngx *Manager) Start(stopCh <-chan struct{}) {
 // with new configuration.  If its invocation succeeds, current
 // nghttpx is going to shutdown gracefully.  The invocation of new
 // process may fail due to invalid configurations.
-func (ngx *Manager) CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressConfig) (bool, error) {
+func (ngx *Manager) CheckAndReload(cfg NghttpxConfiguration, ingressCfg IngressConfig) (bool, error) {
 	ngx.reloadRateLimiter.Accept()
 
 	ngx.reloadLock.Lock()

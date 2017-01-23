@@ -30,7 +30,7 @@ type Interface interface {
 	// CheckAndReload checks whether the nghttpx configuration changed, and if so, make nghttpx reload its configuration.  If reloading
 	// is required, and it successfully issues reloading, returns true.  If there is no need to reloading, it returns false.  On error,
 	// it returns false, and non-nil error.
-	CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressConfig) (bool, error)
+	CheckAndReload(cfg NghttpxConfiguration, ingressCfg IngressConfig) (bool, error)
 	// AddOrUpdateCertAndKey creates a key and certificate files with the specified prefix name, and returns the path to key, and
 	// certificate files, and checksum of them concatenated.
 	AddOrUpdateCertAndKey(name string, cert, key []byte) (TLSCred, error)

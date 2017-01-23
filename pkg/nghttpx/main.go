@@ -43,7 +43,7 @@ var (
 )
 
 // nghttpxConfiguration is set of configuration we apply to nghttpx instance.
-type nghttpxConfiguration struct {
+type NghttpxConfiguration struct {
 	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-n
 	// Set the number of worker threads.
 	Workers string
@@ -77,8 +77,8 @@ type Manager struct {
 
 // defaultConfiguration returns the default configuration contained
 // in the file default-conf.json
-func newDefaultNghttpxCfg() nghttpxConfiguration {
-	cfg := nghttpxConfiguration{
+func newDefaultNghttpxCfg() NghttpxConfiguration {
+	cfg := NghttpxConfiguration{
 		Workers: strconv.Itoa(runtime.NumCPU()),
 	}
 
