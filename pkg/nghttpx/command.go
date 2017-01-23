@@ -72,7 +72,7 @@ func (ngx *Manager) Start(stopCh <-chan struct{}) {
 // with new configuration.  If its invocation succeeds, current
 // nghttpx is going to shutdown gracefully.  The invocation of new
 // process may fail due to invalid configurations.
-func (ngx *Manager) CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressConfig) {
+func (ngx *Manager) CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressConfig) (bool, error) {
 	ngx.reloadRateLimiter.Accept()
 
 	ngx.reloadLock.Lock()
@@ -81,8 +81,7 @@ func (ngx *Manager) CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressC
 	changed, err := ngx.writeCfg(cfg, ingressCfg)
 
 	if err != nil {
-		glog.Errorf("failed to write new nghttpx configuration. Avoiding reload: %v", err)
-		return
+		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %v", err)
 	}
 
 	switch changed {
@@ -92,12 +91,16 @@ func (ngx *Manager) CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressC
 		glog.Info("change in configuration detected. Reloading...")
 		out, err := exec.Command(cmd, args...).CombinedOutput()
 		if err != nil {
-			glog.Errorf("failed to execute %v %v: %v", cmd, args, string(out))
+			return false, fmt.Errorf("failed to execute %v %v: %v", cmd, args, string(out))
 		}
+		return true, nil
 	case backendConfigChanged:
 		if err := ngx.issueBackendReplaceRequest(); err != nil {
-			glog.Errorf("failed to issue backend replace request: %v", err)
+			return false, fmt.Errorf("failed to issue backend replace request: %v", err)
 		}
+		return true, nil
+	default:
+		return false, nil
 	}
 }
 

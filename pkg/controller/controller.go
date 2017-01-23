@@ -117,7 +117,7 @@ type LoadBalancerController struct {
 	endpLister       cache.StoreToEndpointsLister
 	secretLister     StoreToSecretLister
 	mapLister        StoreToMapLister
-	nghttpx          *nghttpx.Manager
+	nghttpx          nghttpx.Interface
 	podInfo          *PodInfo
 	defaultSvc       string
 	ngxConfigMap     string
@@ -534,10 +534,14 @@ func (lbc *LoadBalancerController) sync(key string) {
 	cfg := lbc.getConfigMap(lbc.ngxConfigMap)
 
 	ngxConfig := nghttpx.ReadConfig(cfg)
-	lbc.nghttpx.CheckAndReload(ngxConfig, nghttpx.IngressConfig{
+	if reloaded, err := lbc.nghttpx.CheckAndReload(ngxConfig, nghttpx.IngressConfig{
 		Upstreams: upstreams,
 		Server:    server,
-	})
+	}); err != nil {
+		glog.Error(err)
+	} else if !reloaded {
+		glog.V(4).Infof("No need to reload configuration.")
+	}
 }
 
 func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
@@ -887,10 +891,6 @@ func (lbc *LoadBalancerController) Run() {
 	glog.Infof("Shutting down nghttpx loadbalancer controller")
 
 	lbc.syncQueue.ShutDown()
-}
-
-func (lbc *LoadBalancerController) Nghttpx() *nghttpx.Manager {
-	return lbc.nghttpx
 }
 
 func retryOrForget(q workqueue.RateLimitingInterface, key interface{}, requeue bool) {
