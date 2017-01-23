@@ -132,6 +132,9 @@ type LoadBalancerController struct {
 	stopLock sync.Mutex
 	shutdown bool
 	stopCh   chan struct{}
+
+	// controllersInSyncHandler returns true if all resource controllers have synced.
+	controllersInSyncHandler func() bool
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -238,6 +241,8 @@ func NewLoadBalancerController(clientset internalclientset.Interface, resyncPeri
 			DeleteFunc: lbc.deleteConfigMapNotification,
 		},
 	)
+
+	lbc.controllersInSyncHandler = lbc.controllersInSync
 
 	return &lbc, nil
 }
@@ -417,7 +422,9 @@ func (lbc *LoadBalancerController) worker() {
 			}
 
 			defer lbc.syncQueue.Done(key)
-			lbc.sync(key.(string))
+			if err := lbc.sync(key.(string)); err != nil {
+				glog.Error(err)
+			}
 		}()
 	}
 }
@@ -516,16 +523,16 @@ func (lbc *LoadBalancerController) checkSvcForUpdate(svc *api.Service) (map[stri
 	return namedPorts, nil
 }
 
-func (lbc *LoadBalancerController) sync(key string) {
+func (lbc *LoadBalancerController) sync(key string) error {
 	retry := false
 
 	defer func() { retryOrForget(lbc.syncQueue, key, retry) }()
 
-	if !lbc.controllersInSync() {
+	if !lbc.controllersInSyncHandler() {
 		glog.Infof("Deferring sync till endpoints controller has synced")
 		retry = true
 		time.Sleep(podStoreSyncedPollPeriod)
-		return
+		return nil
 	}
 
 	ings := lbc.ingLister.Store.List()
@@ -538,10 +545,12 @@ func (lbc *LoadBalancerController) sync(key string) {
 		Upstreams: upstreams,
 		Server:    server,
 	}); err != nil {
-		glog.Error(err)
+		return err
 	} else if !reloaded {
 		glog.V(4).Infof("No need to reload configuration.")
 	}
+
+	return nil
 }
 
 func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
