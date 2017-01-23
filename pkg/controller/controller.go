@@ -533,7 +533,7 @@ func (lbc *LoadBalancerController) sync(key string) {
 
 	cfg := lbc.getConfigMap(lbc.ngxConfigMap)
 
-	ngxConfig := lbc.nghttpx.ReadConfig(cfg)
+	ngxConfig := nghttpx.ReadConfig(cfg)
 	lbc.nghttpx.CheckAndReload(ngxConfig, nghttpx.IngressConfig{
 		Upstreams: upstreams,
 		Server:    server,

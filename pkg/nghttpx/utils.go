@@ -36,7 +36,7 @@ import (
 )
 
 // ReadConfig obtains the configuration defined by the user merged with the defaults.
-func (ngx *Manager) ReadConfig(config *api.ConfigMap) nghttpxConfiguration {
+func ReadConfig(config *api.ConfigMap) nghttpxConfiguration {
 	cfg := newDefaultNghttpxCfg()
 	cfg.ExtraConfig = config.Data["nghttpx-conf"]
 	return cfg
