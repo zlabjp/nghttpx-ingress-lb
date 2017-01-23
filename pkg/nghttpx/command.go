@@ -32,8 +32,6 @@ import (
 	"syscall"
 
 	"github.com/golang/glog"
-
-	"k8s.io/kubernetes/pkg/healthz"
 )
 
 // Start starts a nghttpx process, and wait.
@@ -101,29 +99,6 @@ func (ngx *Manager) CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressC
 			glog.Errorf("failed to issue backend replace request: %v", err)
 		}
 	}
-}
-
-// check to verify Manager implements HealthzChecker interface
-var _ healthz.HealthzChecker = Manager{}
-
-// Name returns the healthcheck name
-func (ngx Manager) Name() string {
-	return "nghttpx"
-}
-
-// Check returns if the nghttpx healthz endpoint is returning ok (status code 200)
-func (ngx Manager) Check(_ *http.Request) error {
-	res, err := http.Get("http://127.0.0.1:8080/healthz")
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != 200 {
-		return fmt.Errorf("nghttpx is unhealthy")
-	}
-
-	return nil
 }
 
 const (

@@ -159,9 +159,32 @@ func main() {
 	}
 }
 
+// healthzChecker implements healthz.HealthzChecker interface.
+type healthzChecker struct{}
+
+// Name returns the healthcheck name
+func (hc healthzChecker) Name() string {
+	return "nghttpx"
+}
+
+// Check returns if the nghttpx healthz endpoint is returning ok (status code 200)
+func (hc healthzChecker) Check(_ *http.Request) error {
+	res, err := http.Get("http://127.0.0.1:8080/healthz")
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return fmt.Errorf("nghttpx is unhealthy")
+	}
+
+	return nil
+}
+
 func registerHandlers(lbc *controller.LoadBalancerController) {
 	mux := http.NewServeMux()
-	healthz.InstallHandler(mux, lbc.Nghttpx())
+	healthz.InstallHandler(mux, &healthzChecker{})
 
 	http.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
