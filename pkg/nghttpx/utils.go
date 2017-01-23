@@ -47,7 +47,7 @@ func ReadConfig(config *api.ConfigMap) nghttpxConfiguration {
 // configuration.  If they differ, we write data into filename, and
 // return true.  Otherwise, just return false without altering
 // existing file.
-func (ngx *Manager) needsReload(filename string, data *bytes.Buffer) (bool, error) {
+func needsReload(filename string, data *bytes.Buffer) (bool, error) {
 	in, err := os.Open(filename)
 	if err != nil {
 		return false, err

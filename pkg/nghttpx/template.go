@@ -92,14 +92,14 @@ func (ngx *Manager) writeCfg(cfg nghttpxConfiguration, ingressCfg IngressConfig)
 	}
 
 	// If main configuration has changed, we need to reload nghttpx
-	mainChanged, err := ngx.needsReload(ngx.ConfigFile, mainConfigBuffer)
+	mainChanged, err := needsReload(ngx.ConfigFile, mainConfigBuffer)
 	if err != nil {
 		return configNotChanged, err
 	}
 
 	// If backend configuration has changed, we need to issue
 	// backend replace API to nghttpx
-	backendChanged, err := ngx.needsReload(ngx.BackendConfigFile, backendConfigBuffer)
+	backendChanged, err := needsReload(ngx.BackendConfigFile, backendConfigBuffer)
 	if err != nil {
 		return configNotChanged, err
 	}
