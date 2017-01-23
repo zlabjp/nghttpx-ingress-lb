@@ -57,7 +57,7 @@ func writeFile(path string, content []byte) error {
 // AddOrUpdateCertAndKey creates a key and certificate files with the
 // specified name, and returns the path to key, and certificate files,
 // and checksum of them concatenated.
-func (nghttpx *Manager) AddOrUpdateCertAndKey(name string, cert []byte, key []byte) (TLSCred, error) {
+func (ngx *Manager) AddOrUpdateCertAndKey(name string, cert []byte, key []byte) (TLSCred, error) {
 	keyFileName := filepath.Join(tlsDirectory, fmt.Sprintf("%v.key", name))
 	certFileName := filepath.Join(tlsDirectory, fmt.Sprintf("%v.crt", name))
 
