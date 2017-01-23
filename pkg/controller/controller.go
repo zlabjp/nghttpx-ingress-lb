@@ -125,7 +125,6 @@ type LoadBalancerController struct {
 	recorder record.EventRecorder
 
 	syncQueue workqueue.RateLimitingInterface
-	ingQueue  workqueue.RateLimitingInterface
 
 	// stopLock is used to enforce only a single call to Stop is active.
 	// Needed because we allow stopping through an http endpoint and
@@ -152,7 +151,6 @@ func NewLoadBalancerController(clientset internalclientset.Interface, resyncPeri
 		defaultSvc:   defaultSvc,
 		recorder:     eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:    workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
-		ingQueue:     workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 	}
 
 	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
@@ -247,14 +245,12 @@ func NewLoadBalancerController(clientset internalclientset.Interface, resyncPeri
 func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
 	ing := obj.(*extensions.Ingress)
 	glog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
-	lbc.enqueueIngress(ing)
 	lbc.enqueue(ing)
 }
 
 func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
 	curIng := cur.(*extensions.Ingress)
 	glog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
-	lbc.enqueueIngress(curIng)
 	lbc.enqueue(curIng)
 }
 
@@ -273,7 +269,6 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 		}
 	}
 	glog.V(4).Infof("Ingress %v/%v deleted", ing.Namespace, ing.Name)
-	lbc.enqueueIngress(ing)
 	lbc.enqueue(ing)
 }
 
@@ -413,16 +408,6 @@ func (lbc *LoadBalancerController) enqueue(obj runtime.Object) {
 	lbc.syncQueue.Add(key)
 }
 
-func (lbc *LoadBalancerController) enqueueIngress(ing *extensions.Ingress) {
-	key, err := controller.KeyFunc(ing)
-	if err != nil {
-		glog.Errorf("Couldn't get key for object %+v: %v", ing, err)
-		return
-	}
-
-	lbc.ingQueue.Add(key)
-}
-
 func (lbc *LoadBalancerController) worker() {
 	for {
 		func() {
@@ -433,20 +418,6 @@ func (lbc *LoadBalancerController) worker() {
 
 			defer lbc.syncQueue.Done(key)
 			lbc.sync(key.(string))
-		}()
-	}
-}
-
-func (lbc *LoadBalancerController) ingressWorker() {
-	for {
-		func() {
-			key, quit := lbc.ingQueue.Get()
-			if quit {
-				return
-			}
-
-			defer lbc.ingQueue.Done(key)
-			lbc.updateIngressStatus(key.(string))
 		}()
 	}
 }
@@ -567,65 +538,6 @@ func (lbc *LoadBalancerController) sync(key string) {
 		Upstreams: upstreams,
 		Server:    server,
 	})
-}
-
-func (lbc *LoadBalancerController) updateIngressStatus(key string) {
-	retry := false
-
-	defer func() { retryOrForget(lbc.ingQueue, key, retry) }()
-
-	if !lbc.controllersInSync() {
-		glog.Infof("Deferring sync till endpoints controller has synced")
-		retry = true
-		time.Sleep(podStoreSyncedPollPeriod)
-		return
-	}
-
-	obj, ingExists, err := lbc.ingLister.Store.GetByKey(key)
-	if err != nil {
-		glog.Errorf("Couldn't get ingress %v: %v", key, err)
-		retry = true
-		return
-	}
-
-	if !ingExists {
-		glog.Infof("Ingress %v has been deleted", key)
-		return
-	}
-
-	ing := obj.(*extensions.Ingress)
-
-	ingClient := lbc.clientset.Extensions().Ingresses(ing.Namespace)
-
-	curIng, err := ingClient.Get(ing.Name)
-	if err != nil {
-		glog.Errorf("unexpected error searching Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
-		retry = true
-		return
-	}
-
-	lbIPs := ing.Status.LoadBalancer.Ingress
-	if !lbc.isStatusIPDefined(lbIPs) {
-		glog.Infof("Updating loadbalancer %v/%v with IP %v", ing.Namespace, ing.Name, lbc.podInfo.NodeIP)
-		curIng.Status.LoadBalancer.Ingress = append(curIng.Status.LoadBalancer.Ingress, api.LoadBalancerIngress{
-			IP: lbc.podInfo.NodeIP,
-		})
-		if _, err := ingClient.UpdateStatus(curIng); err != nil {
-			glog.Errorf("Couldn't update ingress %v: %v", key, err)
-			retry = true
-			return
-		}
-	}
-}
-
-func (lbc *LoadBalancerController) isStatusIPDefined(lbings []api.LoadBalancerIngress) bool {
-	for _, lbing := range lbings {
-		if lbing.IP == lbc.podInfo.NodeIP {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
@@ -957,42 +869,6 @@ func (lbc *LoadBalancerController) Stop() {
 	close(lbc.stopCh)
 }
 
-func (lbc *LoadBalancerController) removeFromIngress(ings []interface{}) {
-	glog.Infof("Updating %v Ingress rule(s)", len(ings))
-	for _, obj := range ings {
-		ing := obj.(*extensions.Ingress)
-
-		ingClient := lbc.clientset.Extensions().Ingresses(ing.Namespace)
-		curIng, err := ingClient.Get(ing.Name)
-		if err != nil {
-			glog.Errorf("unexpected error searching Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
-			continue
-		}
-
-		updated := false
-		for idx, lbStatus := range curIng.Status.LoadBalancer.Ingress {
-			if lbStatus.IP != lbc.podInfo.NodeIP {
-				continue
-			}
-
-			glog.Infof("Updating loadbalancer %v/%v. Removing IP %v", ing.Namespace, ing.Name, lbc.podInfo.NodeIP)
-
-			curIng.Status.LoadBalancer.Ingress = append(curIng.Status.LoadBalancer.Ingress[:idx],
-				curIng.Status.LoadBalancer.Ingress[idx+1:]...)
-			updated = true
-			break
-		}
-
-		if !updated {
-			continue
-		}
-
-		if _, err := ingClient.UpdateStatus(curIng); err != nil {
-			glog.Errorf("Couldn't update Ingress %+v: %v", curIng, err)
-		}
-	}
-}
-
 // Run starts the loadbalancer controller.
 func (lbc *LoadBalancerController) Run() {
 	glog.Infof("Starting nghttpx loadbalancer controller")
@@ -1005,18 +881,12 @@ func (lbc *LoadBalancerController) Run() {
 	go lbc.mapController.Run(lbc.stopCh)
 
 	go wait.Until(lbc.worker, time.Second, lbc.stopCh)
-	go wait.Until(lbc.ingressWorker, time.Second, lbc.stopCh)
 
 	<-lbc.stopCh
 
 	glog.Infof("Shutting down nghttpx loadbalancer controller")
 
 	lbc.syncQueue.ShutDown()
-	lbc.ingQueue.ShutDown()
-
-	glog.Infof("Removing IP address %v from ingress rules", lbc.podInfo.NodeIP)
-	ings := lbc.ingLister.Store.List()
-	lbc.removeFromIngress(ings)
 }
 
 func (lbc *LoadBalancerController) Nghttpx() *nghttpx.Manager {
