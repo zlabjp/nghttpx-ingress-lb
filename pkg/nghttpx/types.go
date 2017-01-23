@@ -33,7 +33,7 @@ type Interface interface {
 	CheckAndReload(cfg nghttpxConfiguration, ingressCfg IngressConfig) (bool, error)
 	// AddOrUpdateCertAndKey creates a key and certificate files with the specified prefix name, and returns the path to key, and
 	// certificate files, and checksum of them concatenated.
-	AddOrUpdateCertAndKey(name string, cert []byte, key []byte) (TLSCred, error)
+	AddOrUpdateCertAndKey(name string, cert, key []byte) (TLSCred, error)
 }
 
 // IngressConfig describes an nghttpx configuration
