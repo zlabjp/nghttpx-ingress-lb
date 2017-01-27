@@ -194,6 +194,7 @@ func newEmptyConfigMap() *api.ConfigMap {
 			Name:      defaultConfigMapName,
 			Namespace: defaultConfigMapNamespace,
 		},
+		Data: make(map[string]string),
 	}
 }
 
@@ -251,6 +252,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 	f := newFixture(t)
 
 	cm := newEmptyConfigMap()
+	cm.Data[nghttpx.NghttpxExtraConfigFieldName] = "Test"
 	svc, eps := newDefaultBackend()
 
 	f.mapStore = append(f.mapStore, cm)
@@ -284,5 +286,9 @@ func TestSyncDefaultBackend(t *testing.T) {
 		if got, want := us.Address, "192.168.100.1"; got != want {
 			t.Errorf("0: us.Address = %v, want %v", got, want)
 		}
+	}
+
+	if got, want := fm.cfg.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigFieldName]; got != want {
+		t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
 	}
 }
