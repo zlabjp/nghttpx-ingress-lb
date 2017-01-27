@@ -9,4 +9,7 @@ spec:
   selector:
     k8s-app: default-http-backend
   ports:
-  - port: 8080
+  - name: 8080-8080
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
