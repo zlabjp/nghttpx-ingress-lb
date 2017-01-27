@@ -259,8 +259,6 @@ func TestSyncDefaultBackend(t *testing.T) {
 
 	f.objects = append(f.objects, cm, svc, eps)
 
-	f.expectGetCMAction(cm)
-
 	f.prepare()
 	f.run(getKey(svc, t))
 

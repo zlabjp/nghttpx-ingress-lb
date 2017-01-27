@@ -446,19 +446,20 @@ func (lbc *LoadBalancerController) controllersInSync() bool {
 		lbc.mapController.HasSynced()
 }
 
-func (lbc *LoadBalancerController) getConfigMap(cfgName string) *api.ConfigMap {
-	if cfgName == "" {
-		return &api.ConfigMap{}
+// getConfigMap returns ConfigMap denoted by cmKey.
+func (lbc *LoadBalancerController) getConfigMap(cmKey string) (*api.ConfigMap, error) {
+	if cmKey == "" {
+		return &api.ConfigMap{}, nil
 	}
 
-	ns, name, _ := ParseNSName(cfgName)
-	// TODO: check why lbc.mapLister.Store.GetByKey(mapKey) is not stable (random content)
-	if cfg, err := lbc.clientset.Core().ConfigMaps(ns).Get(name); err != nil {
-		glog.V(3).Infof("configmap not found %v : %v", cfgName, err)
-		return &api.ConfigMap{}
-	} else {
-		return cfg
+	obj, exists, err := lbc.mapLister.GetByKey(cmKey)
+	if err != nil {
+		return nil, err
+	} else if !exists {
+		glog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
+		return &api.ConfigMap{}, nil
 	}
+	return obj.(*api.ConfigMap), nil
 }
 
 // checkSvcForUpdate verifies if one of the running pods for a service contains
@@ -547,7 +548,10 @@ func (lbc *LoadBalancerController) sync(key string) error {
 	ings := lbc.ingLister.Store.List()
 	upstreams, server := lbc.getUpstreamServers(ings)
 
-	cfg := lbc.getConfigMap(lbc.ngxConfigMap)
+	cfg, err := lbc.getConfigMap(lbc.ngxConfigMap)
+	if err != nil {
+		return err
+	}
 
 	ngxConfig := nghttpx.ReadConfig(cfg)
 	if reloaded, err := lbc.nghttpx.CheckAndReload(ngxConfig, nghttpx.IngressConfig{
