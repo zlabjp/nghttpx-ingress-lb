@@ -5,7 +5,7 @@ For instance, if we want to change the log-level to "INFO", do like
 so:
 
 ```
-$ cat nghttpx-ingress-lb-conf.yaml
+$ cat conf.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -16,11 +16,11 @@ data:
 ```
 
 ```
-$ kubectl create -f nghttpx-ingress-lb-conf.yaml
+$ kubectl create -f conf.yaml
 ```
 
-Pass `--nghttpx-configmap=default/nghttpx-ingress-lb-conf` to
-nghttpx-ingress-controller to tell the lb Configmap name.
+Pass `--nghttpx-configmap=default/nghttpx-ingress-lb` to
+nghttpx-ingress-controller to tell the lb ConfigMap name.
 
-If the Configmap it is updated, nghttpx will be reloaded with the new
+If the ConfigMap it is updated, nghttpx will be reloaded with the new
 configuration.

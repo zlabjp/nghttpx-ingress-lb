@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nghttpx-ingress-lb
+data:
+  nghttpx-conf: |
+    log-level=INFO
