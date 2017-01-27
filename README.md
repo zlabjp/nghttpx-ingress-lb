@@ -1,7 +1,7 @@
 # nghttpx Ingress Controller
 
 This is a nghttpx Ingress controller that uses
-[ConfigMap](https://github.com/kubernetes/kubernetes/blob/master/docs/proposals/configmap.md)
+[ConfigMap](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/configmap.md)
 to store the nghttpx configuration. See [Ingress controller
 documentation](../README.md) for details on how it works.
 
@@ -13,7 +13,7 @@ nghttpx ingress controller is created based on
 - Ingress controller
 - nghttpx >= 1.10
 - TLS support
-- custom nghttpx configuration using [ConfigMap](https://github.com/kubernetes/kubernetes/blob/master/docs/proposals/configmap.md)
+- custom nghttpx configuration using [ConfigMap](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/configmap.md)
 
 
 ## Requirements
@@ -35,7 +35,7 @@ $ ./nghttpx-ingress-controller --running-in-cluster=false --default-backend-serv
 
 ## Deploy the Ingress controller
 
-First create a default backend:
+Before the deploy of the Ingress controller we need a default backend [404-server](https://github.com/kubernetes/contrib/tree/master/404-server)
 ```
 $ kubectl create -f examples/default-backend.yaml
 $ kubectl expose rc default-http-backend --port=80 --target-port=8080 --name=default-http-backend
@@ -76,12 +76,6 @@ echomap   -
           bar.baz.com
           /bar          echoheaders-y:80
           /foo          echoheaders-x:80
-```
-
-Before the deploy of the Ingress controller we need a default backend [404-server](https://github.com/kubernetes/contrib/tree/master/404-server)
-```
-kubectl create -f examples/default-backend.yaml
-kubectl expose rc default-http-backend --port=80 --target-port=8080 --name=default-http-backend
 ```
 
 Check nghttpx it is running with the defined Ingress rules:
