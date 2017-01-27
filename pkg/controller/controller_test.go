@@ -77,7 +77,13 @@ const (
 // prepare performs setup necessary for test run.
 func (f *fixture) prepare() {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
-	if lbc, err := NewLoadBalancerController(f.clientset, newFakeManager(), defaultResyncPeriod, fmt.Sprintf("%v/%v", defaultBackendNamespace, defaultBackendName), defaultIngNamespace, defaultConfigMapName, nil); err != nil {
+	config := Config{
+		ResyncPeriod:              defaultResyncPeriod,
+		DefaultBackendServiceName: fmt.Sprintf("%v/%v", defaultBackendNamespace, defaultBackendName),
+		WatchNamespace:            defaultIngNamespace,
+		NghttpxConfigMapName:      fmt.Sprintf("%v/%v", defaultConfigMapNamespace, defaultConfigMapName),
+	}
+	if lbc, err := NewLoadBalancerController(f.clientset, newFakeManager(), &config, nil); err != nil {
 		f.t.Fatalf("Could not create LoadBalancerController: %v", err)
 	} else {
 		f.lbc = lbc

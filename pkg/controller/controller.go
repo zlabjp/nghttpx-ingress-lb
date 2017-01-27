@@ -137,21 +137,30 @@ type LoadBalancerController struct {
 	controllersInSyncHandler func() bool
 }
 
-// NewLoadBalancerController creates a controller for nghttpx loadbalancer
-func NewLoadBalancerController(clientset internalclientset.Interface, manager nghttpx.Interface, resyncPeriod time.Duration, defaultSvc,
-	namespace, ngxConfigMapName string, runtimeInfo *PodInfo) (*LoadBalancerController, error) {
+type Config struct {
+	// ResyncPeriod is the duration that Ingress resources are forcibly processed.
+	ResyncPeriod time.Duration
+	// DefaultBackendServiceName is the default backend service name.
+	DefaultBackendServiceName string
+	// WatchNamespace is the namespace to watch for Ingress resource updates.
+	WatchNamespace string
+	// NghttpxConfigMapName is the name of ConfigMap resource which contains additional configuration for nghttpx.
+	NghttpxConfigMapName string
+}
 
+// NewLoadBalancerController creates a controller for nghttpx loadbalancer
+func NewLoadBalancerController(clientset internalclientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *PodInfo) (*LoadBalancerController, error) {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
-	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: clientset.Core().Events(namespace)})
+	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: clientset.Core().Events(config.WatchNamespace)})
 
 	lbc := LoadBalancerController{
 		clientset:    clientset,
 		stopCh:       make(chan struct{}),
 		podInfo:      runtimeInfo,
 		nghttpx:      manager,
-		ngxConfigMap: ngxConfigMapName,
-		defaultSvc:   defaultSvc,
+		ngxConfigMap: config.NghttpxConfigMapName,
+		defaultSvc:   config.DefaultBackendServiceName,
 		recorder:     eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:    workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 	}
@@ -159,14 +168,14 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Extensions().Ingresses(namespace).List(options)
+				return lbc.clientset.Extensions().Ingresses(config.WatchNamespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Extensions().Ingresses(namespace).Watch(options)
+				return lbc.clientset.Extensions().Ingresses(config.WatchNamespace).Watch(options)
 			},
 		},
 		&extensions.Ingress{},
-		resyncPeriod,
+		config.ResyncPeriod,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addIngressNotification,
 			UpdateFunc: lbc.updateIngressNotification,
@@ -177,10 +186,10 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	lbc.endpLister.Store, lbc.endpController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Endpoints(namespace).List(options)
+				return lbc.clientset.Core().Endpoints(config.WatchNamespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Endpoints(namespace).Watch(options)
+				return lbc.clientset.Core().Endpoints(config.WatchNamespace).Watch(options)
 			},
 		},
 		&api.Endpoints{},
@@ -195,10 +204,10 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	lbc.svcLister.Store, lbc.svcController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Services(namespace).List(options)
+				return lbc.clientset.Core().Services(config.WatchNamespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Services(namespace).Watch(options)
+				return lbc.clientset.Core().Services(config.WatchNamespace).Watch(options)
 			},
 		},
 		&api.Service{},
@@ -209,10 +218,10 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	lbc.secretLister.Store, lbc.secretController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Secrets(namespace).List(options)
+				return lbc.clientset.Core().Secrets(config.WatchNamespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Secrets(namespace).Watch(options)
+				return lbc.clientset.Core().Secrets(config.WatchNamespace).Watch(options)
 			},
 		},
 		&api.Secret{},
@@ -227,10 +236,10 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	lbc.mapLister.Store, lbc.mapController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().ConfigMaps(namespace).List(options)
+				return lbc.clientset.Core().ConfigMaps(config.WatchNamespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().ConfigMaps(namespace).Watch(options)
+				return lbc.clientset.Core().ConfigMaps(config.WatchNamespace).Watch(options)
 			},
 		},
 		&api.ConfigMap{},

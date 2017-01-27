@@ -144,7 +144,14 @@ func main() {
 		}
 	}
 
-	lbc, err := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), *resyncPeriod, *defaultSvc, *watchNamespace, *ngxConfigMap, runtimePodInfo)
+	controllerConfig := controller.Config{
+		ResyncPeriod:              *resyncPeriod,
+		DefaultBackendServiceName: *defaultSvc,
+		WatchNamespace:            *watchNamespace,
+		NghttpxConfigMapName:      *ngxConfigMap,
+	}
+
+	lbc, err := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), &controllerConfig, runtimePodInfo)
 	if err != nil {
 		glog.Fatalf("%v", err)
 	}
