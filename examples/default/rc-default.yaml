@@ -44,6 +44,6 @@ spec:
           hostPort: 443
         args:
         - /nghttpx-ingress-controller
-        - --default-backend-service=default/default-http-backend
+        - --default-backend-service=$(POD_NAMESPACE)/default-http-backend
         - --logtostderr
 
