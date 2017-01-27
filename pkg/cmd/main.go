@@ -44,6 +44,7 @@ import (
 	kubectl_util "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
+	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
 
 const (
@@ -143,7 +144,7 @@ func main() {
 		}
 	}
 
-	lbc, err := controller.NewLoadBalancerController(clientset, *resyncPeriod, *defaultSvc, *watchNamespace, *ngxConfigMap, runtimePodInfo)
+	lbc, err := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), *resyncPeriod, *defaultSvc, *watchNamespace, *ngxConfigMap, runtimePodInfo)
 	if err != nil {
 		glog.Fatalf("%v", err)
 	}

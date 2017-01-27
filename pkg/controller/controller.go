@@ -138,7 +138,7 @@ type LoadBalancerController struct {
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
-func NewLoadBalancerController(clientset internalclientset.Interface, resyncPeriod time.Duration, defaultSvc,
+func NewLoadBalancerController(clientset internalclientset.Interface, manager nghttpx.Interface, resyncPeriod time.Duration, defaultSvc,
 	namespace, ngxConfigMapName string, runtimeInfo *PodInfo) (*LoadBalancerController, error) {
 
 	eventBroadcaster := record.NewBroadcaster()
@@ -149,7 +149,7 @@ func NewLoadBalancerController(clientset internalclientset.Interface, resyncPeri
 		clientset:    clientset,
 		stopCh:       make(chan struct{}),
 		podInfo:      runtimeInfo,
-		nghttpx:      nghttpx.NewManager(),
+		nghttpx:      manager,
 		ngxConfigMap: ngxConfigMapName,
 		defaultSvc:   defaultSvc,
 		recorder:     eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
