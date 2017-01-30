@@ -610,10 +610,10 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*nghttpx.Upstream, *nghttpx.Server, error) {
 	server := &nghttpx.Server{}
 
-	pems := lbc.getTLSCredFromIngress(data)
-
-	sort.Sort(nghttpx.TLSCredKeyLess(pems))
-	pems = nghttpx.RemoveDuplicatePems(pems)
+	var (
+		upstreams []*nghttpx.Upstream
+		pems      []*nghttpx.TLSCred
+	)
 
 	if lbc.defaultTLSSecret != "" {
 		tlsCred, err := lbc.getTLSCredFromSecret(lbc.defaultTLSSecret)
@@ -621,27 +621,19 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 			return nil, nil, err
 		}
 
-		// Remove default TLS key pair from pems.
-		for i, _ := range pems {
-			if tlsCred.Key == pems[i].Key {
-				pems = append(pems[:i], pems[i+1:]...)
-				break
-			}
-		}
-
 		server.TLS = true
 		server.DefaultTLSCred = tlsCred
-		server.SubTLSCred = pems
-	} else if len(pems) > 0 {
-		server.TLS = true
-		server.DefaultTLSCred = pems[0]
-		server.SubTLSCred = pems[1:]
 	}
-
-	upstreams := []*nghttpx.Upstream{}
 
 	for _, ingIf := range data {
 		ing := ingIf.(*extensions.Ingress)
+
+		if ingPems, err := lbc.getTLSCredFromIngress(ing); err != nil {
+			glog.Warningf("Ingress %v/%v is disabled because its TLS Secret cannot be processed: %v", ing.Namespace, ing.Name, err)
+			continue
+		} else {
+			pems = append(pems, ingPems...)
+		}
 
 		backendConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getBackendConfig()
 
@@ -719,6 +711,24 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 		}
 	}
 
+	sort.Sort(nghttpx.TLSCredKeyLess(pems))
+	pems = nghttpx.RemoveDuplicatePems(pems)
+
+	if server.DefaultTLSCred != nil {
+		// Remove default TLS key pair from pems.
+		for i, _ := range pems {
+			if server.DefaultTLSCred.Key == pems[i].Key {
+				pems = append(pems[:i], pems[i+1:]...)
+				break
+			}
+		}
+		server.SubTLSCred = pems
+	} else if len(pems) > 0 {
+		server.TLS = true
+		server.DefaultTLSCred = pems[0]
+		server.SubTLSCred = pems[1:]
+	}
+
 	// find default backend.  If only it is not found, use default backend.  This is useful to override default backend with ingress.
 	defaultUpstreamFound := false
 
@@ -772,35 +782,28 @@ func (lbc *LoadBalancerController) getTLSCredFromSecret(secretKey string) (*nght
 	return tlsCred, nil
 }
 
-// getTLSCredFromIngress returns list of nghttpx.TLSCred obtained from Ingress resources.
-func (lbc *LoadBalancerController) getTLSCredFromIngress(data []interface{}) []*nghttpx.TLSCred {
+// getTLSCredFromIngress returns list of nghttpx.TLSCred obtained from Ingress resource.
+func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *extensions.Ingress) ([]*nghttpx.TLSCred, error) {
 	var pems []*nghttpx.TLSCred
 
-	for _, ingIf := range data {
-		ing := ingIf.(*extensions.Ingress)
-
-		for _, tls := range ing.Spec.TLS {
-			secretKey := fmt.Sprintf("%s/%s", ing.Namespace, tls.SecretName)
-			obj, exists, err := lbc.secretLister.GetByKey(secretKey)
-			if err != nil {
-				glog.Warningf("Error retrieving Secret %v for Ingress %v/%v: %v", secretKey, ing.Namespace, ing.Name, err)
-				continue
-			}
-			if !exists {
-				glog.Warningf("Secret %v has been deleted", secretKey)
-				continue
-			}
-			tlsCred, err := lbc.createTLSCredFromSecret(obj.(*api.Secret))
-			if err != nil {
-				glog.Warning(err)
-				continue
-			}
-
-			pems = append(pems, tlsCred)
+	for _, tls := range ing.Spec.TLS {
+		secretKey := fmt.Sprintf("%s/%s", ing.Namespace, tls.SecretName)
+		obj, exists, err := lbc.secretLister.GetByKey(secretKey)
+		if err != nil {
+			return nil, fmt.Errorf("Error retrieving Secret %v for Ingress %v/%v: %v", secretKey, ing.Namespace, ing.Name, err)
 		}
+		if !exists {
+			return nil, fmt.Errorf("Secret %v has been deleted", secretKey)
+		}
+		tlsCred, err := lbc.createTLSCredFromSecret(obj.(*api.Secret))
+		if err != nil {
+			return nil, err
+		}
+
+		pems = append(pems, tlsCred)
 	}
 
-	return pems
+	return pems, nil
 }
 
 // createTLSCredFromSecret creates nghttpx.TLSCred from secret.
