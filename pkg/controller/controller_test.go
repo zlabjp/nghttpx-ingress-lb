@@ -159,7 +159,7 @@ func (f *fixture) expectGetCMAction(cm *api.ConfigMap) {
 // newFakeManager implements nghttpx.Interface.
 type fakeManager struct {
 	checkAndReloadHandler        func(cfg nghttpx.NghttpxConfiguration, ingressCfg nghttpx.IngressConfig) (bool, error)
-	addOrUpdateCertAndKeyHandler func(name string, cert []byte, key []byte) (nghttpx.TLSCred, error)
+	addOrUpdateCertAndKeyHandler func(name string, cert []byte, key []byte) (*nghttpx.TLSCred, error)
 
 	cfg        nghttpx.NghttpxConfiguration
 	ingressCfg nghttpx.IngressConfig
@@ -180,7 +180,7 @@ func (fm *fakeManager) CheckAndReload(cfg nghttpx.NghttpxConfiguration, ingressC
 	return fm.checkAndReloadHandler(cfg, ingressCfg)
 }
 
-func (fm *fakeManager) AddOrUpdateCertAndKey(name string, cert, key []byte) (nghttpx.TLSCred, error) {
+func (fm *fakeManager) AddOrUpdateCertAndKey(name string, cert, key []byte) (*nghttpx.TLSCred, error) {
 	return fm.addOrUpdateCertAndKeyHandler(name, cert, key)
 }
 
@@ -190,13 +190,13 @@ func (fm *fakeManager) defaultCheckAndReload(cfg nghttpx.NghttpxConfiguration, i
 	return true, nil
 }
 
-func (fm *fakeManager) defaultAddOrUpdateCertAndKey(name string, cert []byte, key []byte) (nghttpx.TLSCred, error) {
+func (fm *fakeManager) defaultAddOrUpdateCertAndKey(name string, cert []byte, key []byte) (*nghttpx.TLSCred, error) {
 	fm.certs = append(fm.certs, keyPair{
 		name: name,
 		cert: cert,
 		key:  key,
 	})
-	return nghttpx.TLSCred{
+	return &nghttpx.TLSCred{
 		Key:      fmt.Sprintf("%v.key", name),
 		Cert:     fmt.Sprintf("%v.crt", name),
 		Checksum: nghttpx.TLSCertKeyChecksum(cert, key),

@@ -59,19 +59,19 @@ func writeFile(path string, content []byte) error {
 // AddOrUpdateCertAndKey creates a key and certificate files with the
 // specified name, and returns the path to key, and certificate files,
 // and checksum of them concatenated.
-func (ngx *Manager) AddOrUpdateCertAndKey(name string, cert, key []byte) (TLSCred, error) {
+func (ngx *Manager) AddOrUpdateCertAndKey(name string, cert, key []byte) (*TLSCred, error) {
 	keyFileName := filepath.Join(tlsDirectory, fmt.Sprintf("%v.key", name))
 	certFileName := filepath.Join(tlsDirectory, fmt.Sprintf("%v.crt", name))
 
 	if err := writeFile(keyFileName, key); err != nil {
-		return TLSCred{}, err
+		return nil, err
 	}
 
 	if err := writeFile(certFileName, cert); err != nil {
-		return TLSCred{}, err
+		return nil, err
 	}
 
-	return TLSCred{
+	return &TLSCred{
 		Cert:     certFileName,
 		Key:      keyFileName,
 		Checksum: TLSCertKeyChecksum(cert, key),
@@ -152,7 +152,7 @@ func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
 }
 
 // RemoveDuplicatePems removes duplicates from pems.  It assumes that pems are sorted using TLSCredKeyLess.
-func RemoveDuplicatePems(pems []TLSCred) []TLSCred {
+func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 	if len(pems) == 0 {
 		return pems
 	}

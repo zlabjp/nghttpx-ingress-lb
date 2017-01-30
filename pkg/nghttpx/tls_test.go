@@ -82,35 +82,35 @@ func TestAddOrUpdateCertAndKey(t *testing.T) {
 // TestRemoveDuplicatePems tests RemoveDuplicatePems function.  We make sure that duplicates are removed from supplied input array.
 func TestRemoveDuplicatePems(t *testing.T) {
 	tests := []struct {
-		in  []TLSCred
-		out []TLSCred
+		in  []*TLSCred
+		out []*TLSCred
 	}{
 		{},
 		{
-			in: []TLSCred{
+			in: []*TLSCred{
 				{
 					Key: "alpha",
 				},
 			},
-			out: []TLSCred{
+			out: []*TLSCred{
 				{
 					Key: "alpha",
 				},
 			},
 		},
 		{
-			in: []TLSCred{
+			in: []*TLSCred{
 				{Key: "alpha"}, {Key: "bravo"}, {Key: "charlie"}, {Key: "delta"},
 			},
-			out: []TLSCred{
+			out: []*TLSCred{
 				{Key: "alpha"}, {Key: "bravo"}, {Key: "charlie"}, {Key: "delta"},
 			},
 		},
 		{
-			in: []TLSCred{
+			in: []*TLSCred{
 				{Key: "alpha"}, {Key: "alpha"}, {Key: "bravo"}, {Key: "charlie"}, {Key: "charlie"}, {Key: "delta"}, {Key: "delta"},
 			},
-			out: []TLSCred{
+			out: []*TLSCred{
 				{Key: "alpha"}, {Key: "bravo"}, {Key: "charlie"}, {Key: "delta"},
 			},
 		},

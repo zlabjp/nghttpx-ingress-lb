@@ -33,7 +33,7 @@ type Interface interface {
 	CheckAndReload(cfg NghttpxConfiguration, ingressCfg IngressConfig) (bool, error)
 	// AddOrUpdateCertAndKey creates a key and certificate files with the specified prefix name, and returns the path to key, and
 	// certificate files, and checksum of them concatenated.
-	AddOrUpdateCertAndKey(name string, cert, key []byte) (TLSCred, error)
+	AddOrUpdateCertAndKey(name string, cert, key []byte) (*TLSCred, error)
 }
 
 // IngressConfig describes an nghttpx configuration
@@ -110,7 +110,7 @@ type TLSCred struct {
 	Checksum string
 }
 
-type TLSCredKeyLess []TLSCred
+type TLSCredKeyLess []*TLSCred
 
 func (c TLSCredKeyLess) Len() int      { return len(c) }
 func (c TLSCredKeyLess) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
@@ -121,8 +121,8 @@ func (c TLSCredKeyLess) Less(i, j int) bool {
 // Server describes an nghttpx server
 type Server struct {
 	TLS               bool
-	DefaultTLSCred    TLSCred
-	SubTLSCred        []TLSCred
+	DefaultTLSCred    *TLSCred
+	SubTLSCred        []*TLSCred
 	TLSCertificate    string
 	TLSCertificateKey string
 }

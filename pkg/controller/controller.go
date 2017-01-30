@@ -757,24 +757,24 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 }
 
 // getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.
-func (lbc *LoadBalancerController) getTLSCredFromSecret(secretKey string) (nghttpx.TLSCred, error) {
+func (lbc *LoadBalancerController) getTLSCredFromSecret(secretKey string) (*nghttpx.TLSCred, error) {
 	obj, exists, err := lbc.secretLister.GetByKey(secretKey)
 	if err != nil {
-		return nghttpx.TLSCred{}, fmt.Errorf("Could not get TLS secret %v: %v", secretKey, err)
+		return nil, fmt.Errorf("Could not get TLS secret %v: %v", secretKey, err)
 	}
 	if !exists {
-		return nghttpx.TLSCred{}, fmt.Errorf("Secret %v has been deleted", secretKey)
+		return nil, fmt.Errorf("Secret %v has been deleted", secretKey)
 	}
 	tlsCred, err := lbc.createTLSCredFromSecret(obj.(*api.Secret))
 	if err != nil {
-		return nghttpx.TLSCred{}, err
+		return nil, err
 	}
 	return tlsCred, nil
 }
 
 // getTLSCredFromIngress returns list of nghttpx.TLSCred obtained from Ingress resources.
-func (lbc *LoadBalancerController) getTLSCredFromIngress(data []interface{}) []nghttpx.TLSCred {
-	var pems []nghttpx.TLSCred
+func (lbc *LoadBalancerController) getTLSCredFromIngress(data []interface{}) []*nghttpx.TLSCred {
+	var pems []*nghttpx.TLSCred
 
 	for _, ingIf := range data {
 		ing := ingIf.(*extensions.Ingress)
@@ -804,27 +804,27 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(data []interface{}) []n
 }
 
 // createTLSCredFromSecret creates nghttpx.TLSCred from secret.
-func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *api.Secret) (nghttpx.TLSCred, error) {
+func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *api.Secret) (*nghttpx.TLSCred, error) {
 	cert, ok := secret.Data[api.TLSCertKey]
 	if !ok {
-		return nghttpx.TLSCred{}, fmt.Errorf("Secret %v/%v has no certificate", secret.Namespace, secret.Name)
+		return nil, fmt.Errorf("Secret %v/%v has no certificate", secret.Namespace, secret.Name)
 	}
 	key, ok := secret.Data[api.TLSPrivateKeyKey]
 	if !ok {
-		return nghttpx.TLSCred{}, fmt.Errorf("Secret %v/%v has no private key", secret.Namespace, secret.Name)
+		return nil, fmt.Errorf("Secret %v/%v has no private key", secret.Namespace, secret.Name)
 	}
 
 	if _, err := nghttpx.CommonNames(cert); err != nil {
-		return nghttpx.TLSCred{}, fmt.Errorf("No valid TLS certificate found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+		return nil, fmt.Errorf("No valid TLS certificate found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
 
 	if err := nghttpx.CheckPrivateKey(key); err != nil {
-		return nghttpx.TLSCred{}, fmt.Errorf("No valid TLS private key found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+		return nil, fmt.Errorf("No valid TLS private key found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
 
 	tlsCred, err := lbc.nghttpx.AddOrUpdateCertAndKey(nghttpx.TLSCredPrefix(secret), cert, key)
 	if err != nil {
-		return nghttpx.TLSCred{}, fmt.Errorf("Could not create private key and certificate files for Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+		return nil, fmt.Errorf("Could not create private key and certificate files for Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
 
 	return tlsCred, nil
