@@ -578,7 +578,7 @@ func (lbc *LoadBalancerController) sync(key string) error {
 		return nil
 	}
 
-	ings := lbc.ingLister.Store.List()
+	ings := lbc.ingLister.List()
 	upstreams, server, err := lbc.getUpstreamServers(ings)
 	if err != nil {
 		return err
@@ -607,7 +607,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 		Name: lbc.defaultSvc,
 	}
 	svcKey := lbc.defaultSvc
-	svcObj, svcExists, err := lbc.svcLister.Store.GetByKey(svcKey)
+	svcObj, svcExists, err := lbc.svcLister.GetByKey(svcKey)
 	if err != nil {
 		glog.Warningf("unexpected error searching the default backend %v: %v", lbc.defaultSvc, err)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
@@ -692,7 +692,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 				glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
 
 				svcKey := fmt.Sprintf("%v/%v", ing.Namespace, path.Backend.ServiceName)
-				svcObj, svcExists, err := lbc.svcLister.Store.GetByKey(svcKey)
+				svcObj, svcExists, err := lbc.svcLister.GetByKey(svcKey)
 				if err != nil {
 					glog.Infof("error getting service %v from the cache: %v", svcKey, err)
 					continue
@@ -867,7 +867,7 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 		return true
 	}
 
-	for _, ingIf := range lbc.ingLister.Store.List() {
+	for _, ingIf := range lbc.ingLister.List() {
 		ing := ingIf.(*extensions.Ingress)
 		if ing.Namespace != namespace {
 			continue
