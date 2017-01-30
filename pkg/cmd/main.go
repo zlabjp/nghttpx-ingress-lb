@@ -85,6 +85,9 @@ var (
 	allowInternalIP = flags.Bool("allow-internal-ip", false, `Allow to use address of type NodeInternalIP when fetching
                 external IP address. This is the workaround for the cluster configuration where NodeExternalIP or
                 NodeLegacyHostIP is not assigned or cannot be used.`)
+
+	defaultTLSSecret = flags.String("default-tls-secret", "",
+		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.`)
 )
 
 func main() {
@@ -144,11 +147,18 @@ func main() {
 		}
 	}
 
+	if *defaultTLSSecret != "" {
+		if _, _, err := controller.ParseNSName(*defaultTLSSecret); err != nil {
+			glog.Fatalf("could not parse Secret %v: %v", *defaultTLSSecret, err)
+		}
+	}
+
 	controllerConfig := controller.Config{
 		ResyncPeriod:              *resyncPeriod,
 		DefaultBackendServiceName: *defaultSvc,
 		WatchNamespace:            *watchNamespace,
 		NghttpxConfigMapName:      *ngxConfigMap,
+		DefaultTLSSecretName:      *defaultTLSSecret,
 	}
 
 	lbc, err := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), &controllerConfig, runtimePodInfo)

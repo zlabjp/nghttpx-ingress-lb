@@ -121,6 +121,7 @@ type LoadBalancerController struct {
 	podInfo          *PodInfo
 	defaultSvc       string
 	ngxConfigMap     string
+	defaultTLSSecret string
 
 	recorder record.EventRecorder
 
@@ -146,6 +147,8 @@ type Config struct {
 	WatchNamespace string
 	// NghttpxConfigMapName is the name of ConfigMap resource which contains additional configuration for nghttpx.
 	NghttpxConfigMapName string
+	// DefaultTLSSecretName is the default TLS Secret to enable TLS by default.
+	DefaultTLSSecretName string
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -155,14 +158,15 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: clientset.Core().Events(config.WatchNamespace)})
 
 	lbc := LoadBalancerController{
-		clientset:    clientset,
-		stopCh:       make(chan struct{}),
-		podInfo:      runtimeInfo,
-		nghttpx:      manager,
-		ngxConfigMap: config.NghttpxConfigMapName,
-		defaultSvc:   config.DefaultBackendServiceName,
-		recorder:     eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
-		syncQueue:    workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		clientset:        clientset,
+		stopCh:           make(chan struct{}),
+		podInfo:          runtimeInfo,
+		nghttpx:          manager,
+		ngxConfigMap:     config.NghttpxConfigMapName,
+		defaultSvc:       config.DefaultBackendServiceName,
+		defaultTLSSecret: config.DefaultTLSSecretName,
+		recorder:         eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
+		syncQueue:        workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 	}
 
 	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
@@ -218,10 +222,10 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	lbc.secretLister.Store, lbc.secretController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Secrets(config.WatchNamespace).List(options)
+				return lbc.clientset.Core().Secrets(api.NamespaceAll).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Secrets(config.WatchNamespace).Watch(options)
+				return lbc.clientset.Core().Secrets(api.NamespaceAll).Watch(options)
 			},
 		},
 		&api.Secret{},
@@ -546,7 +550,10 @@ func (lbc *LoadBalancerController) sync(key string) error {
 	}
 
 	ings := lbc.ingLister.Store.List()
-	upstreams, server := lbc.getUpstreamServers(ings)
+	upstreams, server, err := lbc.getUpstreamServers(ings)
+	if err != nil {
+		return err
+	}
 
 	cfg, err := lbc.getConfigMap(lbc.ngxConfigMap)
 	if err != nil {
@@ -600,12 +607,32 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 }
 
 // in nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
-func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*nghttpx.Upstream, *nghttpx.Server) {
-	pems := lbc.getPemsFromIngress(data)
-
+func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*nghttpx.Upstream, *nghttpx.Server, error) {
 	server := &nghttpx.Server{}
 
-	if len(pems) > 0 {
+	pems := lbc.getTLSCredFromIngress(data)
+
+	sort.Sort(nghttpx.TLSCredKeyLess(pems))
+	pems = nghttpx.RemoveDuplicatePems(pems)
+
+	if lbc.defaultTLSSecret != "" {
+		tlsCred, err := lbc.getTLSCredFromSecret(lbc.defaultTLSSecret)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Remove default TLS key pair from pems.
+		for i, _ := range pems {
+			if tlsCred.Key == pems[i].Key {
+				pems = append(pems[:i], pems[i+1:]...)
+				break
+			}
+		}
+
+		server.TLS = true
+		server.DefaultTLSCred = tlsCred
+		server.SubTLSCred = pems
+	} else if len(pems) > 0 {
 		server.TLS = true
 		server.DefaultTLSCred = pems[0]
 		server.SubTLSCred = pems[1:]
@@ -726,52 +753,46 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 		value.Backends = uniqBackends
 	}
 
-	return upstreams, server
+	return upstreams, server, nil
 }
 
-func (lbc *LoadBalancerController) getPemsFromIngress(data []interface{}) []nghttpx.TLSCred {
-	pems := []nghttpx.TLSCred{}
+// getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.
+func (lbc *LoadBalancerController) getTLSCredFromSecret(secretKey string) (nghttpx.TLSCred, error) {
+	obj, exists, err := lbc.secretLister.GetByKey(secretKey)
+	if err != nil {
+		return nghttpx.TLSCred{}, fmt.Errorf("Could not get TLS secret %v: %v", secretKey, err)
+	}
+	if !exists {
+		return nghttpx.TLSCred{}, fmt.Errorf("Secret %v has been deleted", secretKey)
+	}
+	tlsCred, err := lbc.createTLSCredFromSecret(obj.(*api.Secret))
+	if err != nil {
+		return nghttpx.TLSCred{}, err
+	}
+	return tlsCred, nil
+}
+
+// getTLSCredFromIngress returns list of nghttpx.TLSCred obtained from Ingress resources.
+func (lbc *LoadBalancerController) getTLSCredFromIngress(data []interface{}) []nghttpx.TLSCred {
+	var pems []nghttpx.TLSCred
 
 	for _, ingIf := range data {
 		ing := ingIf.(*extensions.Ingress)
 
 		for _, tls := range ing.Spec.TLS {
-			secretName := tls.SecretName
-			secretKey := fmt.Sprintf("%s/%s", ing.Namespace, secretName)
-			secretInterface, exists, err := lbc.secretLister.Store.GetByKey(secretKey)
+			secretKey := fmt.Sprintf("%s/%s", ing.Namespace, tls.SecretName)
+			obj, exists, err := lbc.secretLister.GetByKey(secretKey)
 			if err != nil {
-				glog.Warningf("Error retriveing secret %v for ing %v: %v", secretKey, ing.Name, err)
+				glog.Warningf("Error retrieving Secret %v for Ingress %v/%v: %v", secretKey, ing.Namespace, ing.Name, err)
 				continue
 			}
 			if !exists {
-				glog.Warningf("Secret %v does not exist", secretKey)
+				glog.Warningf("Secret %v has been deleted", secretKey)
 				continue
 			}
-			secret := secretInterface.(*api.Secret)
-			cert, ok := secret.Data[api.TLSCertKey]
-			if !ok {
-				glog.Warningf("Secret %v has no cert", secretKey)
-				continue
-			}
-			key, ok := secret.Data[api.TLSPrivateKeyKey]
-			if !ok {
-				glog.Warningf("Secret %v has no private key", secretKey)
-				continue
-			}
-
-			if _, err := nghttpx.CommonNames(cert); err != nil {
-				glog.Errorf("No valid TLS certificate found in secret %v: %v", secretKey, err)
-				continue
-			}
-
-			if err := nghttpx.CheckPrivateKey(key); err != nil {
-				glog.Errorf("No valid TLS private key found in secret %v: %v", secretKey, err)
-				continue
-			}
-
-			tlsCred, err := lbc.nghttpx.AddOrUpdateCertAndKey(fmt.Sprintf("%v_%v", ing.Namespace, secretName), cert, key)
+			tlsCred, err := lbc.createTLSCredFromSecret(obj.(*api.Secret))
 			if err != nil {
-				glog.Errorf("Could not create private key and certificate files %v: %v", secretKey, err)
+				glog.Warning(err)
 				continue
 			}
 
@@ -779,12 +800,41 @@ func (lbc *LoadBalancerController) getPemsFromIngress(data []interface{}) []nght
 		}
 	}
 
-	sort.Sort(nghttpx.TLSCredKeyLess(pems))
+	return pems
+}
 
-	return nghttpx.RemoveDuplicatePems(pems)
+// createTLSCredFromSecret creates nghttpx.TLSCred from secret.
+func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *api.Secret) (nghttpx.TLSCred, error) {
+	cert, ok := secret.Data[api.TLSCertKey]
+	if !ok {
+		return nghttpx.TLSCred{}, fmt.Errorf("Secret %v/%v has no certificate", secret.Namespace, secret.Name)
+	}
+	key, ok := secret.Data[api.TLSPrivateKeyKey]
+	if !ok {
+		return nghttpx.TLSCred{}, fmt.Errorf("Secret %v/%v has no private key", secret.Namespace, secret.Name)
+	}
+
+	if _, err := nghttpx.CommonNames(cert); err != nil {
+		return nghttpx.TLSCred{}, fmt.Errorf("No valid TLS certificate found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+	}
+
+	if err := nghttpx.CheckPrivateKey(key); err != nil {
+		return nghttpx.TLSCred{}, fmt.Errorf("No valid TLS private key found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+	}
+
+	tlsCred, err := lbc.nghttpx.AddOrUpdateCertAndKey(nghttpx.TLSCredPrefix(secret), cert, key)
+	if err != nil {
+		return nghttpx.TLSCred{}, fmt.Errorf("Could not create private key and certificate files for Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+	}
+
+	return tlsCred, nil
 }
 
 func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool {
+	if lbc.defaultTLSSecret == fmt.Sprintf("%v/%v", namespace, name) {
+		return true
+	}
+
 	for _, ingIf := range lbc.ingLister.Store.List() {
 		ing := ingIf.(*extensions.Ingress)
 		if ing.Namespace != namespace {

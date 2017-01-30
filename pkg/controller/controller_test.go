@@ -24,6 +24,7 @@ limitations under the License.
 package controller
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 	"time"
@@ -72,6 +73,10 @@ const (
 	defaultIngNamespace       = api.NamespaceAll
 	defaultConfigMapName      = "ing-config"
 	defaultConfigMapNamespace = "kube-system"
+
+	// openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/tls.key -out /tmp/tls.crt -subj "/CN=echoheaders/O=echoheaders"
+	tlsCrt = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURhakNDQWxLZ0F3SUJBZ0lKQUxHUXR5VVBKTFhYTUEwR0NTcUdTSWIzRFFFQkJRVUFNQ3d4RkRBU0JnTlYKQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3RWdZRFZRUUtFd3RsWTJodmFHVmhaR1Z5Y3pBZUZ3MHhOakF6TXpFeQpNekU1TkRoYUZ3MHhOekF6TXpFeU16RTVORGhhTUN3eEZEQVNCZ05WQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3CkVnWURWUVFLRXd0bFkyaHZhR1ZoWkdWeWN6Q0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0MKZ2dFQkFONzVmS0N5RWwxanFpMjUxTlNabDYzeGQweG5HMHZTVjdYL0xxTHJveVNraW5nbnI0NDZZWlE4UEJWOAo5TUZzdW5RRGt1QVoyZzA3NHM1YWhLSm9BRGJOMzhld053RXNsVDJkRzhRTUw0TktrTUNxL1hWbzRQMDFlWG1PCmkxR2txZFA1ZUExUHlPZCtHM3gzZmxPN2xOdmtJdHVHYXFyc0tvMEhtMHhqTDVtRUpwWUlOa0tGSVhsWWVLZS8KeHRDR25CU2tLVHFMTG0yeExKSGFFcnJpaDZRdkx4NXF5U2gzZTU2QVpEcTlkTERvcWdmVHV3Z2IzekhQekc2NwppZ0E0dkYrc2FRNHpZUE1NMHQyU1NiVkx1M2pScWNvL3lxZysrOVJBTTV4bjRubnorL0hUWFhHKzZ0RDBaeGI1CmVVRDNQakVhTnlXaUV2dTN6UFJmdysyNURMY0NBd0VBQWFPQmpqQ0JpekFkQmdOVkhRNEVGZ1FVcktMZFhHeUUKNUlEOGRvd2lZNkdzK3dNMHFKc3dYQVlEVlIwakJGVXdVNEFVcktMZFhHeUU1SUQ4ZG93aVk2R3Mrd00wcUp1aApNS1F1TUN3eEZEQVNCZ05WQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3RWdZRFZRUUtFd3RsWTJodmFHVmhaR1Z5CmM0SUpBTEdRdHlVUEpMWFhNQXdHQTFVZEV3UUZNQU1CQWY4d0RRWUpLb1pJaHZjTkFRRUZCUUFEZ2dFQkFNZVMKMHFia3VZa3Z1enlSWmtBeE1PdUFaSDJCK0Evb3N4ODhFRHB1ckV0ZWN5RXVxdnRvMmpCSVdCZ2RkR3VBYU5jVQorUUZDRm9NakJOUDVWVUxIWVhTQ3VaczN2Y25WRDU4N3NHNlBaLzhzbXJuYUhTUjg1ZVpZVS80bmFyNUErdWErClIvMHJrSkZnOTlQSmNJd3JmcWlYOHdRcWdJVVlLNE9nWEJZcUJRL0VZS2YvdXl6UFN3UVZYRnVJTTZTeDBXcTYKTUNML3d2RlhLS0FaWDBqb3J4cHRjcldkUXNCcmYzWVRnYmx4TE1sN20zL2VuR1drcEhDUHdYeVRCOC9rRkw3SApLL2ZHTU1NWGswUkVSbGFPM1hTSUhrZUQ2SXJiRnRNV3R1RlJwZms2ZFA2TXlMOHRmTmZ6a3VvUHVEWUFaWllWCnR1NnZ0c0FRS0xWb0pGaGV0b1k9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+	tlsKey = "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBM3ZsOG9MSVNYV09xTGJuVTFKbVhyZkYzVEdjYlM5Slh0Zjh1b3V1akpLU0tlQ2V2CmpqcGhsRHc4Rlh6MHdXeTZkQU9TNEJuYURUdml6bHFFb21nQU5zM2Z4N0EzQVN5VlBaMGJ4QXd2ZzBxUXdLcjkKZFdqZy9UVjVlWTZMVWFTcDAvbDREVS9JNTM0YmZIZCtVN3VVMitRaTI0WnFxdXdxalFlYlRHTXZtWVFtbGdnMgpRb1VoZVZoNHA3L0cwSWFjRktRcE9vc3ViYkVza2RvU3V1S0hwQzh2SG1ySktIZDdub0JrT3IxMHNPaXFCOU83CkNCdmZNYy9NYnJ1S0FEaThYNnhwRGpOZzh3elMzWkpKdFV1N2VOR3B5ai9LcUQ3NzFFQXpuR2ZpZWZQNzhkTmQKY2I3cTBQUm5Gdmw1UVBjK01SbzNKYUlTKzdmTTlGL0Q3YmtNdHdJREFRQUJBb0lCQUViNmFEL0hMNjFtMG45bgp6bVkyMWwvYW83MUFmU0h2dlZnRCtWYUhhQkY4QjFBa1lmQUdpWlZrYjBQdjJRSFJtTERoaWxtb0lROWhadHVGCldQOVIxKythTFlnbGdmenZzanBBenR2amZTUndFaEFpM2pnSHdNY1p4S2Q3UnNJZ2hxY2huS093S0NYNHNNczQKUnBCbEFBZlhZWGs4R3F4NkxUbGptSDRDZk42QzZHM1EwTTlLMUxBN2lsck1Na3hwcngxMnBlVTNkczZMVmNpOQptOFdBL21YZ2I0c3pEbVNaWVpYRmNZMEhYNTgyS3JKRHpQWEVJdGQwZk5wd3I0eFIybzdzMEwvK2RnZCtqWERjCkh2SDBKZ3NqODJJaTIxWGZGM2tST3FxR3BKNmhVcncxTUZzVWRyZ29GL3pFck0vNWZKMDdVNEhodGFlalVzWTIKMFJuNXdpRUNnWUVBKzVUTVRiV084Wkg5K2pIdVQwc0NhZFBYcW50WTZYdTZmYU04Tm5CZWNoeTFoWGdlQVN5agpSWERlZGFWM1c0SjU5eWxIQ3FoOVdseVh4cDVTWWtyQU41RnQ3elFGYi91YmorUFIyWWhMTWZpYlBSYlYvZW1MCm5YaGF6MmtlNUUxT1JLY0x6QUVwSmpuZGQwZlZMZjdmQzFHeStnS2YyK3hTY1hjMHJqRE5iNGtDZ1lFQTR1UVEKQk91TlJQS3FKcDZUZS9zUzZrZitHbEpjQSs3RmVOMVlxM0E2WEVZVm9ydXhnZXQ4a2E2ZEo1QjZDOWtITGtNcQpwdnFwMzkxeTN3YW5uWC9ONC9KQlU2M2RxZEcyd1BWRUQ0REduaE54Qm1oaWZpQ1I0R0c2ZnE4MUV6ZE1vcTZ4CklTNHA2RVJaQnZkb1RqNk9pTHl6aUJMckpxeUhIMWR6c0hGRlNqOENnWUVBOWlSSEgyQ2JVazU4SnVYak8wRXcKUTBvNG4xdS9TZkQ4TFNBZ01VTVBwS1hpRTR2S0Qyd1U4a1BUNDFiWXlIZUh6UUpkdDFmU0RTNjZjR0ZHU1ZUSgphNVNsOG5yN051ejg3bkwvUmMzTGhFQ3Y0YjBOOFRjbW1oSy9CbDdiRXBOd0dFczNoNGs3TVdNOEF4QU15c3VxCmZmQ1pJM0tkNVJYNk0zbGwyV2QyRjhFQ2dZQlQ5RU9oTG0vVmhWMUVjUVR0cVZlMGJQTXZWaTVLSGozZm5UZkUKS0FEUVIvYVZncElLR3RLN0xUdGxlbVpPbi8yeU5wUS91UnpHZ3pDUUtldzNzU1RFSmMzYVlzbFVudzdhazJhZAp2ZTdBYXowMU84YkdHTk1oamNmdVBIS05LN2Nsc3pKRHJzcys4SnRvb245c0JHWEZYdDJuaWlpTTVPWVN5TTg4CkNJMjFEUUtCZ0hEQVRZbE84UWlDVWFBQlVqOFBsb1BtMDhwa3cyc1VmQW0xMzJCY00wQk9BN1hqYjhtNm1ManQKOUlteU5kZ2ZiM080UjlKVUxTb1pZSTc1dUxIL3k2SDhQOVlpWHZOdzMrTXl6VFU2b2d1YU8xSTNya2pna29NeAo5cU5pYlJFeGswS1A5MVZkckVLSEdHZEFwT05ES1N4VzF3ektvbUxHdmtYSTVKV05KRXFkCi0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg=="
 )
 
 // prepare performs setup necessary for test run.
@@ -92,6 +97,26 @@ func (f *fixture) prepare() {
 }
 
 func (f *fixture) run(ingKey string) {
+	f.setupStore()
+
+	if err := f.lbc.sync(ingKey); err != nil {
+		f.t.Errorf("Failed to sync %v: %v", ingKey, err)
+	}
+
+	f.verifyActions()
+}
+
+func (f *fixture) runShouldFail(ingKey string) {
+	f.setupStore()
+
+	if err := f.lbc.sync(ingKey); err == nil {
+		f.t.Errorf("sync should fail")
+	}
+
+	f.verifyActions()
+}
+
+func (f *fixture) setupStore() {
 	for _, ing := range f.ingStore {
 		f.lbc.ingLister.Add(ing)
 	}
@@ -107,11 +132,9 @@ func (f *fixture) run(ingKey string) {
 	for _, cm := range f.mapStore {
 		f.lbc.mapLister.Add(cm)
 	}
+}
 
-	if err := f.lbc.sync(ingKey); err != nil {
-		f.t.Errorf("Failed to sync %v: %v", ingKey, err)
-	}
-
+func (f *fixture) verifyActions() {
 	actions := f.clientset.Actions()
 	for i, action := range actions {
 		if len(f.actions) < i+1 {
@@ -158,7 +181,7 @@ func (fm *fakeManager) CheckAndReload(cfg nghttpx.NghttpxConfiguration, ingressC
 }
 
 func (fm *fakeManager) AddOrUpdateCertAndKey(name string, cert, key []byte) (nghttpx.TLSCred, error) {
-	return fm.AddOrUpdateCertAndKey(name, cert, key)
+	return fm.addOrUpdateCertAndKeyHandler(name, cert, key)
 }
 
 func (fm *fakeManager) defaultCheckAndReload(cfg nghttpx.NghttpxConfiguration, ingressCfg nghttpx.IngressConfig) (bool, error) {
@@ -176,7 +199,7 @@ func (fm *fakeManager) defaultAddOrUpdateCertAndKey(name string, cert []byte, ke
 	return nghttpx.TLSCred{
 		Key:      fmt.Sprintf("%v.key", name),
 		Cert:     fmt.Sprintf("%v.crt", name),
-		Checksum: "deadbeef",
+		Checksum: nghttpx.TLSCertKeyChecksum(cert, key),
 	}, nil
 }
 
@@ -238,6 +261,98 @@ func newDefaultBackend() (*api.Service, *api.Endpoints) {
 	return svc, eps
 }
 
+func newBackend(namespace, name string, addrs []string) (*api.Service, *api.Endpoints) {
+	svc := &api.Service{
+		ObjectMeta: api.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: api.ServiceSpec{
+			Ports: []api.ServicePort{
+				{
+					Port:       8080,
+					TargetPort: intstr.FromInt(8080),
+				},
+			},
+		},
+	}
+	eps := &api.Endpoints{
+		ObjectMeta: api.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Subsets: []api.EndpointSubset{
+			{
+				Ports: []api.EndpointPort{
+					{
+						Protocol: api.ProtocolTCP,
+						Port:     8080,
+					},
+				},
+			},
+		},
+	}
+
+	var endpointAddrs []api.EndpointAddress
+	for _, addr := range addrs {
+		endpointAddrs = append(endpointAddrs, api.EndpointAddress{IP: addr})
+	}
+
+	eps.Subsets[0].Addresses = endpointAddrs
+
+	return svc, eps
+}
+
+func newIngressTLS(namespace, name, svcName, svcPort, tlsSecretName string) *extensions.Ingress {
+	ing := newIngress(namespace, name, svcName, svcPort)
+	ing.Spec.TLS = []extensions.IngressTLS{
+		{SecretName: tlsSecretName},
+	}
+	return ing
+}
+
+func newIngress(namespace, name, svcName, svcPort string) *extensions.Ingress {
+	return &extensions.Ingress{
+		ObjectMeta: api.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: extensions.IngressSpec{
+			Rules: []extensions.IngressRule{
+				{
+					Host: fmt.Sprintf("%v.%v.test", name, namespace),
+					IngressRuleValue: extensions.IngressRuleValue{
+						HTTP: &extensions.HTTPIngressRuleValue{
+							Paths: []extensions.HTTPIngressPath{
+								{
+									Path: "/",
+									Backend: extensions.IngressBackend{
+										ServiceName: svcName,
+										ServicePort: intstr.FromString(svcPort),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func newTLSSecret(namespace, name string, tlsCrt, tlsKey []byte) *api.Secret {
+	return &api.Secret{
+		ObjectMeta: api.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: map[string][]byte{
+			api.TLSCertKey:       tlsCrt,
+			api.TLSPrivateKeyKey: tlsKey,
+		},
+	}
+}
+
 func getKey(obj runtime.Object, t *testing.T) string {
 	if key, err := controller.KeyFunc(obj); err != nil {
 		t.Fatalf("Could not get key for %+v: %v", obj, err)
@@ -290,5 +405,98 @@ func TestSyncDefaultBackend(t *testing.T) {
 
 	if got, want := fm.cfg.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigFieldName]; got != want {
 		t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
+	}
+}
+
+// TestSyncDefaultTLSSecretNotFound verifies that sync must fail if default TLS Secret is not found.
+func TestSyncDefaultTLSSecretNotFound(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps := newDefaultBackend()
+
+	f.svcStore = append(f.svcStore, svc)
+	f.endpStore = append(f.endpStore, eps)
+
+	f.objects = append(f.objects, svc, eps)
+
+	f.prepare()
+	f.lbc.defaultTLSSecret = "kube-system/default-tls"
+	f.runShouldFail(getKey(svc, t))
+}
+
+// TestSyncDefaultSecret verifies that default TLS secret is loaded.
+func TestSyncDefaultSecret(t *testing.T) {
+	f := newFixture(t)
+
+	dCrt, _ := base64.StdEncoding.DecodeString(tlsCrt)
+	dKey, _ := base64.StdEncoding.DecodeString(tlsKey)
+	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
+	svc, eps := newDefaultBackend()
+
+	f.secretStore = append(f.secretStore, tlsSecret)
+	f.svcStore = append(f.svcStore, svc)
+	f.endpStore = append(f.endpStore, eps)
+
+	f.objects = append(f.objects, tlsSecret, svc, eps)
+
+	f.prepare()
+	f.lbc.defaultTLSSecret = fmt.Sprintf("%v/%v", tlsSecret.Namespace, tlsSecret.Name)
+	f.run(getKey(svc, t))
+
+	fm := f.lbc.nghttpx.(*fakeManager)
+	server := fm.ingressCfg.Server
+
+	if got, want := server.TLS, true; got != want {
+		t.Errorf("server.TLS = %v, want %v", got, want)
+	}
+
+	prefix := nghttpx.TLSCredPrefix(tlsSecret)
+	if got, want := server.DefaultTLSCred.Key, fmt.Sprintf("%v.key", prefix); got != want {
+		t.Errorf("server.DefaultTLSCred.Key = %v, want %v", got, want)
+	}
+	if got, want := server.DefaultTLSCred.Cert, fmt.Sprintf("%v.crt", prefix); got != want {
+		t.Errorf("server.DefaultTLSCred.Crt = %v, want %v", got, want)
+	}
+	if got, want := server.DefaultTLSCred.Checksum, nghttpx.TLSCertKeyChecksum(dCrt, dKey); got != want {
+		t.Errorf("server.DefaultTLSCred.Checksum = %v, want %v", got, want)
+	}
+}
+
+// TestSyncDupDefaultSecret verifies that duplicated default TLS secret is removed.
+func TestSyncDupDefaultSecret(t *testing.T) {
+	f := newFixture(t)
+
+	dCrt, _ := base64.StdEncoding.DecodeString(tlsCrt)
+	dKey, _ := base64.StdEncoding.DecodeString(tlsKey)
+	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
+	svc, eps := newDefaultBackend()
+
+	bs1, be1 := newBackend(api.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	ing1 := newIngressTLS(api.NamespaceDefault, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String(), tlsSecret.Name)
+
+	f.secretStore = append(f.secretStore, tlsSecret)
+	f.ingStore = append(f.ingStore, ing1)
+	f.svcStore = append(f.svcStore, svc, bs1)
+	f.endpStore = append(f.endpStore, eps, be1)
+
+	f.objects = append(f.objects, tlsSecret, svc, eps, bs1, be1, ing1)
+
+	f.prepare()
+	f.lbc.defaultTLSSecret = fmt.Sprintf("%v/%v", tlsSecret.Namespace, tlsSecret.Name)
+	f.run(getKey(svc, t))
+
+	fm := f.lbc.nghttpx.(*fakeManager)
+	server := fm.ingressCfg.Server
+
+	if got, want := server.TLS, true; got != want {
+		t.Errorf("server.TLS = %v, want %v", got, want)
+	}
+
+	prefix := nghttpx.TLSCredPrefix(tlsSecret)
+	if got, want := server.DefaultTLSCred.Key, fmt.Sprintf("%v.key", prefix); got != want {
+		t.Errorf("server.DefaultTLSCred.Key = %v, want %v", got, want)
+	}
+	if got, want := len(server.SubTLSCred), 0; got != want {
+		t.Errorf("len(server.SubTLSCred) = %v, want %v", got, want)
 	}
 }

@@ -37,6 +37,8 @@ import (
 	"path/filepath"
 
 	"github.com/golang/glog"
+
+	"k8s.io/kubernetes/pkg/api"
 )
 
 func writeFile(path string, content []byte) error {
@@ -72,11 +74,12 @@ func (ngx *Manager) AddOrUpdateCertAndKey(name string, cert, key []byte) (TLSCre
 	return TLSCred{
 		Cert:     certFileName,
 		Key:      keyFileName,
-		Checksum: checksum(cert, key),
+		Checksum: TLSCertKeyChecksum(cert, key),
 	}, nil
 }
 
-func checksum(cert []byte, key []byte) string {
+// TLSCertKeyChecksum returns checksum of cert and key in hex string.
+func TLSCertKeyChecksum(cert []byte, key []byte) string {
 	h := sha256.New()
 	h.Write(cert)
 	h.Write(key)
@@ -165,4 +168,9 @@ func RemoveDuplicatePems(pems []TLSCred) []TLSCred {
 		}
 	}
 	return pems[:j+1]
+}
+
+// TLSCredPrefix returns prefix of TLS certificate/private key files.
+func TLSCredPrefix(secret *api.Secret) string {
+	return fmt.Sprintf("%v_%v", secret.Namespace, secret.Name)
 }
