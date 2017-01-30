@@ -59,7 +59,7 @@ var (
 	flags = pflag.NewFlagSet("", pflag.ExitOnError)
 
 	defaultSvc = flags.String("default-backend-service", "",
-		`Service used to serve a 404 page for the default backend. Takes the form
+		`(Required) Service used to serve a 404 page for the default backend. Takes the form
     namespace/name. The controller uses the first node port of this Service for
     the default backend.`)
 
