@@ -122,6 +122,7 @@ type LoadBalancerController struct {
 	defaultSvc       string
 	ngxConfigMap     string
 	defaultTLSSecret string
+	watchNamespace   string
 
 	recorder record.EventRecorder
 
@@ -165,6 +166,7 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		ngxConfigMap:     config.NghttpxConfigMapName,
 		defaultSvc:       config.DefaultBackendServiceName,
 		defaultTLSSecret: config.DefaultTLSSecretName,
+		watchNamespace:   config.WatchNamespace,
 		recorder:         eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:        workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 	}
@@ -190,10 +192,10 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	lbc.endpLister.Store, lbc.endpController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Endpoints(config.WatchNamespace).List(options)
+				return lbc.clientset.Core().Endpoints(api.NamespaceAll).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Endpoints(config.WatchNamespace).Watch(options)
+				return lbc.clientset.Core().Endpoints(api.NamespaceAll).Watch(options)
 			},
 		},
 		&api.Endpoints{},
@@ -208,10 +210,10 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	lbc.svcLister.Store, lbc.svcController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Services(config.WatchNamespace).List(options)
+				return lbc.clientset.Core().Services(api.NamespaceAll).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Services(config.WatchNamespace).Watch(options)
+				return lbc.clientset.Core().Services(api.NamespaceAll).Watch(options)
 			},
 		},
 		&api.Service{},
@@ -301,6 +303,9 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 
 func (lbc *LoadBalancerController) addEndpointNotification(obj interface{}) {
 	ep := obj.(*api.Endpoints)
+	if !lbc.endpointsReferenced(ep) {
+		return
+	}
 	glog.V(4).Infof("Endpoints %v/%v added", ep.Namespace, ep.Name)
 	lbc.enqueue(ep)
 }
@@ -311,6 +316,9 @@ func (lbc *LoadBalancerController) updateEndpointNotification(old, cur interface
 	}
 
 	curEp := cur.(*api.Endpoints)
+	if !lbc.endpointsReferenced(curEp) {
+		return
+	}
 	glog.V(4).Infof("Endpoints %v/%v updated", curEp.Namespace, curEp.Name)
 	lbc.enqueue(curEp)
 }
@@ -329,8 +337,20 @@ func (lbc *LoadBalancerController) deleteEndpointNotification(obj interface{}) {
 			return
 		}
 	}
+	if !lbc.endpointsReferenced(ep) {
+		return
+	}
 	glog.V(4).Infof("Endpoints %v/%v deleted", ep.Namespace, ep.Name)
 	lbc.enqueue(ep)
+}
+
+// endpointsReferenced returns true if we are interested in ep.
+func (lbc *LoadBalancerController) endpointsReferenced(ep *api.Endpoints) bool {
+	if lbc.watchNamespace == api.NamespaceAll {
+		return true
+	}
+
+	return lbc.watchNamespace == ep.Namespace || fmt.Sprintf("%v/%v", ep.Namespace, ep.Name) == lbc.defaultSvc
 }
 
 func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
