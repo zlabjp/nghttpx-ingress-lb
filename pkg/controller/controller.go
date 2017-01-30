@@ -237,13 +237,22 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		},
 	)
 
+	var cmNamespace string
+	if lbc.ngxConfigMap != "" {
+		ns, _, _ := ParseNSName(lbc.ngxConfigMap)
+		cmNamespace = ns
+	} else {
+		// Just watch runtimeInfo.PodNamespace to make codebase simple
+		cmNamespace = runtimeInfo.PodNamespace
+	}
+
 	lbc.mapLister.Store, lbc.mapController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().ConfigMaps(config.WatchNamespace).List(options)
+				return lbc.clientset.Core().ConfigMaps(cmNamespace).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().ConfigMaps(config.WatchNamespace).Watch(options)
+				return lbc.clientset.Core().ConfigMaps(cmNamespace).Watch(options)
 			},
 		},
 		&api.ConfigMap{},
