@@ -49,7 +49,7 @@ type StoreToSecretLister struct {
 }
 
 // StoreToMapLister makes a Store that lists Configmaps.
-type StoreToMapLister struct {
+type StoreToConfigMapLister struct {
 	cache.Store
 }
 

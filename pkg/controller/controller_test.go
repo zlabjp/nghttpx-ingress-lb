@@ -52,7 +52,7 @@ type fixture struct {
 	epStore     []*api.Endpoints
 	svcStore    []*api.Service
 	secretStore []*api.Secret
-	mapStore    []*api.ConfigMap
+	cmStore     []*api.ConfigMap
 
 	objects []runtime.Object
 
@@ -137,8 +137,8 @@ func (f *fixture) setupStore() {
 	for _, secret := range f.secretStore {
 		f.lbc.secretLister.Add(secret)
 	}
-	for _, cm := range f.mapStore {
-		f.lbc.mapLister.Add(cm)
+	for _, cm := range f.cmStore {
+		f.lbc.cmLister.Add(cm)
 	}
 }
 
@@ -378,7 +378,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 	cm.Data[nghttpx.NghttpxExtraConfigFieldName] = "Test"
 	svc, eps := newDefaultBackend()
 
-	f.mapStore = append(f.mapStore, cm)
+	f.cmStore = append(f.cmStore, cm)
 	f.svcStore = append(f.svcStore, svc)
 	f.epStore = append(f.epStore, eps)
 

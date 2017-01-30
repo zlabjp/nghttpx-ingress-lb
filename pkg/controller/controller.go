@@ -111,12 +111,12 @@ type LoadBalancerController struct {
 	epController     *cache.Controller
 	svcController    *cache.Controller
 	secretController *cache.Controller
-	mapController    *cache.Controller
+	cmController     *cache.Controller
 	ingLister        StoreToIngressLister
 	svcLister        StoreToServiceLister
 	epLister         cache.StoreToEndpointsLister
 	secretLister     StoreToSecretLister
-	mapLister        StoreToMapLister
+	cmLister         StoreToConfigMapLister
 	nghttpx          nghttpx.Interface
 	podInfo          *PodInfo
 	defaultSvc       string
@@ -248,7 +248,7 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		cmNamespace = runtimeInfo.PodNamespace
 	}
 
-	lbc.mapLister.Store, lbc.mapController = cache.NewInformer(
+	lbc.cmLister.Store, lbc.cmController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return lbc.clientset.Core().ConfigMaps(cmNamespace).List(options)
@@ -476,7 +476,7 @@ func (lbc *LoadBalancerController) controllersInSync() bool {
 		lbc.svcController.HasSynced() &&
 		lbc.epController.HasSynced() &&
 		lbc.secretController.HasSynced() &&
-		lbc.mapController.HasSynced()
+		lbc.cmController.HasSynced()
 }
 
 // getConfigMap returns ConfigMap denoted by cmKey.
@@ -485,7 +485,7 @@ func (lbc *LoadBalancerController) getConfigMap(cmKey string) (*api.ConfigMap, e
 		return &api.ConfigMap{}, nil
 	}
 
-	obj, exists, err := lbc.mapLister.GetByKey(cmKey)
+	obj, exists, err := lbc.cmLister.GetByKey(cmKey)
 	if err != nil {
 		return nil, err
 	} else if !exists {
@@ -986,7 +986,7 @@ func (lbc *LoadBalancerController) Run() {
 	go lbc.epController.Run(lbc.stopCh)
 	go lbc.svcController.Run(lbc.stopCh)
 	go lbc.secretController.Run(lbc.stopCh)
-	go lbc.mapController.Run(lbc.stopCh)
+	go lbc.cmController.Run(lbc.stopCh)
 
 	go wait.Until(lbc.worker, time.Second, lbc.stopCh)
 
