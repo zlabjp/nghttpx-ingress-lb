@@ -201,9 +201,9 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		&api.Endpoints{},
 		depResyncPeriod(),
 		cache.ResourceEventHandlerFuncs{
-			AddFunc:    lbc.addEndpointNotification,
-			UpdateFunc: lbc.updateEndpointNotification,
-			DeleteFunc: lbc.deleteEndpointNotification,
+			AddFunc:    lbc.addEndpointsNotification,
+			UpdateFunc: lbc.updateEndpointsNotification,
+			DeleteFunc: lbc.deleteEndpointsNotification,
 		},
 	)
 
@@ -301,7 +301,7 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 	lbc.enqueue(ing)
 }
 
-func (lbc *LoadBalancerController) addEndpointNotification(obj interface{}) {
+func (lbc *LoadBalancerController) addEndpointsNotification(obj interface{}) {
 	ep := obj.(*api.Endpoints)
 	if !lbc.endpointsReferenced(ep) {
 		return
@@ -310,7 +310,7 @@ func (lbc *LoadBalancerController) addEndpointNotification(obj interface{}) {
 	lbc.enqueue(ep)
 }
 
-func (lbc *LoadBalancerController) updateEndpointNotification(old, cur interface{}) {
+func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interface{}) {
 	if reflect.DeepEqual(old, cur) {
 		return
 	}
@@ -323,7 +323,7 @@ func (lbc *LoadBalancerController) updateEndpointNotification(old, cur interface
 	lbc.enqueue(curEp)
 }
 
-func (lbc *LoadBalancerController) deleteEndpointNotification(obj interface{}) {
+func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) {
 	ep, ok := obj.(*api.Endpoints)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
