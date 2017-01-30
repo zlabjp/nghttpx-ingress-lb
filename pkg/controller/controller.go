@@ -108,13 +108,13 @@ func (ia ingressAnnotation) getBackendConfig() map[string]map[string]nghttpx.Por
 type LoadBalancerController struct {
 	clientset        internalclientset.Interface
 	ingController    *cache.Controller
-	endpController   *cache.Controller
+	epController     *cache.Controller
 	svcController    *cache.Controller
 	secretController *cache.Controller
 	mapController    *cache.Controller
 	ingLister        StoreToIngressLister
 	svcLister        StoreToServiceLister
-	endpLister       cache.StoreToEndpointsLister
+	epLister         cache.StoreToEndpointsLister
 	secretLister     StoreToSecretLister
 	mapLister        StoreToMapLister
 	nghttpx          nghttpx.Interface
@@ -189,7 +189,7 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		},
 	)
 
-	lbc.endpLister.Store, lbc.endpController = cache.NewInformer(
+	lbc.epLister.Store, lbc.epController = cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return lbc.clientset.Core().Endpoints(api.NamespaceAll).List(options)
@@ -474,7 +474,7 @@ func (lbc *LoadBalancerController) worker() {
 func (lbc *LoadBalancerController) controllersInSync() bool {
 	return lbc.ingController.HasSynced() &&
 		lbc.svcController.HasSynced() &&
-		lbc.endpController.HasSynced() &&
+		lbc.epController.HasSynced() &&
 		lbc.secretController.HasSynced() &&
 		lbc.mapController.HasSynced()
 }
@@ -624,12 +624,12 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 
 	portBackendConfig := nghttpx.DefaultPortBackendConfig()
 
-	endps := lbc.getEndpoints(svc, svc.Spec.Ports[0].TargetPort, api.ProtocolTCP, &portBackendConfig)
-	if len(endps) == 0 {
+	eps := lbc.getEndpoints(svc, svc.Spec.Ports[0].TargetPort, api.ProtocolTCP, &portBackendConfig)
+	if len(eps) == 0 {
 		glog.Warningf("service %v does no have any active endpoints", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
 	} else {
-		upstream.Backends = append(upstream.Backends, endps...)
+		upstream.Backends = append(upstream.Backends, eps...)
 	}
 
 	return upstream
@@ -719,13 +719,13 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 							portBackendConfig = nghttpx.DefaultPortBackendConfig()
 						}
 
-						endps := lbc.getEndpoints(svc, servicePort.TargetPort, api.ProtocolTCP, &portBackendConfig)
-						if len(endps) == 0 {
+						eps := lbc.getEndpoints(svc, servicePort.TargetPort, api.ProtocolTCP, &portBackendConfig)
+						if len(eps) == 0 {
 							glog.Warningf("service %v does no have any active endpoints", svcKey)
 							break
 						}
 
-						ups.Backends = append(ups.Backends, endps...)
+						ups.Backends = append(ups.Backends, eps...)
 						break
 					}
 				}
@@ -886,7 +886,7 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 // per-port configuration for backend, which must not be nil.
 func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort intstr.IntOrString, proto api.Protocol, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
 	glog.V(3).Infof("getting endpoints for service %v/%v and port %v", s.Namespace, s.Name, servicePort.String())
-	ep, err := lbc.endpLister.GetServiceEndpoints(s)
+	ep, err := lbc.epLister.GetServiceEndpoints(s)
 	if err != nil {
 		glog.Warningf("unexpected error obtaining service endpoints: %v", err)
 		return []nghttpx.UpstreamServer{}
@@ -983,7 +983,7 @@ func (lbc *LoadBalancerController) Run() {
 	go lbc.nghttpx.Start(lbc.stopCh)
 
 	go lbc.ingController.Run(lbc.stopCh)
-	go lbc.endpController.Run(lbc.stopCh)
+	go lbc.epController.Run(lbc.stopCh)
 	go lbc.svcController.Run(lbc.stopCh)
 	go lbc.secretController.Run(lbc.stopCh)
 	go lbc.mapController.Run(lbc.stopCh)

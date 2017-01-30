@@ -49,7 +49,7 @@ type fixture struct {
 	lbc *LoadBalancerController
 
 	ingStore    []*extensions.Ingress
-	endpStore   []*api.Endpoints
+	epStore     []*api.Endpoints
 	svcStore    []*api.Service
 	secretStore []*api.Secret
 	mapStore    []*api.ConfigMap
@@ -128,8 +128,8 @@ func (f *fixture) setupStore() {
 	for _, ing := range f.ingStore {
 		f.lbc.ingLister.Add(ing)
 	}
-	for _, endp := range f.endpStore {
-		f.lbc.endpLister.Add(endp)
+	for _, ep := range f.epStore {
+		f.lbc.epLister.Add(ep)
 	}
 	for _, svc := range f.svcStore {
 		f.lbc.svcLister.Add(svc)
@@ -380,7 +380,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 
 	f.mapStore = append(f.mapStore, cm)
 	f.svcStore = append(f.svcStore, svc)
-	f.endpStore = append(f.endpStore, eps)
+	f.epStore = append(f.epStore, eps)
 
 	f.objects = append(f.objects, cm, svc, eps)
 
@@ -423,7 +423,7 @@ func TestSyncDefaultTLSSecretNotFound(t *testing.T) {
 	svc, eps := newDefaultBackend()
 
 	f.svcStore = append(f.svcStore, svc)
-	f.endpStore = append(f.endpStore, eps)
+	f.epStore = append(f.epStore, eps)
 
 	f.objects = append(f.objects, svc, eps)
 
@@ -443,7 +443,7 @@ func TestSyncDefaultSecret(t *testing.T) {
 
 	f.secretStore = append(f.secretStore, tlsSecret)
 	f.svcStore = append(f.svcStore, svc)
-	f.endpStore = append(f.endpStore, eps)
+	f.epStore = append(f.epStore, eps)
 
 	f.objects = append(f.objects, tlsSecret, svc, eps)
 
@@ -485,7 +485,7 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	f.secretStore = append(f.secretStore, tlsSecret)
 	f.ingStore = append(f.ingStore, ing1)
 	f.svcStore = append(f.svcStore, svc, bs1)
-	f.endpStore = append(f.endpStore, eps, be1)
+	f.epStore = append(f.epStore, eps, be1)
 
 	f.objects = append(f.objects, tlsSecret, svc, eps, bs1, be1, ing1)
 
