@@ -142,14 +142,14 @@ type LoadBalancerController struct {
 type Config struct {
 	// ResyncPeriod is the duration that Ingress resources are forcibly processed.
 	ResyncPeriod time.Duration
-	// DefaultBackendServiceName is the default backend service name.
-	DefaultBackendServiceName string
+	// DefaultBackendService is the default backend service name.
+	DefaultBackendService string
 	// WatchNamespace is the namespace to watch for Ingress resource updates.
 	WatchNamespace string
-	// NghttpxConfigMapName is the name of ConfigMap resource which contains additional configuration for nghttpx.
-	NghttpxConfigMapName string
-	// DefaultTLSSecretName is the default TLS Secret to enable TLS by default.
-	DefaultTLSSecretName string
+	// NghttpxConfigMap is the name of ConfigMap resource which contains additional configuration for nghttpx.
+	NghttpxConfigMap string
+	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
+	DefaultTLSSecret string
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -163,9 +163,9 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		stopCh:           make(chan struct{}),
 		podInfo:          runtimeInfo,
 		nghttpx:          manager,
-		ngxConfigMap:     config.NghttpxConfigMapName,
-		defaultSvc:       config.DefaultBackendServiceName,
-		defaultTLSSecret: config.DefaultTLSSecretName,
+		ngxConfigMap:     config.NghttpxConfigMap,
+		defaultSvc:       config.DefaultBackendService,
+		defaultTLSSecret: config.DefaultTLSSecret,
 		watchNamespace:   config.WatchNamespace,
 		recorder:         eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:        workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),

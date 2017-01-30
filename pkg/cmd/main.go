@@ -154,11 +154,11 @@ func main() {
 	}
 
 	controllerConfig := controller.Config{
-		ResyncPeriod:              *resyncPeriod,
-		DefaultBackendServiceName: *defaultSvc,
-		WatchNamespace:            *watchNamespace,
-		NghttpxConfigMapName:      *ngxConfigMap,
-		DefaultTLSSecretName:      *defaultTLSSecret,
+		ResyncPeriod:          *resyncPeriod,
+		DefaultBackendService: *defaultSvc,
+		WatchNamespace:        *watchNamespace,
+		NghttpxConfigMap:      *ngxConfigMap,
+		DefaultTLSSecret:      *defaultTLSSecret,
 	}
 
 	lbc, err := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), &controllerConfig, runtimePodInfo)

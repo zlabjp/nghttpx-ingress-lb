@@ -91,10 +91,10 @@ var (
 func (f *fixture) prepare() {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
 	config := Config{
-		ResyncPeriod:              defaultResyncPeriod,
-		DefaultBackendServiceName: fmt.Sprintf("%v/%v", defaultBackendNamespace, defaultBackendName),
-		WatchNamespace:            defaultIngNamespace,
-		NghttpxConfigMapName:      fmt.Sprintf("%v/%v", defaultConfigMapNamespace, defaultConfigMapName),
+		ResyncPeriod:          defaultResyncPeriod,
+		DefaultBackendService: fmt.Sprintf("%v/%v", defaultBackendNamespace, defaultBackendName),
+		WatchNamespace:        defaultIngNamespace,
+		NghttpxConfigMap:      fmt.Sprintf("%v/%v", defaultConfigMapNamespace, defaultConfigMapName),
 	}
 	if lbc, err := NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo); err != nil {
 		f.t.Fatalf("Could not create LoadBalancerController: %v", err)
