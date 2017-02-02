@@ -38,7 +38,7 @@ $ ./nghttpx-ingress-controller --running-in-cluster=false --default-backend-serv
 Before the deploy of the Ingress controller we need a default backend [404-server](https://github.com/kubernetes/contrib/tree/master/404-server)
 ```
 $ kubectl create -f examples/default-backend.yaml
-$ kubectl expose rc default-http-backend --port=80 --target-port=8080 --name=default-http-backend
+$ kubectl expose deployment default-http-backend --port=80 --target-port=8080 --name=default-http-backend
 ```
 
 Loadbalancers are created via a ReplicationController or Daemonset:
