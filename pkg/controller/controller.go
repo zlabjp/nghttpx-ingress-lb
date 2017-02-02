@@ -346,11 +346,7 @@ func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) 
 
 // endpointsReferenced returns true if we are interested in ep.
 func (lbc *LoadBalancerController) endpointsReferenced(ep *api.Endpoints) bool {
-	if lbc.watchNamespace == api.NamespaceAll {
-		return true
-	}
-
-	return lbc.watchNamespace == ep.Namespace || fmt.Sprintf("%v/%v", ep.Namespace, ep.Name) == lbc.defaultSvc
+	return lbc.watchNamespace == api.NamespaceAll || lbc.watchNamespace == ep.Namespace || fmt.Sprintf("%v/%v", ep.Namespace, ep.Name) == lbc.defaultSvc
 }
 
 func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
