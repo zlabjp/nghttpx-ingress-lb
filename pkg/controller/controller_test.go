@@ -53,6 +53,7 @@ type fixture struct {
 	svcStore    []*api.Service
 	secretStore []*api.Secret
 	cmStore     []*api.ConfigMap
+	podStore    []*api.Pod
 
 	objects []runtime.Object
 
@@ -139,6 +140,9 @@ func (f *fixture) setupStore() {
 	}
 	for _, cm := range f.cmStore {
 		f.lbc.cmLister.Add(cm)
+	}
+	for _, pod := range f.podStore {
+		f.lbc.podLister.Indexer.Add(pod)
 	}
 }
 
@@ -241,6 +245,7 @@ func newDefaultBackend() (*api.Service, *api.Endpoints) {
 				{
 					Port:       8080,
 					TargetPort: intstr.FromInt(8080),
+					Protocol:   api.ProtocolTCP,
 				},
 			},
 		},
@@ -280,7 +285,11 @@ func newBackend(namespace, name string, addrs []string) (*api.Service, *api.Endp
 				{
 					Port:       8080,
 					TargetPort: intstr.FromInt(8080),
+					Protocol:   api.ProtocolTCP,
 				},
+			},
+			Selector: map[string]string{
+				"k8s-app": "test",
 			},
 		},
 	}
@@ -506,5 +515,97 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	}
 	if got, want := len(server.SubTLSCred), 0; got != want {
 		t.Errorf("len(server.SubTLSCred) = %v, want %v", got, want)
+	}
+}
+
+// TestSyncStringNamedPort verifies that if service target port is a named port, it is looked up from Pod spec.
+func TestSyncStringNamedPort(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps := newDefaultBackend()
+
+	bs1, be1 := newBackend(api.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1.Spec.Ports[0] = api.ServicePort{
+		TargetPort: intstr.FromString("my-port"),
+		Protocol:   api.ProtocolTCP,
+	}
+	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
+
+	bp1 := &api.Pod{
+		ObjectMeta: api.ObjectMeta{
+			Name:      "alpha-pod-1",
+			Namespace: bs1.Namespace,
+			Labels:    bs1.Spec.Selector,
+		},
+		Spec: api.PodSpec{
+			Containers: []api.Container{
+				{
+					Ports: []api.ContainerPort{
+						{
+							Name:          "my-port",
+							ContainerPort: 8080,
+							Protocol:      api.ProtocolTCP,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	f.svcStore = append(f.svcStore, svc, bs1)
+	f.epStore = append(f.epStore, eps, be1)
+	f.ingStore = append(f.ingStore, ing1)
+	f.podStore = append(f.podStore, bp1)
+
+	f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bp1)
+
+	f.prepare()
+	f.run(getKey(svc, t))
+
+	fm := f.lbc.nghttpx.(*fakeManager)
+	ingressCfg := fm.ingressCfg
+
+	if got, want := len(ingressCfg.Upstreams), 2; got != want {
+		t.Errorf("len(ingressCfg.Upstreams) = %v, want %v", got, want)
+	}
+
+	backend := ingressCfg.Upstreams[1].Backends[0]
+	if got, want := backend.Port, "8080"; got != want {
+		t.Errorf("backend.Port = %v, want %v", got, want)
+	}
+}
+
+// TestSyncNumericTargetPort verifies that if target port is numeric, it is compared to endpoint port directly.
+func TestSyncNumericTargetPort(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps := newDefaultBackend()
+
+	bs1, be1 := newBackend(api.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1.Spec.Ports[0] = api.ServicePort{
+		TargetPort: intstr.FromString("8080"),
+		Protocol:   api.ProtocolTCP,
+	}
+	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
+
+	f.svcStore = append(f.svcStore, svc, bs1)
+	f.epStore = append(f.epStore, eps, be1)
+	f.ingStore = append(f.ingStore, ing1)
+
+	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+
+	f.prepare()
+	f.run(getKey(svc, t))
+
+	fm := f.lbc.nghttpx.(*fakeManager)
+	ingressCfg := fm.ingressCfg
+
+	if got, want := len(ingressCfg.Upstreams), 2; got != want {
+		t.Errorf("len(ingressCfg.Upstreams) = %v, want %v", got, want)
+	}
+
+	backend := ingressCfg.Upstreams[1].Backends[0]
+	if got, want := backend.Port, "8080"; got != want {
+		t.Errorf("backend.Port = %v, want %v", got, want)
 	}
 }

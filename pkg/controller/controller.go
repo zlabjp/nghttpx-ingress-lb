@@ -56,35 +56,11 @@ import (
 
 const (
 	defServerName            = "_"
-	namedPortAnnotation      = "ingress.kubernetes.io/named-ports"
 	backendConfigAnnotation  = "ingress.zlab.co.jp/backend-config"
 	podStoreSyncedPollPeriod = 1 * time.Second
 	// Minimum resync period for resources other than Ingress
 	minDepResyncPeriod = 12 * time.Hour
 )
-
-type serviceAnnotation map[string]string
-
-// getPort returns the port defined in a named port
-func (npm serviceAnnotation) getPort(name string) (string, bool) {
-	val, ok := npm.getPortMappings()[name]
-	return val, ok
-}
-
-// getPortMappings returns the map containing the
-// mapping of named port names and the port number
-func (npm serviceAnnotation) getPortMappings() map[string]string {
-	data := npm[namedPortAnnotation]
-	var mapping map[string]string
-	if data == "" {
-		return mapping
-	}
-	if err := json.Unmarshal([]byte(data), &mapping); err != nil {
-		glog.Errorf("unexpected error reading annotations: %v", err)
-	}
-
-	return mapping
-}
 
 type ingressAnnotation map[string]string
 
@@ -112,11 +88,13 @@ type LoadBalancerController struct {
 	svcController    *cache.Controller
 	secretController *cache.Controller
 	cmController     *cache.Controller
+	podController    *cache.Controller
 	ingLister        StoreToIngressLister
 	svcLister        StoreToServiceLister
 	epLister         cache.StoreToEndpointsLister
 	secretLister     StoreToSecretLister
 	cmLister         StoreToConfigMapLister
+	podLister        cache.StoreToPodLister
 	nghttpx          nghttpx.Interface
 	podInfo          *PodInfo
 	defaultSvc       string
@@ -237,6 +215,25 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 			UpdateFunc: lbc.updateSecretNotification,
 			DeleteFunc: lbc.deleteSecretNotification,
 		},
+	)
+
+	lbc.podLister.Indexer, lbc.podController = cache.NewIndexerInformer(
+		&cache.ListWatch{
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return lbc.clientset.Core().Pods(api.NamespaceAll).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return lbc.clientset.Core().Pods(api.NamespaceAll).Watch(options)
+			},
+		},
+		&api.Pod{},
+		depResyncPeriod(),
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addPodNotification,
+			UpdateFunc: lbc.updatePodNotification,
+			DeleteFunc: lbc.deletePodNotification,
+		},
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 	)
 
 	var cmNamespace string
@@ -441,6 +438,54 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 	lbc.enqueue(c)
 }
 
+func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
+	pod := obj.(*api.Pod)
+	if !lbc.podReferenced(pod) {
+		return
+	}
+	glog.V(4).Infof("Pod %v/%v added", pod.Namespace, pod.Name)
+	lbc.enqueue(pod)
+}
+
+func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
+	if reflect.DeepEqual(old, cur) {
+		return
+	}
+
+	curPod := cur.(*api.Pod)
+	if !lbc.podReferenced(curPod) {
+		return
+	}
+	glog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
+	lbc.enqueue(curPod)
+}
+
+func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
+	pod, ok := obj.(*api.Pod)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			return
+		}
+		pod, ok = tombstone.Obj.(*api.Pod)
+		if !ok {
+			glog.Errorf("Tombstone contained object that is not Pod %+v", obj)
+			return
+		}
+	}
+	if !lbc.podReferenced(pod) {
+		return
+	}
+	glog.V(4).Infof("Pod %v/%v deleted", pod.Namespace, pod.Name)
+	lbc.enqueue(pod)
+}
+
+// podReferenced returns true if we are interested in pod.
+func (lbc *LoadBalancerController) podReferenced(pod *api.Pod) bool {
+	return lbc.watchNamespace == api.NamespaceAll || lbc.watchNamespace == pod.Namespace || fmt.Sprintf("%v/%v", pod.Namespace, pod.Name) == lbc.defaultSvc
+}
+
 func (lbc *LoadBalancerController) enqueue(obj runtime.Object) {
 	key, err := controller.KeyFunc(obj)
 	if err != nil {
@@ -472,7 +517,8 @@ func (lbc *LoadBalancerController) controllersInSync() bool {
 		lbc.svcController.HasSynced() &&
 		lbc.epController.HasSynced() &&
 		lbc.secretController.HasSynced() &&
-		lbc.cmController.HasSynced()
+		lbc.cmController.HasSynced() &&
+		lbc.podController.HasSynced()
 }
 
 // getConfigMap returns ConfigMap denoted by cmKey.
@@ -489,77 +535,6 @@ func (lbc *LoadBalancerController) getConfigMap(cmKey string) (*api.ConfigMap, e
 		return &api.ConfigMap{}, nil
 	}
 	return obj.(*api.ConfigMap), nil
-}
-
-// checkSvcForUpdate verifies if one of the running pods for a service contains
-// named port. If the annotation in the service does not exists or is not equals
-// to the port mapping obtained from the pod the service must be updated to reflect
-// the current state
-func (lbc *LoadBalancerController) checkSvcForUpdate(svc *api.Service) (map[string]string, error) {
-	// get the pods associated with the service
-	// TODO: switch this to a watch
-	pods, err := lbc.clientset.Core().Pods(svc.Namespace).List(api.ListOptions{
-		LabelSelector: labels.Set(svc.Spec.Selector).AsSelector(),
-	})
-
-	namedPorts := map[string]string{}
-	if err != nil {
-		return namedPorts, fmt.Errorf("error searching service pods %v/%v: %v", svc.Namespace, svc.Name, err)
-	}
-
-	if len(pods.Items) == 0 {
-		return namedPorts, nil
-	}
-
-	// we need to check only one pod searching for named ports
-	pod := &pods.Items[0]
-	glog.V(4).Infof("checking pod %v/%v for named port information", pod.Namespace, pod.Name)
-	for i := range svc.Spec.Ports {
-		servicePort := &svc.Spec.Ports[i]
-		_, err := strconv.Atoi(servicePort.TargetPort.StrVal)
-		if err != nil {
-			portNum, err := podutil.FindPort(pod, servicePort)
-			if err != nil {
-				glog.V(4).Infof("failed to find port for service %s/%s: %v", svc.Namespace, svc.Name, err)
-				continue
-			}
-
-			if servicePort.TargetPort.StrVal == "" {
-				continue
-			}
-
-			namedPorts[servicePort.TargetPort.StrVal] = fmt.Sprintf("%v", portNum)
-		}
-	}
-
-	if svc.ObjectMeta.Annotations == nil {
-		svc.ObjectMeta.Annotations = map[string]string{}
-	}
-
-	curNamedPort := svc.ObjectMeta.Annotations[namedPortAnnotation]
-	if len(namedPorts) > 0 && !reflect.DeepEqual(curNamedPort, namedPorts) {
-		data, _ := json.Marshal(namedPorts)
-
-		newSvc, err := lbc.clientset.Core().Services(svc.Namespace).Get(svc.Name)
-		if err != nil {
-			return namedPorts, fmt.Errorf("error getting service %v/%v: %v", svc.Namespace, svc.Name, err)
-		}
-
-		if newSvc.ObjectMeta.Annotations == nil {
-			newSvc.ObjectMeta.Annotations = map[string]string{}
-		}
-
-		newSvc.ObjectMeta.Annotations[namedPortAnnotation] = string(data)
-		glog.Infof("updating service %v with new named port mappings", svc.Name)
-		_, err = lbc.clientset.Core().Services(svc.Namespace).Update(newSvc)
-		if err != nil {
-			return namedPorts, fmt.Errorf("error syncing service %v/%v: %v", svc.Namespace, svc.Name, err)
-		}
-
-		return newSvc.ObjectMeta.Annotations, nil
-	}
-
-	return namedPorts, nil
 }
 
 func (lbc *LoadBalancerController) sync(key string) error {
@@ -620,7 +595,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 
 	portBackendConfig := nghttpx.DefaultPortBackendConfig()
 
-	eps := lbc.getEndpoints(svc, svc.Spec.Ports[0].TargetPort, api.ProtocolTCP, &portBackendConfig)
+	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], api.ProtocolTCP, &portBackendConfig)
 	if len(eps) == 0 {
 		glog.Warningf("service %v does no have any active endpoints", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
@@ -706,7 +681,8 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 				svcBackendConfig := backendConfig[path.Backend.ServiceName]
 
 				for _, servicePort := range svc.Spec.Ports {
-					// targetPort could be a string, use the name or the port (int)
+					// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use
+					// servicePort.Port.  servicePort.TargetPort could be a string.  This is really messy.
 					if strconv.Itoa(int(servicePort.Port)) == bp || servicePort.TargetPort.String() == bp || servicePort.Name == bp {
 						portBackendConfig, ok := svcBackendConfig[bp]
 						if ok {
@@ -715,7 +691,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 							portBackendConfig = nghttpx.DefaultPortBackendConfig()
 						}
 
-						eps := lbc.getEndpoints(svc, servicePort.TargetPort, api.ProtocolTCP, &portBackendConfig)
+						eps := lbc.getEndpoints(svc, &servicePort, api.ProtocolTCP, &portBackendConfig)
 						if len(eps) == 0 {
 							glog.Warningf("service %v does no have any active endpoints", svcKey)
 							break
@@ -880,8 +856,8 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 // getEndpoints returns a list of <endpoint ip>:<port> for a given
 // service/target port combination.  portBackendConfig is additional
 // per-port configuration for backend, which must not be nil.
-func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort intstr.IntOrString, proto api.Protocol, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
-	glog.V(3).Infof("getting endpoints for service %v/%v and port %v", s.Namespace, s.Name, servicePort.String())
+func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort *api.ServicePort, proto api.Protocol, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+	glog.V(3).Infof("getting endpoints for service %v/%v and port %v protocol %v", s.Namespace, s.Name, servicePort.TargetPort.String(), servicePort.Protocol)
 	ep, err := lbc.epLister.GetServiceEndpoints(s)
 	if err != nil {
 		glog.Warningf("unexpected error obtaining service endpoints: %v", err)
@@ -892,54 +868,46 @@ func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort ints
 
 	for _, ss := range ep.Subsets {
 		for _, epPort := range ss.Ports {
-
-			if !reflect.DeepEqual(epPort.Protocol, proto) {
+			if epPort.Protocol != proto {
 				continue
 			}
 
-			var targetPort int
-			switch servicePort.Type {
+			var targetPort int32
+
+			switch servicePort.TargetPort.Type {
 			case intstr.Int:
-				if int(epPort.Port) == servicePort.IntValue() {
-					targetPort = int(epPort.Port)
+				if epPort.Port == servicePort.TargetPort.IntVal {
+					targetPort = epPort.Port
 				}
 			case intstr.String:
-				val, ok := serviceAnnotation(s.ObjectMeta.Annotations).getPort(servicePort.StrVal)
-				if ok {
-					port, err := strconv.Atoi(val)
+				// TODO Is this necessary?
+				if servicePort.TargetPort.StrVal == "" {
+					break
+				}
+				var port int32
+				if p, err := strconv.Atoi(servicePort.TargetPort.StrVal); err != nil {
+					port, err = lbc.getNamedPortFromPod(s, servicePort)
 					if err != nil {
-						glog.Warningf("%v is not valid as a port", val)
+						glog.Warningf("Could not find named port %v in Pod spec: %v", servicePort.TargetPort.String(), err)
 						continue
 					}
-
-					targetPort = port
 				} else {
-					newnp, err := lbc.checkSvcForUpdate(s)
-					if err != nil {
-						glog.Warningf("error mapping service ports: %v", err)
-						continue
-					}
-					val, ok := serviceAnnotation(newnp).getPort(servicePort.StrVal)
-					if ok {
-						port, err := strconv.Atoi(val)
-						if err != nil {
-							glog.Warningf("%v is not valid as a port", val)
-							continue
-						}
-
-						targetPort = port
-					}
+					port = int32(p)
+				}
+				if epPort.Port == port {
+					targetPort = port
 				}
 			}
 
 			if targetPort == 0 {
+				glog.V(4).Infof("Endpoint port %v does not match Service port %v", epPort.Port, servicePort.TargetPort.String())
 				continue
 			}
 
 			for _, epAddress := range ss.Addresses {
 				ups := nghttpx.UpstreamServer{
 					Address:  epAddress.IP,
-					Port:     fmt.Sprintf("%v", targetPort),
+					Port:     strconv.Itoa(int(targetPort)),
 					Protocol: portBackendConfig.Proto,
 					TLS:      portBackendConfig.TLS,
 					SNI:      portBackendConfig.SNI,
@@ -953,6 +921,25 @@ func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort ints
 
 	glog.V(3).Infof("endpoints found: %+v", upsServers)
 	return upsServers
+}
+
+// getNamedPortFromPod returns port number from Pod sharing the same port name with servicePort.
+func (lbc *LoadBalancerController) getNamedPortFromPod(svc *api.Service, servicePort *api.ServicePort) (int32, error) {
+	pods, err := lbc.podLister.Pods(svc.Namespace).List(labels.Set(svc.Spec.Selector).AsSelector())
+	if err != nil {
+		return 0, fmt.Errorf("Could not get Pods %v/%v: %v", svc.Namespace, svc.Name, err)
+	}
+
+	if len(pods) == 0 {
+		return 0, fmt.Errorf("No Pods available for Service %v/%v", svc.Namespace, svc.Name)
+	}
+
+	pod := pods[0]
+	port, err := podutil.FindPort(pod, servicePort)
+	if err != nil {
+		return 0, fmt.Errorf("Failed to find port %v from Pod %v/%v: %v", servicePort.TargetPort.String(), pod.Namespace, pod.Name, err)
+	}
+	return int32(port), nil
 }
 
 // Stop commences shutting down the loadbalancer controller.
@@ -983,6 +970,7 @@ func (lbc *LoadBalancerController) Run() {
 	go lbc.svcController.Run(lbc.stopCh)
 	go lbc.secretController.Run(lbc.stopCh)
 	go lbc.cmController.Run(lbc.stopCh)
+	go lbc.podController.Run(lbc.stopCh)
 
 	go wait.Until(lbc.worker, time.Second, lbc.stopCh)
 
