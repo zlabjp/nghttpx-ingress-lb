@@ -14,13 +14,13 @@ frontend=*,443
 
 {{ $defaultCred := .server.DefaultTLSCred }}
 # checksum is required to detect changes in the generated configuration and force a reload
-# checksum: {{ $defaultCred.Checksum }}
-private-key-file={{ $defaultCred.Key }}
-certificate-file={{ $defaultCred.Cert }}
+# checksum: {{ $defaultCred.Key.Checksum }} {{ $defaultCred.Cert.Checksum }}
+private-key-file={{ $defaultCred.Key.Path }}
+certificate-file={{ $defaultCred.Cert.Path }}
 
 {{ range $cred := .server.SubTLSCred }}
-# checksum: {{ $cred.Checksum }}
-subcert={{ $cred.Key }}:{{ $cred.Cert }}
+# checksum: {{ $cred.Key.Checksum }} {{ $cred.Cert.Checksum }}
+subcert={{ $cred.Key.Path }}:{{ $cred.Cert.Path }}
 {{ end }}
 
 {{ else }}

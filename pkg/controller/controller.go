@@ -699,7 +699,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 	if server.DefaultTLSCred != nil {
 		// Remove default TLS key pair from pems.
 		for i, _ := range pems {
-			if server.DefaultTLSCred.Key == pems[i].Key {
+			if server.DefaultTLSCred.Key.Path == pems[i].Key.Path {
 				pems = append(pems[:i], pems[i+1:]...)
 				break
 			}
@@ -807,7 +807,7 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *api.Secret) (
 		return nil, fmt.Errorf("No valid TLS private key found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
 
-	tlsCred, err := lbc.nghttpx.AddOrUpdateCertAndKey(nghttpx.TLSCredPrefix(secret), cert, key)
+	tlsCred, err := nghttpx.CreateTLSCred(nghttpx.TLSCredPrefix(secret), cert, key)
 	if err != nil {
 		return nil, fmt.Errorf("Could not create private key and certificate files for Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}

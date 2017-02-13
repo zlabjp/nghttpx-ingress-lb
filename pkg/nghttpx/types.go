@@ -31,9 +31,6 @@ type Interface interface {
 	// is required, and it successfully issues reloading, returns true.  If there is no need to reloading, it returns false.  On error,
 	// it returns false, and non-nil error.
 	CheckAndReload(cfg NghttpxConfiguration, ingressCfg IngressConfig) (bool, error)
-	// AddOrUpdateCertAndKey creates a key and certificate files with the specified prefix name, and returns the path to key, and
-	// certificate files, and checksum of them concatenated.
-	AddOrUpdateCertAndKey(name string, cert, key []byte) (*TLSCred, error)
 }
 
 // IngressConfig describes an nghttpx configuration
@@ -105,9 +102,8 @@ func (c UpstreamServerByAddrPort) Less(i, j int) bool {
 
 // TLS server private key and certificate file path
 type TLSCred struct {
-	Key      string
-	Cert     string
-	Checksum string
+	Key  ChecksumFile
+	Cert ChecksumFile
 }
 
 type TLSCredKeyLess []*TLSCred
@@ -115,7 +111,7 @@ type TLSCredKeyLess []*TLSCred
 func (c TLSCredKeyLess) Len() int      { return len(c) }
 func (c TLSCredKeyLess) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
 func (c TLSCredKeyLess) Less(i, j int) bool {
-	return c[i].Key < c[j].Key
+	return c[i].Key.Path < c[j].Key.Path
 }
 
 // Server describes an nghttpx server
@@ -150,4 +146,11 @@ type PortBackendConfig struct {
 	DNS bool `json:"dns,omitempty"`
 	// Affinity is session affinity method nghttpx supports.  See affinity parameter in backend option of nghttpx.
 	Affinity Affinity `json:"affinity,omitempty"`
+}
+
+// ChecksumFile represents a file with path, its arbitrary content, and its checksum.
+type ChecksumFile struct {
+	Path     string
+	Content  []byte
+	Checksum string
 }

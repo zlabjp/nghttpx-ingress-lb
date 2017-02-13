@@ -25,6 +25,8 @@ package nghttpx
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -176,4 +178,11 @@ func writeFile(path string, content []byte) error {
 	}
 
 	return nil
+}
+
+// Checksum calculates and returns checksum of b in hex string.
+func Checksum(b []byte) string {
+	h := sha256.New()
+	h.Write(b)
+	return hex.EncodeToString(h.Sum(nil))
 }
