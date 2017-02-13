@@ -36,14 +36,14 @@ import (
 )
 
 const (
-	// NghttpxExtraConfigFieldName is a field name of extra nghttpx configuration in ConfigMap.
-	NghttpxExtraConfigFieldName = "nghttpx-conf"
+	// NghttpxExtraConfigKey is a field name of extra nghttpx configuration in ConfigMap.
+	NghttpxExtraConfigKey = "nghttpx-conf"
 )
 
 // ReadConfig obtains the configuration defined by the user merged with the defaults.
 func ReadConfig(config *api.ConfigMap) NghttpxConfiguration {
 	cfg := newDefaultNghttpxCfg()
-	cfg.ExtraConfig = config.Data[NghttpxExtraConfigFieldName]
+	cfg.ExtraConfig = config.Data[NghttpxExtraConfigKey]
 	return cfg
 }
 

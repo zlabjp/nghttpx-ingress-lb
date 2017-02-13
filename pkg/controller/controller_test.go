@@ -380,7 +380,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 	f := newFixture(t)
 
 	cm := newEmptyConfigMap()
-	cm.Data[nghttpx.NghttpxExtraConfigFieldName] = "Test"
+	cm.Data[nghttpx.NghttpxExtraConfigKey] = "Test"
 	svc, eps := newDefaultBackend()
 
 	f.cmStore = append(f.cmStore, cm)
@@ -416,7 +416,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 		}
 	}
 
-	if got, want := fm.cfg.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigFieldName]; got != want {
+	if got, want := fm.cfg.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
 		t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
 	}
 }
