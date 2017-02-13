@@ -25,6 +25,7 @@ package nghttpx
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -160,4 +161,19 @@ func DefaultPortBackendConfig() PortBackendConfig {
 		Proto:    ProtocolH1,
 		Affinity: AffinityNone,
 	}
+}
+
+func writeFile(path string, content []byte) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("couldn't create file %v: %v", path, err)
+	}
+
+	defer f.Close()
+
+	if _, err := f.Write(content); err != nil {
+		return fmt.Errorf("couldn't write to file %v: %v", path, err)
+	}
+
+	return nil
 }

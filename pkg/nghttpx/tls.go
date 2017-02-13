@@ -33,28 +33,12 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/golang/glog"
 
 	"k8s.io/kubernetes/pkg/api"
 )
-
-func writeFile(path string, content []byte) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("couldn't create file %v: %v", path, err)
-	}
-
-	defer f.Close()
-
-	if _, err := f.Write(content); err != nil {
-		return fmt.Errorf("couldn't write to file %v: %v", path, err)
-	}
-
-	return nil
-}
 
 // AddOrUpdateCertAndKey creates a key and certificate files with the
 // specified name, and returns the path to key, and certificate files,
