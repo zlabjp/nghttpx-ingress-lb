@@ -97,11 +97,7 @@ func (f *fixture) prepare() {
 		WatchNamespace:        defaultIngNamespace,
 		NghttpxConfigMap:      fmt.Sprintf("%v/%v", defaultConfigMapNamespace, defaultConfigMapName),
 	}
-	if lbc, err := NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo); err != nil {
-		f.t.Fatalf("Could not create LoadBalancerController: %v", err)
-	} else {
-		f.lbc = lbc
-	}
+	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo)
 	f.lbc.controllersInSyncHandler = func() bool { return true }
 }
 

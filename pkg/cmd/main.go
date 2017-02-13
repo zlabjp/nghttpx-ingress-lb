@@ -161,10 +161,7 @@ func main() {
 		DefaultTLSSecret:      *defaultTLSSecret,
 	}
 
-	lbc, err := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), &controllerConfig, runtimePodInfo)
-	if err != nil {
-		glog.Fatalf("%v", err)
-	}
+	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), &controllerConfig, runtimePodInfo)
 
 	go registerHandlers(lbc)
 	go handleSigterm(lbc)

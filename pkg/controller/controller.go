@@ -112,7 +112,7 @@ type Config struct {
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
-func NewLoadBalancerController(clientset internalclientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *PodInfo) (*LoadBalancerController, error) {
+func NewLoadBalancerController(clientset internalclientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *PodInfo) *LoadBalancerController {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
 	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: clientset.Core().Events(config.WatchNamespace)})
@@ -246,7 +246,7 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 
 	lbc.controllersInSyncHandler = lbc.controllersInSync
 
-	return &lbc, nil
+	return &lbc
 }
 
 func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
