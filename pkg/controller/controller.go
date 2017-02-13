@@ -26,7 +26,6 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"reflect"
 	"sort"
 	"strconv"
@@ -540,7 +539,7 @@ func (lbc *LoadBalancerController) getConfigMap(cmKey string) (*api.ConfigMap, e
 func (lbc *LoadBalancerController) sync(key string) error {
 	retry := false
 
-	defer func() { retryOrForget(lbc.syncQueue, key, retry) }()
+	defer func() { lbc.retryOrForget(key, retry) }()
 
 	if !lbc.controllersInSyncHandler() {
 		glog.Infof("Deferring sync till endpoints controller has synced")
@@ -981,19 +980,11 @@ func (lbc *LoadBalancerController) Run() {
 	lbc.syncQueue.ShutDown()
 }
 
-func retryOrForget(q workqueue.RateLimitingInterface, key interface{}, requeue bool) {
+func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) {
 	if !requeue {
-		q.Forget(key)
+		lbc.syncQueue.Forget(key)
 		return
 	}
 
-	q.AddRateLimited(key)
-}
-
-// depResyncPeriod returns duration between resync for resources other than Ingress.
-//
-// Inspired by Kubernetes apiserver: k8s.io/kubernetes/cmd/kube-controller-manager/app/controllermanager.go
-func depResyncPeriod() time.Duration {
-	factor := rand.Float64() + 1
-	return time.Duration(float64(minDepResyncPeriod.Nanoseconds()) * factor)
+	lbc.syncQueue.AddRateLimited(key)
 }

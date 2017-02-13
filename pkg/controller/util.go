@@ -25,6 +25,7 @@ package controller
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -173,4 +174,12 @@ func waitForPodCondition(clientset internalclientset.Interface, ns, podName stri
 
 		return false, nil
 	})
+}
+
+// depResyncPeriod returns duration between resync for resources other than Ingress.
+//
+// Inspired by Kubernetes apiserver: k8s.io/kubernetes/cmd/kube-controller-manager/app/controllermanager.go
+func depResyncPeriod() time.Duration {
+	factor := rand.Float64() + 1
+	return time.Duration(float64(minDepResyncPeriod.Nanoseconds()) * factor)
 }
