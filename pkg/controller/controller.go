@@ -24,7 +24,6 @@ limitations under the License.
 package controller
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -60,23 +59,6 @@ const (
 	// Minimum resync period for resources other than Ingress
 	minDepResyncPeriod = 12 * time.Hour
 )
-
-type ingressAnnotation map[string]string
-
-func (ia ingressAnnotation) getBackendConfig() map[string]map[string]nghttpx.PortBackendConfig {
-	data := ia[backendConfigAnnotation]
-	// the first key specifies service name, and secondary key specifies port name.
-	var config map[string]map[string]nghttpx.PortBackendConfig
-	if data == "" {
-		return config
-	}
-	if err := json.Unmarshal([]byte(data), &config); err != nil {
-		glog.Errorf("unexpected error reading %v annotation: %v", backendConfigAnnotation, err)
-		return config
-	}
-
-	return config
-}
 
 // LoadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
