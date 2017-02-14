@@ -166,19 +166,16 @@ func (f *fixture) expectGetCMAction(cm *api.ConfigMap) {
 
 // newFakeManager implements nghttpx.Interface.
 type fakeManager struct {
-	checkAndReloadHandler        func(cfg nghttpx.NghttpxConfiguration, ingressCfg nghttpx.IngressConfig) (bool, error)
-	addOrUpdateCertAndKeyHandler func(name string, cert []byte, key []byte) (*nghttpx.TLSCred, error)
+	checkAndReloadHandler func(cfg nghttpx.NghttpxConfiguration, ingressCfg nghttpx.IngressConfig) (bool, error)
 
 	cfg        nghttpx.NghttpxConfiguration
 	ingressCfg nghttpx.IngressConfig
-	certs      []keyPair
 }
 
 // newFakeManager creates new fakeManager.
 func newFakeManager() *fakeManager {
 	fm := &fakeManager{}
 	fm.checkAndReloadHandler = fm.defaultCheckAndReload
-	fm.addOrUpdateCertAndKeyHandler = fm.defaultAddOrUpdateCertAndKey
 	return fm
 }
 
@@ -188,27 +185,10 @@ func (fm *fakeManager) CheckAndReload(cfg nghttpx.NghttpxConfiguration, ingressC
 	return fm.checkAndReloadHandler(cfg, ingressCfg)
 }
 
-func (fm *fakeManager) AddOrUpdateCertAndKey(name string, cert, key []byte) (*nghttpx.TLSCred, error) {
-	return fm.addOrUpdateCertAndKeyHandler(name, cert, key)
-}
-
 func (fm *fakeManager) defaultCheckAndReload(cfg nghttpx.NghttpxConfiguration, ingressCfg nghttpx.IngressConfig) (bool, error) {
 	fm.cfg = cfg
 	fm.ingressCfg = ingressCfg
 	return true, nil
-}
-
-func (fm *fakeManager) defaultAddOrUpdateCertAndKey(name string, cert []byte, key []byte) (*nghttpx.TLSCred, error) {
-	fm.certs = append(fm.certs, keyPair{
-		name: name,
-		cert: cert,
-		key:  key,
-	})
-	return &nghttpx.TLSCred{
-		Key:      fmt.Sprintf("%v.key", name),
-		Cert:     fmt.Sprintf("%v.crt", name),
-		Checksum: nghttpx.TLSCertKeyChecksum(cert, key),
-	}, nil
 }
 
 // keyPair contains certificate key, and cert, and their name.
@@ -464,14 +444,17 @@ func TestSyncDefaultSecret(t *testing.T) {
 	}
 
 	prefix := nghttpx.TLSCredPrefix(tlsSecret)
-	if got, want := server.DefaultTLSCred.Key, fmt.Sprintf("%v.key", prefix); got != want {
-		t.Errorf("server.DefaultTLSCred.Key = %v, want %v", got, want)
+	if got, want := server.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(prefix); got != want {
+		t.Errorf("server.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
-	if got, want := server.DefaultTLSCred.Cert, fmt.Sprintf("%v.crt", prefix); got != want {
-		t.Errorf("server.DefaultTLSCred.Crt = %v, want %v", got, want)
+	if got, want := server.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(prefix); got != want {
+		t.Errorf("server.DefaultTLSCred.Cert.Path = %v, want %v", got, want)
 	}
-	if got, want := server.DefaultTLSCred.Checksum, nghttpx.TLSCertKeyChecksum(dCrt, dKey); got != want {
-		t.Errorf("server.DefaultTLSCred.Checksum = %v, want %v", got, want)
+	if got, want := server.DefaultTLSCred.Key.Checksum, nghttpx.Checksum(dKey); got != want {
+		t.Errorf("server.DefaultTLSCred.Key.Checksum = %v, want %v", got, want)
+	}
+	if got, want := server.DefaultTLSCred.Cert.Checksum, nghttpx.Checksum(dCrt); got != want {
+		t.Errorf("server.DefaultTLSCred.Cert.Checksum = %v, want %v", got, want)
 	}
 }
 
@@ -506,8 +489,8 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	}
 
 	prefix := nghttpx.TLSCredPrefix(tlsSecret)
-	if got, want := server.DefaultTLSCred.Key, fmt.Sprintf("%v.key", prefix); got != want {
-		t.Errorf("server.DefaultTLSCred.Key = %v, want %v", got, want)
+	if got, want := server.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(prefix); got != want {
+		t.Errorf("server.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
 	if got, want := len(server.SubTLSCred), 0; got != want {
 		t.Errorf("len(server.SubTLSCred) = %v, want %v", got, want)

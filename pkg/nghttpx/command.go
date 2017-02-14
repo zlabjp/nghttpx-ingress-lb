@@ -78,6 +78,10 @@ func (ngx *Manager) CheckAndReload(cfg NghttpxConfiguration, ingressCfg IngressC
 	ngx.reloadLock.Lock()
 	defer ngx.reloadLock.Unlock()
 
+	if err := ngx.writeTLSKeyCert(ingressCfg.Server); err != nil {
+		return false, err
+	}
+
 	changed, err := ngx.writeCfg(cfg, ingressCfg)
 
 	if err != nil {

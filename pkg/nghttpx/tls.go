@@ -27,9 +27,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -40,34 +38,60 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 )
 
-// AddOrUpdateCertAndKey creates a key and certificate files with the
-// specified name, and returns the path to key, and certificate files,
-// and checksum of them concatenated.
-func (ngx *Manager) AddOrUpdateCertAndKey(name string, cert, key []byte) (*TLSCred, error) {
-	keyFileName := filepath.Join(tlsDirectory, fmt.Sprintf("%v.key", name))
-	certFileName := filepath.Join(tlsDirectory, fmt.Sprintf("%v.crt", name))
+//CreateTLSKeyPath returns TLS private key file path.
+func CreateTLSKeyPath(name string) string {
+	return filepath.Join(tlsDirectory, fmt.Sprintf("%v.key", name))
+}
 
-	if err := writeFile(keyFileName, key); err != nil {
-		return nil, err
-	}
+// CreateTLSCertPath returns TLS certificate file path.
+func CreateTLSCertPath(name string) string {
+	return filepath.Join(tlsDirectory, fmt.Sprintf("%v.crt", name))
+}
 
-	if err := writeFile(certFileName, cert); err != nil {
-		return nil, err
-	}
-
+// CreateTLSCred creates TLSCred for given private key and certificate.
+func CreateTLSCred(name string, cert, key []byte) (*TLSCred, error) {
 	return &TLSCred{
-		Cert:     certFileName,
-		Key:      keyFileName,
-		Checksum: TLSCertKeyChecksum(cert, key),
+		Key: ChecksumFile{
+			Path:     CreateTLSKeyPath(name),
+			Content:  key,
+			Checksum: Checksum(key),
+		},
+		Cert: ChecksumFile{
+			Path:     CreateTLSCertPath(name),
+			Content:  cert,
+			Checksum: Checksum(cert),
+		},
 	}, nil
 }
 
-// TLSCertKeyChecksum returns checksum of cert and key in hex string.
-func TLSCertKeyChecksum(cert []byte, key []byte) string {
-	h := sha256.New()
-	h.Write(cert)
-	h.Write(key)
-	return hex.EncodeToString(h.Sum(nil))
+// writeTLSKeyCert writes TLS private keys and certificates to their files.
+func (ngx *Manager) writeTLSKeyCert(server *Server) error {
+	if server.DefaultTLSCred != nil {
+		if err := writeTLSKeyCert(server.DefaultTLSCred); err != nil {
+			return err
+		}
+	}
+
+	for _, tlsCred := range server.SubTLSCred {
+		if err := writeTLSKeyCert(tlsCred); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// writeTLSKeyCert writes TLS private key and certificate to tlsCred in their files.
+func writeTLSKeyCert(tlsCred *TLSCred) error {
+	if err := writeFile(tlsCred.Key.Path, tlsCred.Key.Content); err != nil {
+		return fmt.Errorf("failed to write TLS private key: %v", err)
+	}
+
+	if err := writeFile(tlsCred.Cert.Path, tlsCred.Cert.Content); err != nil {
+		return fmt.Errorf("failed to write TLS certificate: %v", err)
+	}
+
+	return nil
 }
 
 // commonNames checks if the certificate and key file are valid
@@ -143,7 +167,7 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 	left := pems[1:]
 	j := 0
 	for i, _ := range left {
-		if pems[j].Key == left[i].Key {
+		if pems[j].Key.Path == left[i].Key.Path {
 			continue
 		}
 		j++
