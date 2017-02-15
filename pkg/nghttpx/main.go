@@ -33,8 +33,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-
-	"k8s.io/kubernetes/pkg/util/flowcontrol"
 )
 
 var (
@@ -59,8 +57,6 @@ type Manager struct {
 	BackendConfigFile string
 	// httpClient is used to issue backend API request to nghttpx
 	httpClient *http.Client
-
-	reloadRateLimiter flowcontrol.RateLimiter
 
 	// template loaded ready to be used to generate the nghttpx configuration file
 	template *template.Template
@@ -91,7 +87,6 @@ func NewManager() *Manager {
 		ConfigFile:        "/etc/nghttpx/nghttpx.conf",
 		BackendConfigFile: "/etc/nghttpx/nghttpx-backend.conf",
 		reloadLock:        &sync.Mutex{},
-		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.1, 1),
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
 		},
