@@ -133,7 +133,7 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		watchNamespace:    config.WatchNamespace,
 		recorder:          eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:         workqueue.New(),
-		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.1, 1),
+		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.2, 1),
 	}
 
 	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
