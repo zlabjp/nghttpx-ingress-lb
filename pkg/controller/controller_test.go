@@ -166,10 +166,9 @@ func (f *fixture) expectGetCMAction(cm *api.ConfigMap) {
 
 // newFakeManager implements nghttpx.Interface.
 type fakeManager struct {
-	checkAndReloadHandler func(cfg nghttpx.NghttpxConfiguration, ingressCfg nghttpx.IngressConfig) (bool, error)
+	checkAndReloadHandler func(ingConfig *nghttpx.IngressConfig) (bool, error)
 
-	cfg        nghttpx.NghttpxConfiguration
-	ingressCfg nghttpx.IngressConfig
+	ingConfig *nghttpx.IngressConfig
 }
 
 // newFakeManager creates new fakeManager.
@@ -181,13 +180,12 @@ func newFakeManager() *fakeManager {
 
 func (fm *fakeManager) Start(stopCh <-chan struct{}) {}
 
-func (fm *fakeManager) CheckAndReload(cfg nghttpx.NghttpxConfiguration, ingressCfg nghttpx.IngressConfig) (bool, error) {
-	return fm.checkAndReloadHandler(cfg, ingressCfg)
+func (fm *fakeManager) CheckAndReload(ingConfig *nghttpx.IngressConfig) (bool, error) {
+	return fm.checkAndReloadHandler(ingConfig)
 }
 
-func (fm *fakeManager) defaultCheckAndReload(cfg nghttpx.NghttpxConfiguration, ingressCfg nghttpx.IngressConfig) (bool, error) {
-	fm.cfg = cfg
-	fm.ingressCfg = ingressCfg
+func (fm *fakeManager) defaultCheckAndReload(ingConfig *nghttpx.IngressConfig) (bool, error) {
+	fm.ingConfig = ingConfig
 	return true, nil
 }
 
@@ -373,16 +371,16 @@ func TestSyncDefaultBackend(t *testing.T) {
 	f.run(getKey(svc, t))
 
 	fm := f.lbc.nghttpx.(*fakeManager)
-	ingressCfg := fm.ingressCfg
+	ingConfig := fm.ingConfig
 
-	if got, want := ingressCfg.Server.TLS, false; got != want {
-		t.Errorf("ingressCfg.Server.TLS = %v, want %v", got, want)
+	if got, want := ingConfig.TLS, false; got != want {
+		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
 	}
 
-	if got, want := len(ingressCfg.Upstreams), 1; got != want {
-		t.Errorf("len(ingressCfg.Upstreams) = %v, want %v", got, want)
+	if got, want := len(ingConfig.Upstreams), 1; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	} else {
-		upstream := ingressCfg.Upstreams[0]
+		upstream := ingConfig.Upstreams[0]
 		if got, want := upstream.Path, ""; got != want {
 			t.Errorf("upstream.Path = %v, want %v", got, want)
 		}
@@ -396,7 +394,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 		}
 	}
 
-	if got, want := fm.cfg.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
+	if got, want := fm.ingConfig.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
 		t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
 	}
 }
@@ -437,24 +435,24 @@ func TestSyncDefaultSecret(t *testing.T) {
 	f.run(getKey(svc, t))
 
 	fm := f.lbc.nghttpx.(*fakeManager)
-	server := fm.ingressCfg.Server
+	ingConfig := fm.ingConfig
 
-	if got, want := server.TLS, true; got != want {
-		t.Errorf("server.TLS = %v, want %v", got, want)
+	if got, want := ingConfig.TLS, true; got != want {
+		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
 	}
 
 	prefix := nghttpx.TLSCredPrefix(tlsSecret)
-	if got, want := server.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(prefix); got != want {
-		t.Errorf("server.DefaultTLSCred.Key.Path = %v, want %v", got, want)
+	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(prefix); got != want {
+		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
-	if got, want := server.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(prefix); got != want {
-		t.Errorf("server.DefaultTLSCred.Cert.Path = %v, want %v", got, want)
+	if got, want := ingConfig.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(prefix); got != want {
+		t.Errorf("ingConfig.DefaultTLSCred.Cert.Path = %v, want %v", got, want)
 	}
-	if got, want := server.DefaultTLSCred.Key.Checksum, nghttpx.Checksum(dKey); got != want {
-		t.Errorf("server.DefaultTLSCred.Key.Checksum = %v, want %v", got, want)
+	if got, want := ingConfig.DefaultTLSCred.Key.Checksum, nghttpx.Checksum(dKey); got != want {
+		t.Errorf("ingConfig.DefaultTLSCred.Key.Checksum = %v, want %v", got, want)
 	}
-	if got, want := server.DefaultTLSCred.Cert.Checksum, nghttpx.Checksum(dCrt); got != want {
-		t.Errorf("server.DefaultTLSCred.Cert.Checksum = %v, want %v", got, want)
+	if got, want := ingConfig.DefaultTLSCred.Cert.Checksum, nghttpx.Checksum(dCrt); got != want {
+		t.Errorf("ingConfig.DefaultTLSCred.Cert.Checksum = %v, want %v", got, want)
 	}
 }
 
@@ -482,18 +480,18 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	f.run(getKey(svc, t))
 
 	fm := f.lbc.nghttpx.(*fakeManager)
-	server := fm.ingressCfg.Server
+	ingConfig := fm.ingConfig
 
-	if got, want := server.TLS, true; got != want {
-		t.Errorf("server.TLS = %v, want %v", got, want)
+	if got, want := ingConfig.TLS, true; got != want {
+		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
 	}
 
 	prefix := nghttpx.TLSCredPrefix(tlsSecret)
-	if got, want := server.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(prefix); got != want {
-		t.Errorf("server.DefaultTLSCred.Key.Path = %v, want %v", got, want)
+	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(prefix); got != want {
+		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
-	if got, want := len(server.SubTLSCred), 0; got != want {
-		t.Errorf("len(server.SubTLSCred) = %v, want %v", got, want)
+	if got, want := len(ingConfig.SubTLSCred), 0; got != want {
+		t.Errorf("len(ingConfig.SubTLSCred) = %v, want %v", got, want)
 	}
 }
 
@@ -542,13 +540,13 @@ func TestSyncStringNamedPort(t *testing.T) {
 	f.run(getKey(svc, t))
 
 	fm := f.lbc.nghttpx.(*fakeManager)
-	ingressCfg := fm.ingressCfg
+	ingConfig := fm.ingConfig
 
-	if got, want := len(ingressCfg.Upstreams), 2; got != want {
-		t.Errorf("len(ingressCfg.Upstreams) = %v, want %v", got, want)
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	backend := ingressCfg.Upstreams[1].Backends[0]
+	backend := ingConfig.Upstreams[1].Backends[0]
 	if got, want := backend.Port, "8080"; got != want {
 		t.Errorf("backend.Port = %v, want %v", got, want)
 	}
@@ -577,13 +575,13 @@ func TestSyncNumericTargetPort(t *testing.T) {
 	f.run(getKey(svc, t))
 
 	fm := f.lbc.nghttpx.(*fakeManager)
-	ingressCfg := fm.ingressCfg
+	ingConfig := fm.ingConfig
 
-	if got, want := len(ingressCfg.Upstreams), 2; got != want {
-		t.Errorf("len(ingressCfg.Upstreams) = %v, want %v", got, want)
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	backend := ingressCfg.Upstreams[1].Backends[0]
+	backend := ingConfig.Upstreams[1].Backends[0]
 	if got, want := backend.Port, "8080"; got != want {
 		t.Errorf("backend.Port = %v, want %v", got, want)
 	}

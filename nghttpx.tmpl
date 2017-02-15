@@ -1,5 +1,3 @@
-{{ $cfg := .cfg }}
-
 accesslog-file=/dev/stdout
 
 include=/etc/nghttpx/nghttpx-backend.conf
@@ -9,16 +7,16 @@ frontend=*,80;no-tls
 # API endpoints
 frontend=127.0.0.1,3001;api;no-tls
 
-{{ if .server.TLS }}
+{{ if .cfg.TLS }}
 frontend=*,443
 
-{{ $defaultCred := .server.DefaultTLSCred }}
+{{ $defaultCred := .cfg.DefaultTLSCred }}
 # checksum is required to detect changes in the generated configuration and force a reload
 # checksum: {{ $defaultCred.Key.Checksum }} {{ $defaultCred.Cert.Checksum }}
 private-key-file={{ $defaultCred.Key.Path }}
 certificate-file={{ $defaultCred.Cert.Path }}
 
-{{ range $cred := .server.SubTLSCred }}
+{{ range $cred := .cfg.SubTLSCred }}
 # checksum: {{ $cred.Key.Checksum }} {{ $cred.Cert.Checksum }}
 subcert={{ $cred.Key.Path }}:{{ $cred.Cert.Path }}
 {{ end }}
@@ -32,8 +30,8 @@ frontend=*,443;no-tls
 frontend=127.0.0.1,8080;healthmon;no-tls
 
 # default configuration by controller
-workers={{ $cfg.Workers }}
+workers={{ .cfg.Workers }}
 
 # from ConfigMap
 
-{{ $cfg.ExtraConfig }}
+{{ .cfg.ExtraConfig }}

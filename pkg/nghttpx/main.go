@@ -26,8 +26,6 @@ package nghttpx
 import (
 	"net/http"
 	"os"
-	"runtime"
-	"strconv"
 	"sync"
 	"text/template"
 	"time"
@@ -39,15 +37,6 @@ var (
 	// Base directory that contains the mounted secrets with TLS certificates, keys and
 	tlsDirectory = "/etc/nghttpx-tls"
 )
-
-// nghttpxConfiguration is set of configuration we apply to nghttpx instance.
-type NghttpxConfiguration struct {
-	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-n
-	// Set the number of worker threads.
-	Workers string
-	// ExtraConfig is the extra configurations in a format that nghttpx accepts in --conf.
-	ExtraConfig string
-}
 
 // Manager ...
 type Manager struct {
@@ -69,16 +58,6 @@ type Manager struct {
 	backendTemplate *template.Template
 
 	reloadLock *sync.Mutex
-}
-
-// defaultConfiguration returns the default configuration contained
-// in the file default-conf.json
-func newDefaultNghttpxCfg() NghttpxConfiguration {
-	cfg := NghttpxConfiguration{
-		Workers: strconv.Itoa(runtime.NumCPU()),
-	}
-
-	return cfg
 }
 
 // NewManager ...

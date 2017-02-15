@@ -533,21 +533,19 @@ func (lbc *LoadBalancerController) sync(key string) error {
 	}
 
 	ings := lbc.ingLister.List()
-	upstreams, server, err := lbc.getUpstreamServers(ings)
+	ingConfig, err := lbc.getUpstreamServers(ings)
 	if err != nil {
 		return err
 	}
 
-	cfg, err := lbc.getConfigMap(lbc.ngxConfigMap)
+	cm, err := lbc.getConfigMap(lbc.ngxConfigMap)
 	if err != nil {
 		return err
 	}
 
-	ngxConfig := nghttpx.ReadConfig(cfg)
-	if reloaded, err := lbc.nghttpx.CheckAndReload(ngxConfig, nghttpx.IngressConfig{
-		Upstreams: upstreams,
-		Server:    server,
-	}); err != nil {
+	nghttpx.ReadConfig(ingConfig, cm)
+
+	if reloaded, err := lbc.nghttpx.CheckAndReload(ingConfig); err != nil {
 		return err
 	} else if !reloaded {
 		glog.V(4).Infof("No need to reload configuration.")
@@ -590,8 +588,8 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 }
 
 // in nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
-func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*nghttpx.Upstream, *nghttpx.Server, error) {
-	server := &nghttpx.Server{}
+func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) (*nghttpx.IngressConfig, error) {
+	ingConfig := nghttpx.NewIngressConfig()
 
 	var (
 		upstreams []*nghttpx.Upstream
@@ -601,11 +599,11 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 	if lbc.defaultTLSSecret != "" {
 		tlsCred, err := lbc.getTLSCredFromSecret(lbc.defaultTLSSecret)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
-		server.TLS = true
-		server.DefaultTLSCred = tlsCred
+		ingConfig.TLS = true
+		ingConfig.DefaultTLSCred = tlsCred
 	}
 
 	for _, ingIf := range data {
@@ -698,19 +696,19 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 	sort.Sort(nghttpx.TLSCredKeyLess(pems))
 	pems = nghttpx.RemoveDuplicatePems(pems)
 
-	if server.DefaultTLSCred != nil {
+	if ingConfig.DefaultTLSCred != nil {
 		// Remove default TLS key pair from pems.
 		for i, _ := range pems {
-			if server.DefaultTLSCred.Key.Path == pems[i].Key.Path {
+			if ingConfig.DefaultTLSCred.Key.Path == pems[i].Key.Path {
 				pems = append(pems[:i], pems[i+1:]...)
 				break
 			}
 		}
-		server.SubTLSCred = pems
+		ingConfig.SubTLSCred = pems
 	} else if len(pems) > 0 {
-		server.TLS = true
-		server.DefaultTLSCred = pems[0]
-		server.SubTLSCred = pems[1:]
+		ingConfig.TLS = true
+		ingConfig.DefaultTLSCred = pems[0]
+		ingConfig.SubTLSCred = pems[1:]
 	}
 
 	// find default backend.  If only it is not found, use default backend.  This is useful to override default backend with ingress.
@@ -747,7 +745,9 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) ([]*ng
 		value.Backends = uniqBackends
 	}
 
-	return upstreams, server, nil
+	ingConfig.Upstreams = upstreams
+
+	return ingConfig, nil
 }
 
 // getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.

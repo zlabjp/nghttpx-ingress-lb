@@ -72,15 +72,15 @@ func (ngx *Manager) Start(stopCh <-chan struct{}) {
 // with new configuration.  If its invocation succeeds, current
 // nghttpx is going to shutdown gracefully.  The invocation of new
 // process may fail due to invalid configurations.
-func (ngx *Manager) CheckAndReload(cfg NghttpxConfiguration, ingressCfg IngressConfig) (bool, error) {
+func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 	ngx.reloadLock.Lock()
 	defer ngx.reloadLock.Unlock()
 
-	if err := ngx.writeTLSKeyCert(ingressCfg.Server); err != nil {
+	if err := ngx.writeTLSKeyCert(ingressCfg); err != nil {
 		return false, err
 	}
 
-	changed, err := ngx.writeCfg(cfg, ingressCfg)
+	changed, err := ngx.writeCfg(ingressCfg)
 
 	if err != nil {
 		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %v", err)

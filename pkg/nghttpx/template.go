@@ -65,11 +65,10 @@ const (
 	backendConfigChanged
 )
 
-func (ngx *Manager) writeCfg(cfg NghttpxConfiguration, ingressCfg IngressConfig) (int, error) {
+func (ngx *Manager) writeCfg(ingConfig *IngressConfig) (int, error) {
 	conf := make(map[string]interface{})
-	conf["upstreams"] = ingressCfg.Upstreams
-	conf["server"] = ingressCfg.Server
-	conf["cfg"] = cfg
+	conf["upstreams"] = ingConfig.Upstreams
+	conf["cfg"] = ingConfig
 
 	if glog.V(3) {
 		b, err := json.MarshalIndent(conf, "", "  ")

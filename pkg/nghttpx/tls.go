@@ -65,14 +65,14 @@ func CreateTLSCred(name string, cert, key []byte) (*TLSCred, error) {
 }
 
 // writeTLSKeyCert writes TLS private keys and certificates to their files.
-func (ngx *Manager) writeTLSKeyCert(server *Server) error {
-	if server.DefaultTLSCred != nil {
-		if err := writeTLSKeyCert(server.DefaultTLSCred); err != nil {
+func (ngx *Manager) writeTLSKeyCert(ingConfig *IngressConfig) error {
+	if ingConfig.DefaultTLSCred != nil {
+		if err := writeTLSKeyCert(ingConfig.DefaultTLSCred); err != nil {
 			return err
 		}
 	}
 
-	for _, tlsCred := range server.SubTLSCred {
+	for _, tlsCred := range ingConfig.SubTLSCred {
 		if err := writeTLSKeyCert(tlsCred); err != nil {
 			return err
 		}

@@ -23,6 +23,11 @@ limitations under the License.
 
 package nghttpx
 
+import (
+	"runtime"
+	"strconv"
+)
+
 // Interface is the API to update underlying load balancer.
 type Interface interface {
 	// Start starts a nghttpx process, and wait.  If stopCh becomes readable, kill nghttpx process, and return.
@@ -30,13 +35,29 @@ type Interface interface {
 	// CheckAndReload checks whether the nghttpx configuration changed, and if so, make nghttpx reload its configuration.  If reloading
 	// is required, and it successfully issues reloading, returns true.  If there is no need to reloading, it returns false.  On error,
 	// it returns false, and non-nil error.
-	CheckAndReload(cfg NghttpxConfiguration, ingressCfg IngressConfig) (bool, error)
+	CheckAndReload(ingressCfg *IngressConfig) (bool, error)
 }
 
 // IngressConfig describes an nghttpx configuration
 type IngressConfig struct {
-	Upstreams []*Upstream
-	Server    *Server
+	Upstreams      []*Upstream
+	TLS            bool
+	DefaultTLSCred *TLSCred
+	SubTLSCred     []*TLSCred
+	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-n
+	// Set the number of worker threads.
+	Workers string
+	// ExtraConfig is the extra configurations in a format that nghttpx accepts in --conf.
+	ExtraConfig string
+	// TLSCertificate    string
+	// TLSCertificateKey string
+}
+
+// NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.
+func NewIngressConfig() *IngressConfig {
+	return &IngressConfig{
+		Workers: strconv.Itoa(runtime.NumCPU()),
+	}
 }
 
 // Upstream describes an nghttpx upstream
@@ -112,15 +133,6 @@ func (c TLSCredKeyLess) Len() int      { return len(c) }
 func (c TLSCredKeyLess) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
 func (c TLSCredKeyLess) Less(i, j int) bool {
 	return c[i].Key.Path < c[j].Key.Path
-}
-
-// Server describes an nghttpx server
-type Server struct {
-	TLS               bool
-	DefaultTLSCred    *TLSCred
-	SubTLSCred        []*TLSCred
-	TLSCertificate    string
-	TLSCertificateKey string
 }
 
 // NewDefaultServer return an UpstreamServer to be use as default server that returns 503.

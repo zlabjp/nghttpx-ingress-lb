@@ -44,10 +44,8 @@ const (
 )
 
 // ReadConfig obtains the configuration defined by the user merged with the defaults.
-func ReadConfig(config *api.ConfigMap) NghttpxConfiguration {
-	cfg := newDefaultNghttpxCfg()
-	cfg.ExtraConfig = config.Data[NghttpxExtraConfigKey]
-	return cfg
+func ReadConfig(ingConfig *IngressConfig, config *api.ConfigMap) {
+	ingConfig.ExtraConfig = config.Data[NghttpxExtraConfigKey]
 }
 
 // needsReload first checks that configuration is changed.  filename
