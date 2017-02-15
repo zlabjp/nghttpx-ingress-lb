@@ -41,9 +41,9 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	unversionedcore "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
 	"k8s.io/kubernetes/pkg/client/record"
-	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/util/intstr"
 	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/util/workqueue"
@@ -58,6 +58,9 @@ const (
 	podStoreSyncedPollPeriod = 1 * time.Second
 	// Minimum resync period for resources other than Ingress
 	minDepResyncPeriod = 12 * time.Hour
+	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
+	// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
+	syncKey = "ingress"
 )
 
 // LoadBalancerController watches the kubernetes api and adds/removes services
@@ -85,7 +88,7 @@ type LoadBalancerController struct {
 
 	recorder record.EventRecorder
 
-	syncQueue workqueue.RateLimitingInterface
+	syncQueue workqueue.Interface
 
 	// stopLock is used to enforce only a single call to Stop is active.
 	// Needed because we allow stopping through an http endpoint and
@@ -96,6 +99,8 @@ type LoadBalancerController struct {
 
 	// controllersInSyncHandler returns true if all resource controllers have synced.
 	controllersInSyncHandler func() bool
+
+	reloadRateLimiter flowcontrol.RateLimiter
 }
 
 type Config struct {
@@ -118,16 +123,17 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: clientset.Core().Events(config.WatchNamespace)})
 
 	lbc := LoadBalancerController{
-		clientset:        clientset,
-		stopCh:           make(chan struct{}),
-		podInfo:          runtimeInfo,
-		nghttpx:          manager,
-		ngxConfigMap:     config.NghttpxConfigMap,
-		defaultSvc:       config.DefaultBackendService,
-		defaultTLSSecret: config.DefaultTLSSecret,
-		watchNamespace:   config.WatchNamespace,
-		recorder:         eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
-		syncQueue:        workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		clientset:         clientset,
+		stopCh:            make(chan struct{}),
+		podInfo:           runtimeInfo,
+		nghttpx:           manager,
+		ngxConfigMap:      config.NghttpxConfigMap,
+		defaultSvc:        config.DefaultBackendService,
+		defaultTLSSecret:  config.DefaultTLSSecret,
+		watchNamespace:    config.WatchNamespace,
+		recorder:          eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
+		syncQueue:         workqueue.New(),
+		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.1, 1),
 	}
 
 	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
@@ -252,13 +258,13 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
 	ing := obj.(*extensions.Ingress)
 	glog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
-	lbc.enqueue(ing)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
 	curIng := cur.(*extensions.Ingress)
 	glog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
-	lbc.enqueue(curIng)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
@@ -276,7 +282,7 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 		}
 	}
 	glog.V(4).Infof("Ingress %v/%v deleted", ing.Namespace, ing.Name)
-	lbc.enqueue(ing)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) addEndpointsNotification(obj interface{}) {
@@ -285,7 +291,7 @@ func (lbc *LoadBalancerController) addEndpointsNotification(obj interface{}) {
 		return
 	}
 	glog.V(4).Infof("Endpoints %v/%v added", ep.Namespace, ep.Name)
-	lbc.enqueue(ep)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interface{}) {
@@ -298,7 +304,7 @@ func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interfac
 		return
 	}
 	glog.V(4).Infof("Endpoints %v/%v updated", curEp.Namespace, curEp.Name)
-	lbc.enqueue(curEp)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) {
@@ -319,7 +325,7 @@ func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) 
 		return
 	}
 	glog.V(4).Infof("Endpoints %v/%v deleted", ep.Namespace, ep.Name)
-	lbc.enqueue(ep)
+	lbc.enqueue(syncKey)
 }
 
 // endpointsReferenced returns true if we are interested in ep.
@@ -334,7 +340,7 @@ func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
 	}
 
 	glog.V(4).Infof("Secret %v/%v added", s.Namespace, s.Name)
-	lbc.enqueue(s)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}) {
@@ -348,7 +354,7 @@ func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}
 	}
 
 	glog.V(4).Infof("Secret %v/%v updated", curS.Namespace, curS.Name)
-	lbc.enqueue(curS)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
@@ -369,7 +375,7 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 		return
 	}
 	glog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
-	lbc.enqueue(s)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
@@ -379,7 +385,7 @@ func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 		return
 	}
 	glog.V(4).Infof("ConfigMap %v added", cKey)
-	lbc.enqueue(c)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interface{}) {
@@ -394,7 +400,7 @@ func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interfac
 		return
 	}
 	glog.V(4).Infof("ConfigMap %v updated", cKey)
-	lbc.enqueue(curC)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) {
@@ -416,7 +422,7 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 		return
 	}
 	glog.V(4).Infof("ConfigMap %v deleted", cKey)
-	lbc.enqueue(c)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
@@ -425,7 +431,7 @@ func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
 		return
 	}
 	glog.V(4).Infof("Pod %v/%v added", pod.Namespace, pod.Name)
-	lbc.enqueue(pod)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
@@ -438,7 +444,7 @@ func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
 		return
 	}
 	glog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
-	lbc.enqueue(curPod)
+	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
@@ -459,7 +465,7 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 		return
 	}
 	glog.V(4).Infof("Pod %v/%v deleted", pod.Namespace, pod.Name)
-	lbc.enqueue(pod)
+	lbc.enqueue(syncKey)
 }
 
 // podReferenced returns true if we are interested in pod.
@@ -467,13 +473,7 @@ func (lbc *LoadBalancerController) podReferenced(pod *api.Pod) bool {
 	return lbc.watchNamespace == api.NamespaceAll || lbc.watchNamespace == pod.Namespace || fmt.Sprintf("%v/%v", pod.Namespace, pod.Name) == lbc.defaultSvc
 }
 
-func (lbc *LoadBalancerController) enqueue(obj runtime.Object) {
-	key, err := controller.KeyFunc(obj)
-	if err != nil {
-		glog.Errorf("Couldn't get key for object %+v: %v", obj, err)
-		return
-	}
-
+func (lbc *LoadBalancerController) enqueue(key string) {
 	lbc.syncQueue.Add(key)
 }
 
@@ -519,6 +519,8 @@ func (lbc *LoadBalancerController) getConfigMap(cmKey string) (*api.ConfigMap, e
 }
 
 func (lbc *LoadBalancerController) sync(key string) error {
+	lbc.reloadRateLimiter.Accept()
+
 	retry := false
 
 	defer func() { lbc.retryOrForget(key, retry) }()
@@ -963,10 +965,7 @@ func (lbc *LoadBalancerController) Run() {
 }
 
 func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) {
-	if !requeue {
-		lbc.syncQueue.Forget(key)
-		return
+	if requeue {
+		lbc.syncQueue.Add(key)
 	}
-
-	lbc.syncQueue.AddRateLimited(key)
 }
