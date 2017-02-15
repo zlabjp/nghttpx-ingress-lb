@@ -65,7 +65,8 @@ const (
 	backendConfigChanged
 )
 
-func (ngx *Manager) writeCfg(ingConfig *IngressConfig) (int, error) {
+// generateCfg generates nghttpx's main and backend configurations.
+func (ngx *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error) {
 	conf := make(map[string]interface{})
 	conf["upstreams"] = ingConfig.Upstreams
 	conf["cfg"] = ingConfig
@@ -81,26 +82,42 @@ func (ngx *Manager) writeCfg(ingConfig *IngressConfig) (int, error) {
 	mainConfigBuffer := new(bytes.Buffer)
 	if err := ngx.template.Execute(mainConfigBuffer, conf); err != nil {
 		glog.Infof("nghttpx error while executing main configuration template: %v", err)
-		return configNotChanged, err
+		return nil, nil, err
 	}
 
 	backendConfigBuffer := new(bytes.Buffer)
 	if err := ngx.backendTemplate.Execute(backendConfigBuffer, conf); err != nil {
 		glog.Infof("nghttpx error while executing backend configuration template: %v", err)
-		return configNotChanged, err
+		return nil, nil, err
 	}
 
+	return mainConfigBuffer.Bytes(), backendConfigBuffer.Bytes(), nil
+}
+
+func (ngx *Manager) checkAndWriteCfg(mainConfig, backendConfig []byte) (int, error) {
 	// If main configuration has changed, we need to reload nghttpx
-	mainChanged, err := needsReload(ngx.ConfigFile, mainConfigBuffer)
+	mainChanged, err := needsReload(ngx.ConfigFile, mainConfig)
 	if err != nil {
 		return configNotChanged, err
 	}
 
 	// If backend configuration has changed, we need to issue
 	// backend replace API to nghttpx
-	backendChanged, err := needsReload(ngx.BackendConfigFile, backendConfigBuffer)
+	backendChanged, err := needsReload(ngx.BackendConfigFile, backendConfig)
 	if err != nil {
 		return configNotChanged, err
+	}
+
+	if mainChanged {
+		if err := writeFile(ngx.ConfigFile, mainConfig); err != nil {
+			return configNotChanged, err
+		}
+	}
+
+	if backendChanged {
+		if err := writeFile(ngx.BackendConfigFile, backendConfig); err != nil {
+			return configNotChanged, err
+		}
 	}
 
 	if mainChanged {

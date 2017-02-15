@@ -76,14 +76,22 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 	ngx.reloadLock.Lock()
 	defer ngx.reloadLock.Unlock()
 
-	if err := ngx.writeTLSKeyCert(ingressCfg); err != nil {
+	mainConfig, backendConfig, err := ngx.generateCfg(ingressCfg)
+	if err != nil {
 		return false, err
 	}
 
-	changed, err := ngx.writeCfg(ingressCfg)
-
+	changed, err := ngx.checkAndWriteCfg(mainConfig, backendConfig)
 	if err != nil {
 		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %v", err)
+	}
+
+	if changed == configNotChanged {
+		return false, nil
+	}
+
+	if err := ngx.writeTLSKeyCert(ingressCfg); err != nil {
+		return false, err
 	}
 
 	switch changed {

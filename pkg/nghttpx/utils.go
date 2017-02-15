@@ -52,48 +52,29 @@ func ReadConfig(ingConfig *IngressConfig, config *api.ConfigMap) {
 // configuration.  If they differ, we write data into filename, and
 // return true.  Otherwise, just return false without altering
 // existing file.
-func needsReload(filename string, data *bytes.Buffer) (bool, error) {
+func needsReload(filename string, newCfg []byte) (bool, error) {
 	in, err := os.Open(filename)
 	if err != nil {
 		return false, err
 	}
 
-	src, err := ioutil.ReadAll(in)
+	oldCfg, err := ioutil.ReadAll(in)
 	in.Close()
 	if err != nil {
 		return false, err
 	}
 
-	res := data.Bytes()
-	if bytes.Equal(src, res) {
+	if bytes.Equal(oldCfg, newCfg) {
 		return false, nil
 	}
 
-	// First write into temporary file in the same
-	// directory of filename.  Then replace filename with
-	// temporary file.  In Linux, this is atomic
-	// operation.
-	dir := filepath.Dir(filename)
-	tempFile, err := ioutil.TempFile(dir, "nghttpx")
-	if err != nil {
-		return false, err
-	}
-	tempFile.Close()
-	if err := ioutil.WriteFile(tempFile.Name(), res, 0644); err != nil {
-		os.Remove(tempFile.Name())
-		return false, err
-	}
-	if err := os.Rename(tempFile.Name(), filename); err != nil {
-		return false, err
-	}
 	if glog.V(2) {
-		dData, err := diff(src, res)
+		dData, err := diff(oldCfg, newCfg)
 		if err != nil {
 			glog.Errorf("error computing diff: %s", err)
 			return true, nil
 		}
-		glog.Infof("nghttpx configuration diff a/%s b/%s\n", filename, filename)
-		glog.Infof("%v", string(dData))
+		glog.Infof("nghttpx configuration diff a/%s b/%s\n%v", filename, filename, string(dData))
 	}
 
 	return true, nil
