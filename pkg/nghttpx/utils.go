@@ -27,7 +27,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -164,15 +163,19 @@ func DefaultPortBackendConfig() PortBackendConfig {
 }
 
 func writeFile(path string, content []byte) error {
-	f, err := os.Create(path)
+	dir := filepath.Dir(path)
+	tempFile, err := ioutil.TempFile(dir, "nghttpx")
 	if err != nil {
-		return fmt.Errorf("couldn't create file %v: %v", path, err)
+		return err
 	}
+	tempFile.Close()
 
-	defer f.Close()
-
-	if _, err := f.Write(content); err != nil {
-		return fmt.Errorf("couldn't write to file %v: %v", path, err)
+	if err := ioutil.WriteFile(tempFile.Name(), content, 0644); err != nil {
+		os.Remove(tempFile.Name())
+		return err
+	}
+	if err := os.Rename(tempFile.Name(), path); err != nil {
+		return err
 	}
 
 	return nil
