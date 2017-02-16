@@ -40,25 +40,25 @@ import (
 	"k8s.io/kubernetes/pkg/util/wait"
 )
 
-// StoreToIngressLister makes a Store that lists Ingress.
-type StoreToIngressLister struct {
+// ingressLister makes a Store that lists Ingresses.
+type ingressLister struct {
 	// indexer is added here so that object can be added to indexer in test.
 	indexer cache.Indexer
 	extensionslisters.IngressLister
 }
 
-// StoreToSecrLister makes a Store that lists Secrets.
-type StoreToSecretLister struct {
+// secrLister makes a Store that lists Secrets.
+type secretLister struct {
 	cache.Store
 }
 
-// StoreToMapLister makes a Store that lists ConfigMaps.
-type StoreToConfigMapLister struct {
+// configMapLister makes a Store that lists ConfigMaps.
+type configMapLister struct {
 	cache.Store
 }
 
-// StoreToServiceLister makes a Store that lists Services.
-type StoreToServiceLister struct {
+// serviceLister makes a Store that lists Services.
+type serviceLister struct {
 	cache.Store
 }
 

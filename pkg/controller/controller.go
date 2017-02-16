@@ -74,11 +74,11 @@ type LoadBalancerController struct {
 	secretController *cache.Controller
 	cmController     *cache.Controller
 	podController    *cache.Controller
-	ingLister        StoreToIngressLister
-	svcLister        StoreToServiceLister
+	ingLister        ingressLister
+	svcLister        serviceLister
 	epLister         cache.StoreToEndpointsLister
-	secretLister     StoreToSecretLister
-	cmLister         StoreToConfigMapLister
+	secretLister     secretLister
+	cmLister         configMapLister
 	podLister        cache.StoreToPodLister
 	nghttpx          nghttpx.Interface
 	podInfo          *PodInfo
