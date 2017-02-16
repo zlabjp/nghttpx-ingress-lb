@@ -74,6 +74,7 @@ const (
 	defaultIngNamespace       = api.NamespaceAll
 	defaultConfigMapName      = "ing-config"
 	defaultConfigMapNamespace = "kube-system"
+	defaultIngressClass       = "nghttpx"
 
 	// openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/tls.key -out /tmp/tls.crt -subj "/CN=echoheaders/O=echoheaders"
 	tlsCrt = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURhakNDQWxLZ0F3SUJBZ0lKQUxHUXR5VVBKTFhYTUEwR0NTcUdTSWIzRFFFQkJRVUFNQ3d4RkRBU0JnTlYKQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3RWdZRFZRUUtFd3RsWTJodmFHVmhaR1Z5Y3pBZUZ3MHhOakF6TXpFeQpNekU1TkRoYUZ3MHhOekF6TXpFeU16RTVORGhhTUN3eEZEQVNCZ05WQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3CkVnWURWUVFLRXd0bFkyaHZhR1ZoWkdWeWN6Q0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0MKZ2dFQkFONzVmS0N5RWwxanFpMjUxTlNabDYzeGQweG5HMHZTVjdYL0xxTHJveVNraW5nbnI0NDZZWlE4UEJWOAo5TUZzdW5RRGt1QVoyZzA3NHM1YWhLSm9BRGJOMzhld053RXNsVDJkRzhRTUw0TktrTUNxL1hWbzRQMDFlWG1PCmkxR2txZFA1ZUExUHlPZCtHM3gzZmxPN2xOdmtJdHVHYXFyc0tvMEhtMHhqTDVtRUpwWUlOa0tGSVhsWWVLZS8KeHRDR25CU2tLVHFMTG0yeExKSGFFcnJpaDZRdkx4NXF5U2gzZTU2QVpEcTlkTERvcWdmVHV3Z2IzekhQekc2NwppZ0E0dkYrc2FRNHpZUE1NMHQyU1NiVkx1M2pScWNvL3lxZysrOVJBTTV4bjRubnorL0hUWFhHKzZ0RDBaeGI1CmVVRDNQakVhTnlXaUV2dTN6UFJmdysyNURMY0NBd0VBQWFPQmpqQ0JpekFkQmdOVkhRNEVGZ1FVcktMZFhHeUUKNUlEOGRvd2lZNkdzK3dNMHFKc3dYQVlEVlIwakJGVXdVNEFVcktMZFhHeUU1SUQ4ZG93aVk2R3Mrd00wcUp1aApNS1F1TUN3eEZEQVNCZ05WQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3RWdZRFZRUUtFd3RsWTJodmFHVmhaR1Z5CmM0SUpBTEdRdHlVUEpMWFhNQXdHQTFVZEV3UUZNQU1CQWY4d0RRWUpLb1pJaHZjTkFRRUZCUUFEZ2dFQkFNZVMKMHFia3VZa3Z1enlSWmtBeE1PdUFaSDJCK0Evb3N4ODhFRHB1ckV0ZWN5RXVxdnRvMmpCSVdCZ2RkR3VBYU5jVQorUUZDRm9NakJOUDVWVUxIWVhTQ3VaczN2Y25WRDU4N3NHNlBaLzhzbXJuYUhTUjg1ZVpZVS80bmFyNUErdWErClIvMHJrSkZnOTlQSmNJd3JmcWlYOHdRcWdJVVlLNE9nWEJZcUJRL0VZS2YvdXl6UFN3UVZYRnVJTTZTeDBXcTYKTUNML3d2RlhLS0FaWDBqb3J4cHRjcldkUXNCcmYzWVRnYmx4TE1sN20zL2VuR1drcEhDUHdYeVRCOC9rRkw3SApLL2ZHTU1NWGswUkVSbGFPM1hTSUhrZUQ2SXJiRnRNV3R1RlJwZms2ZFA2TXlMOHRmTmZ6a3VvUHVEWUFaWllWCnR1NnZ0c0FRS0xWb0pGaGV0b1k9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
@@ -96,6 +97,7 @@ func (f *fixture) prepare() {
 		DefaultBackendService: fmt.Sprintf("%v/%v", defaultBackendNamespace, defaultBackendName),
 		WatchNamespace:        defaultIngNamespace,
 		NghttpxConfigMap:      fmt.Sprintf("%v/%v", defaultConfigMapNamespace, defaultConfigMapName),
+		IngressClass:          defaultIngressClass,
 	}
 	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo)
 	f.lbc.controllersInSyncHandler = func() bool { return true }
@@ -307,6 +309,9 @@ func newIngress(namespace, name, svcName, svcPort string) *extensions.Ingress {
 		ObjectMeta: api.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Annotations: map[string]string{
+				ingressClassKey: defaultIngressClass,
+			},
 		},
 		Spec: extensions.IngressSpec{
 			Rules: []extensions.IngressRule{
@@ -584,5 +589,40 @@ func TestSyncNumericTargetPort(t *testing.T) {
 	backend := ingConfig.Upstreams[1].Backends[0]
 	if got, want := backend.Port, "8080"; got != want {
 		t.Errorf("backend.Port = %v, want %v", got, want)
+	}
+}
+
+// TestSyncIngressClass validates that Ingress resource bearing Ingress class "foo" is not processed.
+func TestSyncIngressClass(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps := newDefaultBackend()
+
+	bs1, be1 := newBackend(api.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
+
+	bs2, be2 := newBackend(api.NamespaceDefault, "beta", []string{"192.168.10.2"})
+	ing2 := newIngress(bs2.Namespace, "beta-ing", bs2.Name, bs2.Spec.Ports[0].TargetPort.String())
+	ing2.Annotations[ingressClassKey] = "foo"
+
+	f.svcStore = append(f.svcStore, svc, bs1, bs2)
+	f.epStore = append(f.epStore, eps, be1, be2)
+	f.ingStore = append(f.ingStore, ing1, ing2)
+
+	f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bs2, be2, ing2)
+
+	f.prepare()
+	f.run(getKey(svc, t))
+
+	fm := f.lbc.nghttpx.(*fakeManager)
+	ingConfig := fm.ingConfig
+
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	}
+
+	backend := ingConfig.Upstreams[0].Backends[0]
+	if got, want := backend.Address, "192.168.10.1"; got != want {
+		t.Errorf("backend.Address = %v, want %v", got, want)
 	}
 }
