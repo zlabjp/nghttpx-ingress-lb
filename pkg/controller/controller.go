@@ -685,12 +685,14 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 		backendConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getBackendConfig()
 
-		for _, rule := range ing.Spec.Rules {
-			if rule.IngressRuleValue.HTTP == nil {
+		for i, _ := range ing.Spec.Rules {
+			rule := &ing.Spec.Rules[i]
+			if rule.HTTP == nil {
 				continue
 			}
 
-			for _, path := range rule.HTTP.Paths {
+			for i, _ := range rule.HTTP.Paths {
+				path := &rule.HTTP.Paths[i]
 				var normalizedPath string
 				if path.Path == "" {
 					normalizedPath = "/"
@@ -728,7 +730,8 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 				svcBackendConfig := backendConfig[path.Backend.ServiceName]
 
-				for _, servicePort := range svc.Spec.Ports {
+				for i, _ := range svc.Spec.Ports {
+					servicePort := &svc.Spec.Ports[i]
 					// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use
 					// servicePort.Port.  servicePort.TargetPort could be a string.  This is really messy.
 					if strconv.Itoa(int(servicePort.Port)) == bp || servicePort.TargetPort.String() == bp || servicePort.Name == bp {
@@ -739,7 +742,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 							portBackendConfig = nghttpx.DefaultPortBackendConfig()
 						}
 
-						eps := lbc.getEndpoints(svc, &servicePort, api.ProtocolTCP, &portBackendConfig)
+						eps := lbc.getEndpoints(svc, servicePort, api.ProtocolTCP, &portBackendConfig)
 						if len(eps) == 0 {
 							glog.Warningf("service %v does no have any active endpoints", svcKey)
 							break
@@ -837,7 +840,8 @@ func (lbc *LoadBalancerController) getTLSCredFromSecret(secretKey string) (*nght
 func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *extensions.Ingress) ([]*nghttpx.TLSCred, error) {
 	var pems []*nghttpx.TLSCred
 
-	for _, tls := range ing.Spec.TLS {
+	for i, _ := range ing.Spec.TLS {
+		tls := &ing.Spec.TLS[i]
 		secretKey := fmt.Sprintf("%s/%s", ing.Namespace, tls.SecretName)
 		obj, exists, err := lbc.secretLister.GetByKey(secretKey)
 		if err != nil {
@@ -895,7 +899,8 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 		return false
 	}
 	for _, ing := range ings {
-		for _, tls := range ing.Spec.TLS {
+		for i, _ := range ing.Spec.TLS {
+			tls := &ing.Spec.TLS[i]
 			if tls.SecretName == name {
 				return true
 			}
@@ -917,8 +922,10 @@ func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort *api
 
 	upsServers := []nghttpx.UpstreamServer{}
 
-	for _, ss := range ep.Subsets {
-		for _, epPort := range ss.Ports {
+	for i, _ := range ep.Subsets {
+		ss := &ep.Subsets[i]
+		for i, _ := range ss.Ports {
+			epPort := &ss.Ports[i]
 			if epPort.Protocol != proto {
 				continue
 			}
@@ -955,7 +962,8 @@ func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort *api
 				continue
 			}
 
-			for _, epAddress := range ss.Addresses {
+			for i, _ := range ss.Addresses {
+				epAddress := &ss.Addresses[i]
 				ups := nghttpx.UpstreamServer{
 					Address:  epAddress.IP,
 					Port:     strconv.Itoa(int(targetPort)),

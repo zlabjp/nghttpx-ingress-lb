@@ -90,7 +90,8 @@ func GetPodDetails(clientset internalclientset.Interface, allowInternalIP bool) 
 	}
 
 	var externalIP string
-	for _, address := range node.Status.Addresses {
+	for i, _ := range node.Status.Addresses {
+		address := &node.Status.Addresses[i]
 		if address.Type == api.NodeExternalIP {
 			if address.Address != "" {
 				externalIP = address.Address
