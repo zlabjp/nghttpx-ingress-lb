@@ -47,11 +47,8 @@ var (
 )
 
 func (ngx *Manager) loadTemplate() {
-	tmpl, _ := template.New("nghttpx.tmpl").Funcs(funcMap).ParseFiles("./nghttpx.tmpl")
-	ngx.template = tmpl
-
-	backendTmpl, _ := template.New("nghttpx-backend.tmpl").Funcs(funcMap).ParseFiles("./nghttpx-backend.tmpl")
-	ngx.backendTemplate = backendTmpl
+	ngx.template = template.Must(template.New("nghttpx.tmpl").Funcs(funcMap).ParseFiles("./nghttpx.tmpl"))
+	ngx.backendTemplate = template.Must(template.New("nghttpx-backend.tmpl").Funcs(funcMap).ParseFiles("./nghttpx-backend.tmpl"))
 }
 
 const (
