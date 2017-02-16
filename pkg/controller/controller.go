@@ -317,8 +317,9 @@ func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interfac
 		return
 	}
 
+	oldEp := old.(*api.Endpoints)
 	curEp := cur.(*api.Endpoints)
-	if !lbc.endpointsReferenced(curEp) {
+	if !lbc.endpointsReferenced(oldEp) && !lbc.endpointsReferenced(curEp) {
 		return
 	}
 	glog.V(4).Infof("Endpoints %v/%v updated", curEp.Namespace, curEp.Name)
@@ -393,8 +394,9 @@ func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}
 		return
 	}
 
+	oldS := old.(*api.Secret)
 	curS := cur.(*api.Secret)
-	if !lbc.secretReferenced(curS.Namespace, curS.Name) {
+	if !lbc.secretReferenced(oldS.Namespace, oldS.Name) && !lbc.secretReferenced(curS.Namespace, curS.Name) {
 		return
 	}
 
@@ -484,8 +486,9 @@ func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
 		return
 	}
 
+	oldPod := old.(*api.Pod)
 	curPod := cur.(*api.Pod)
-	if !lbc.podReferenced(curPod) {
+	if !lbc.podReferenced(oldPod) && !lbc.podReferenced(curPod) {
 		return
 	}
 	glog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
