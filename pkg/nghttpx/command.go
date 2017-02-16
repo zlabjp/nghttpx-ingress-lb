@@ -24,12 +24,14 @@ limitations under the License.
 package nghttpx
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"github.com/golang/glog"
 )
@@ -90,12 +92,24 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		return false, nil
 	}
 
-	if err := ngx.writeTLSKeyCert(ingressCfg); err != nil {
-		return false, err
+	if glog.V(3) {
+		conf := make(map[string]interface{})
+		conf["upstreams"] = ingressCfg.Upstreams
+		conf["cfg"] = ingressCfg
+
+		b, err := json.MarshalIndent(conf, "", "  ")
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+		glog.Infof("nghttpx configuration: %v", string(b))
 	}
 
 	switch changed {
 	case mainConfigChanged:
+		if err := ngx.writeTLSKeyCert(ingressCfg); err != nil {
+			return false, err
+		}
+
 		cmd := "killall"
 		args := []string{"-HUP", "nghttpx"}
 		glog.Info("change in configuration detected. Reloading...")
@@ -103,15 +117,18 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("failed to execute %v %v: %v", cmd, args, string(out))
 		}
-		return true, nil
+
+		// Wait for few seconds to give nghttpx enough time to reload configuration.  If this is too short, we may overwrite
+		// configuration files while nghttpx is still reloading previous configuration.  In the near future, we will add an feature
+		// to nghttpx so that controller can query the nghttpx process whether reloading has finished.
+		time.Sleep(5 * time.Second)
 	case backendConfigChanged:
 		if err := ngx.issueBackendReplaceRequest(); err != nil {
 			return false, fmt.Errorf("failed to issue backend replace request: %v", err)
 		}
-		return true, nil
-	default:
-		return false, nil
 	}
+
+	return true, nil
 }
 
 const (

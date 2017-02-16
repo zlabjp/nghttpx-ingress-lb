@@ -25,8 +25,6 @@ package nghttpx
 
 import (
 	"bytes"
-	"encoding/json"
-	"fmt"
 	"regexp"
 	"text/template"
 
@@ -70,14 +68,6 @@ func (ngx *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error
 	conf := make(map[string]interface{})
 	conf["upstreams"] = ingConfig.Upstreams
 	conf["cfg"] = ingConfig
-
-	if glog.V(3) {
-		b, err := json.MarshalIndent(conf, "", "  ")
-		if err != nil {
-			fmt.Println("error:", err)
-		}
-		glog.Infof("nghttpx configuration: %v", string(b))
-	}
 
 	mainConfigBuffer := new(bytes.Buffer)
 	if err := ngx.template.Execute(mainConfigBuffer, conf); err != nil {
