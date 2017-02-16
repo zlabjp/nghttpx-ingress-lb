@@ -259,8 +259,8 @@ func newBackend(namespace, name string, addrs []string) (*api.Service, *api.Endp
 		Spec: api.ServiceSpec{
 			Ports: []api.ServicePort{
 				{
-					Port:       8080,
-					TargetPort: intstr.FromInt(8080),
+					Port:       80,
+					TargetPort: intstr.FromInt(80),
 					Protocol:   api.ProtocolTCP,
 				},
 			},
@@ -279,7 +279,7 @@ func newBackend(namespace, name string, addrs []string) (*api.Service, *api.Endp
 				Ports: []api.EndpointPort{
 					{
 						Protocol: api.ProtocolTCP,
-						Port:     8080,
+						Port:     80,
 					},
 				},
 			},
@@ -525,7 +525,7 @@ func TestSyncStringNamedPort(t *testing.T) {
 					Ports: []api.ContainerPort{
 						{
 							Name:          "my-port",
-							ContainerPort: 8080,
+							ContainerPort: 80,
 							Protocol:      api.ProtocolTCP,
 						},
 					},
@@ -551,8 +551,8 @@ func TestSyncStringNamedPort(t *testing.T) {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	backend := ingConfig.Upstreams[1].Backends[0]
-	if got, want := backend.Port, "8080"; got != want {
+	backend := ingConfig.Upstreams[0].Backends[0]
+	if got, want := backend.Port, "80"; got != want {
 		t.Errorf("backend.Port = %v, want %v", got, want)
 	}
 }
@@ -565,7 +565,7 @@ func TestSyncNumericTargetPort(t *testing.T) {
 
 	bs1, be1 := newBackend(api.NamespaceDefault, "alpha", []string{"192.168.10.1"})
 	bs1.Spec.Ports[0] = api.ServicePort{
-		TargetPort: intstr.FromString("8080"),
+		TargetPort: intstr.FromString("80"),
 		Protocol:   api.ProtocolTCP,
 	}
 	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
@@ -586,8 +586,8 @@ func TestSyncNumericTargetPort(t *testing.T) {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	backend := ingConfig.Upstreams[1].Backends[0]
-	if got, want := backend.Port, "8080"; got != want {
+	backend := ingConfig.Upstreams[0].Backends[0]
+	if got, want := backend.Port, "80"; got != want {
 		t.Errorf("backend.Port = %v, want %v", got, want)
 	}
 }
