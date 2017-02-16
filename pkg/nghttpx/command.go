@@ -136,7 +136,7 @@ const (
 )
 
 func (ngx *Manager) issueBackendReplaceRequest() error {
-	glog.Infof("Issuing API request to %v", backendReplaceURI)
+	glog.Infof("Issuing API request %v", backendReplaceURI)
 
 	in, err := os.Open(ngx.BackendConfigFile)
 	if err != nil {
@@ -145,9 +145,9 @@ func (ngx *Manager) issueBackendReplaceRequest() error {
 
 	defer in.Close()
 
-	req, err := http.NewRequest("PUT", backendReplaceURI, in)
+	req, err := http.NewRequest(http.MethodPost, backendReplaceURI, in)
 	if err != nil {
-		return fmt.Errorf("Could not create API request %v: %v", backendReplaceURI, err)
+		return fmt.Errorf("Could not create API request: %v", err)
 	}
 
 	req.Header.Add("Content-Type", "text/plain")
@@ -155,25 +155,25 @@ func (ngx *Manager) issueBackendReplaceRequest() error {
 	resp, err := ngx.httpClient.Do(req)
 
 	if err != nil {
-		return fmt.Errorf("Could not issue PUT %v: %v", backendReplaceURI, err)
+		return fmt.Errorf("Could not issue API request: %v", err)
 	}
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("%v returned unsuccessful status code %v", backendReplaceURI, resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Received returned unsuccessful status code %v", resp.StatusCode)
 	}
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Error while reading response body from %v: %v", backendReplaceURI, err)
+		return fmt.Errorf("Error while reading API response body: %v", err)
 	}
 
 	if glog.V(3) {
-		glog.Infof("API request %v returned response body: %v", backendReplaceURI, string(respBody))
+		glog.Infof("API request returned response body: %v", string(respBody))
 	}
 
-	glog.Infof("API request %v has completed successfully", backendReplaceURI)
+	glog.Info("API request has completed successfully")
 
 	return nil
 }
