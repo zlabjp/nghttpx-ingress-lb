@@ -20,19 +20,6 @@ nghttpx ingress controller is created based on
 - default backend [404-server](https://github.com/kubernetes/contrib/tree/master/404-server)
 
 
-## Dry running the Ingress controller
-
-TODO This does not work
-
-Before deploying the controller to production you might want to run it outside the cluster and observe it.
-
-```console
-$ make controller
-$ mkdir /etc/nghttpx-tls
-$ ./nghttpx-ingress-controller --running-in-cluster=false --default-backend-service=kube-system/default-http-backend
-```
-
-
 ## Deploy the Ingress controller
 
 Before the deploy of the Ingress controller we need a default backend [404-server](https://github.com/kubernetes/contrib/tree/master/404-server)
