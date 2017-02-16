@@ -26,7 +26,6 @@ package nghttpx
 import (
 	"net/http"
 	"os"
-	"sync"
 	"text/template"
 	"time"
 
@@ -56,8 +55,6 @@ type Manager struct {
 	// backend configuration without reloading nghttpx if main
 	// configuration has not changed.
 	backendTemplate *template.Template
-
-	reloadLock *sync.Mutex
 }
 
 // NewManager ...
@@ -65,7 +62,6 @@ func NewManager() *Manager {
 	ngx := &Manager{
 		ConfigFile:        "/etc/nghttpx/nghttpx.conf",
 		BackendConfigFile: "/etc/nghttpx/nghttpx-backend.conf",
-		reloadLock:        &sync.Mutex{},
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
 		},

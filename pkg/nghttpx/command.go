@@ -75,9 +75,6 @@ func (ngx *Manager) Start(stopCh <-chan struct{}) {
 // nghttpx is going to shutdown gracefully.  The invocation of new
 // process may fail due to invalid configurations.
 func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
-	ngx.reloadLock.Lock()
-	defer ngx.reloadLock.Unlock()
-
 	mainConfig, backendConfig, err := ngx.generateCfg(ingressCfg)
 	if err != nil {
 		return false, err
