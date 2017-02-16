@@ -54,7 +54,6 @@ import (
 )
 
 const (
-	backendConfigAnnotation  = "ingress.zlab.co.jp/backend-config"
 	podStoreSyncedPollPeriod = 1 * time.Second
 	// Minimum resync period for resources other than Ingress
 	minDepResyncPeriod = 12 * time.Hour
