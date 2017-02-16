@@ -88,6 +88,9 @@ var (
 
 	defaultTLSSecret = flags.String("default-tls-secret", "",
 		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.`)
+
+	ingressClass = flags.String("ingress-class", "nghttpx",
+		`Ingress class which this controller is responsible for.`)
 )
 
 func main() {
@@ -159,6 +162,7 @@ func main() {
 		WatchNamespace:        *watchNamespace,
 		NghttpxConfigMap:      *ngxConfigMap,
 		DefaultTLSSecret:      *defaultTLSSecret,
+		IngressClass:          *ingressClass,
 	}
 
 	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), &controllerConfig, runtimePodInfo)

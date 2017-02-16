@@ -84,6 +84,7 @@ type LoadBalancerController struct {
 	ngxConfigMap     string
 	defaultTLSSecret string
 	watchNamespace   string
+	ingressClass     string
 
 	recorder record.EventRecorder
 
@@ -113,6 +114,8 @@ type Config struct {
 	NghttpxConfigMap string
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret string
+	// IngressClass is the Ingress class this controller is responsible for.
+	IngressClass string
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -130,6 +133,7 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		defaultSvc:        config.DefaultBackendService,
 		defaultTLSSecret:  config.DefaultTLSSecret,
 		watchNamespace:    config.WatchNamespace,
+		ingressClass:      config.IngressClass,
 		recorder:          eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:         workqueue.New(),
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
@@ -261,12 +265,19 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 
 func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
 	ing := obj.(*extensions.Ingress)
+	if !lbc.validateIngressClass(ing) {
+		return
+	}
 	glog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
 	lbc.enqueue(syncKey)
 }
 
 func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
+	oldIng := old.(*extensions.Ingress)
 	curIng := cur.(*extensions.Ingress)
+	if !lbc.validateIngressClass(oldIng) && !lbc.validateIngressClass(curIng) {
+		return
+	}
 	glog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
 	lbc.enqueue(syncKey)
 }
@@ -284,6 +295,9 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 			glog.Errorf("Tombstone contained object that is not an Ingress %+v", obj)
 			return
 		}
+	}
+	if !lbc.validateIngressClass(ing) {
+		return
 	}
 	glog.V(4).Infof("Ingress %v/%v deleted", ing.Namespace, ing.Name)
 	lbc.enqueue(syncKey)
@@ -344,6 +358,9 @@ func (lbc *LoadBalancerController) endpointsReferenced(ep *api.Endpoints) bool {
 		return false
 	}
 	for _, ing := range ings {
+		if !lbc.validateIngressClass(ing) {
+			continue
+		}
 		for i, _ := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
 			if rule.HTTP == nil {
@@ -512,6 +529,9 @@ func (lbc *LoadBalancerController) podReferenced(pod *api.Pod) bool {
 		return false
 	}
 	for _, ing := range ings {
+		if !lbc.validateIngressClass(ing) {
+			continue
+		}
 		for i, _ := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
 			if rule.HTTP == nil {
@@ -674,6 +694,9 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 	}
 
 	for _, ing := range ings {
+		if !lbc.validateIngressClass(ing) {
+			continue
+		}
 		if ingPems, err := lbc.getTLSCredFromIngress(ing); err != nil {
 			glog.Warningf("Ingress %v/%v is disabled because its TLS Secret cannot be processed: %v", ing.Namespace, ing.Name, err)
 			continue
@@ -897,6 +920,9 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 		return false
 	}
 	for _, ing := range ings {
+		if !lbc.validateIngressClass(ing) {
+			continue
+		}
 		for i, _ := range ing.Spec.TLS {
 			tls := &ing.Spec.TLS[i]
 			if tls.SecretName == name {
@@ -1041,5 +1067,16 @@ func (lbc *LoadBalancerController) Run() {
 func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) {
 	if requeue {
 		lbc.syncQueue.Add(key)
+	}
+}
+
+// validateIngressClass checks whether this controller should process ing or not.  If ing has "kubernetes.io/ingress.class" annotation, its
+// value should be empty or "nghttpx".
+func (lbc *LoadBalancerController) validateIngressClass(ing *extensions.Ingress) bool {
+	switch ingressAnnotation(ing.ObjectMeta.Annotations).getIngressClass() {
+	case "", lbc.ingressClass:
+		return true
+	default:
+		return false
 	}
 }

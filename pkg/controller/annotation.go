@@ -11,6 +11,8 @@ import (
 const (
 	// backendConfigKey is a key to annotation for extra backend configuration.
 	backendConfigKey = "ingress.zlab.co.jp/backend-config"
+	// ingressClassKey is a key to annotation in order to run multiple Ingress controllers.
+	ingressClassKey = "kubernetes.io/ingress.class"
 )
 
 type ingressAnnotation map[string]string
@@ -28,4 +30,9 @@ func (ia ingressAnnotation) getBackendConfig() map[string]map[string]nghttpx.Por
 	}
 
 	return config
+}
+
+// getIngressClass returns Ingress class from annotation.
+func (ia ingressAnnotation) getIngressClass() string {
+	return ia[ingressClassKey]
 }
