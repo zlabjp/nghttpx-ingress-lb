@@ -846,6 +846,11 @@
 			"Rev": "82450d03cb057bab0950214ef122b67c83fb11df"
 		},
 		{
+			"ImportPath": "k8s.io/kubernetes/pkg/client/listers/extensions/internalversion",
+			"Comment": "v1.5.1",
+			"Rev": "82450d03cb057bab0950214ef122b67c83fb11df"
+		},
+		{
 			"ImportPath": "k8s.io/kubernetes/pkg/client/metrics",
 			"Comment": "v1.5.1",
 			"Rev": "82450d03cb057bab0950214ef122b67c83fb11df"

@@ -36,12 +36,15 @@ import (
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	extensionslisters "k8s.io/kubernetes/pkg/client/listers/extensions/internalversion"
 	"k8s.io/kubernetes/pkg/util/wait"
 )
 
 // StoreToIngressLister makes a Store that lists Ingress.
 type StoreToIngressLister struct {
-	cache.Store
+	// indexer is added here so that object can be added to indexer in test.
+	indexer cache.Indexer
+	extensionslisters.IngressLister
 }
 
 // StoreToSecrLister makes a Store that lists Secrets.

@@ -123,7 +123,7 @@ func (f *fixture) runShouldFail(ingKey string) {
 
 func (f *fixture) setupStore() {
 	for _, ing := range f.ingStore {
-		f.lbc.ingLister.Add(ing)
+		f.lbc.ingLister.indexer.Add(ing)
 	}
 	for _, ep := range f.epStore {
 		f.lbc.epLister.Add(ep)

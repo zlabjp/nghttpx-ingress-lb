@@ -40,6 +40,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	unversionedcore "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
+	extensionslisters "k8s.io/kubernetes/pkg/client/listers/extensions/internalversion"
 	"k8s.io/kubernetes/pkg/client/record"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -136,7 +137,7 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
 	}
 
-	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
+	ingIndexer, ingController := cache.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return lbc.clientset.Extensions().Ingresses(config.WatchNamespace).List(options)
@@ -152,7 +153,12 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 			UpdateFunc: lbc.updateIngressNotification,
 			DeleteFunc: lbc.deleteIngressNotification,
 		},
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 	)
+
+	lbc.ingLister.indexer = ingIndexer
+	lbc.ingLister.IngressLister = extensionslisters.NewIngressLister(ingIndexer)
+	lbc.ingController = ingController
 
 	lbc.epLister.Store, lbc.epController = cache.NewInformer(
 		&cache.ListWatch{
@@ -330,7 +336,31 @@ func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) 
 
 // endpointsReferenced returns true if we are interested in ep.
 func (lbc *LoadBalancerController) endpointsReferenced(ep *api.Endpoints) bool {
-	return lbc.watchNamespace == api.NamespaceAll || lbc.watchNamespace == ep.Namespace || fmt.Sprintf("%v/%v", ep.Namespace, ep.Name) == lbc.defaultSvc
+	if fmt.Sprintf("%v/%v", ep.Namespace, ep.Name) == lbc.defaultSvc {
+		return true
+	}
+
+	ings, err := lbc.ingLister.Ingresses(ep.Namespace).List(labels.Everything())
+	if err != nil {
+		glog.Errorf("Could not list Ingress namespace=%v: %v", ep.Namespace, err)
+		return false
+	}
+	for _, ing := range ings {
+		for i, _ := range ing.Spec.Rules {
+			rule := &ing.Spec.Rules[i]
+			if rule.HTTP == nil {
+				continue
+			}
+			for i, _ := range rule.HTTP.Paths {
+				path := &rule.HTTP.Paths[i]
+				if ep.Name == path.Backend.ServiceName {
+					glog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
@@ -470,7 +500,39 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 
 // podReferenced returns true if we are interested in pod.
 func (lbc *LoadBalancerController) podReferenced(pod *api.Pod) bool {
-	return lbc.watchNamespace == api.NamespaceAll || lbc.watchNamespace == pod.Namespace || fmt.Sprintf("%v/%v", pod.Namespace, pod.Name) == lbc.defaultSvc
+	if fmt.Sprintf("%v/%v", pod.Namespace, pod.Name) == lbc.defaultSvc {
+		return true
+	}
+
+	ings, err := lbc.ingLister.Ingresses(pod.Namespace).List(labels.Everything())
+	if err != nil {
+		glog.Errorf("Could not list Ingress namespace=%v: %v", pod.Namespace, err)
+		return false
+	}
+	for _, ing := range ings {
+		for i, _ := range ing.Spec.Rules {
+			rule := &ing.Spec.Rules[i]
+			if rule.HTTP == nil {
+				continue
+			}
+			for i, _ := range rule.HTTP.Paths {
+				path := &rule.HTTP.Paths[i]
+				var svc *api.Service
+				if obj, exists, err := lbc.svcLister.GetByKey(fmt.Sprintf("%v/%v", pod.Namespace, path.Backend.ServiceName)); err != nil || !exists {
+					continue
+				} else {
+					svc = obj.(*api.Service)
+				}
+				if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
+					glog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
+						pod.Namespace, pod.Name, ing.Namespace, ing.Name, svc.Namespace, svc.Name)
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 func (lbc *LoadBalancerController) enqueue(key string) {
@@ -532,7 +594,10 @@ func (lbc *LoadBalancerController) sync(key string) error {
 		return nil
 	}
 
-	ings := lbc.ingLister.List()
+	ings, err := lbc.ingLister.List(labels.Everything())
+	if err != nil {
+		return err
+	}
 	ingConfig, err := lbc.getUpstreamServers(ings)
 	if err != nil {
 		return err
@@ -588,7 +653,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 }
 
 // in nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
-func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) (*nghttpx.IngressConfig, error) {
+func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress) (*nghttpx.IngressConfig, error) {
 	ingConfig := nghttpx.NewIngressConfig()
 
 	var (
@@ -606,9 +671,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(data []interface{}) (*nght
 		ingConfig.DefaultTLSCred = tlsCred
 	}
 
-	for _, ingIf := range data {
-		ing := ingIf.(*extensions.Ingress)
-
+	for _, ing := range ings {
 		if ingPems, err := lbc.getTLSCredFromIngress(ing); err != nil {
 			glog.Warningf("Ingress %v/%v is disabled because its TLS Secret cannot be processed: %v", ing.Namespace, ing.Name, err)
 			continue
@@ -822,11 +885,12 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 		return true
 	}
 
-	for _, ingIf := range lbc.ingLister.List() {
-		ing := ingIf.(*extensions.Ingress)
-		if ing.Namespace != namespace {
-			continue
-		}
+	ings, err := lbc.ingLister.Ingresses(namespace).List(labels.Everything())
+	if err != nil {
+		glog.Errorf("Could not list Ingress namespace=%v: %v", namespace, err)
+		return false
+	}
+	for _, ing := range ings {
 		for _, tls := range ing.Spec.TLS {
 			if tls.SecretName == name {
 				return true
