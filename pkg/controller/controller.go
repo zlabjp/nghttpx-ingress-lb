@@ -500,8 +500,12 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 
 // podReferenced returns true if we are interested in pod.
 func (lbc *LoadBalancerController) podReferenced(pod *api.Pod) bool {
-	if fmt.Sprintf("%v/%v", pod.Namespace, pod.Name) == lbc.defaultSvc {
-		return true
+	if obj, exists, err := lbc.svcLister.GetByKey(lbc.defaultSvc); err == nil && exists {
+		svc := obj.(*api.Service)
+		if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
+			glog.V(4).Infof("Pod %v/%v is referenced by default Service %v", pod.Namespace, pod.Name, lbc.defaultSvc)
+			return true
+		}
 	}
 
 	ings, err := lbc.ingLister.Ingresses(pod.Namespace).List(labels.Everything())
