@@ -35,6 +35,13 @@ $ kubectl create -f examples/default/service-account.yaml
 $ kubectl create -f examples/default/rc-default.yaml
 ```
 
+## Ingress class
+
+This controller supports "kubernetes.io/ingress.class" Ingress
+annotation.  By default, the controller processes "nghttpx" class.  It
+also processes the Ingress object which has no Ingress class
+annotation, or its value is empty.
+
 ## HTTP
 
 First we need to deploy some application to publish. To keep this simple we will use the [echoheaders app](https://github.com/kubernetes/contrib/blob/master/ingress/echoheaders/echo-app.yaml) that just returns information about the http request as output
