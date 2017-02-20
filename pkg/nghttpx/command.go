@@ -97,15 +97,11 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 	}
 
 	if glog.V(3) {
-		conf := make(map[string]interface{})
-		conf["upstreams"] = ingressCfg.Upstreams
-		conf["cfg"] = ingressCfg
-
-		b, err := json.MarshalIndent(conf, "", "  ")
+		b, err := json.MarshalIndent(ingressCfg, "", "  ")
 		if err != nil {
 			fmt.Println("error:", err)
 		}
-		glog.Infof("nghttpx configuration: %v", string(b))
+		glog.Infof("nghttpx configuration:\n%v", string(b))
 	}
 
 	switch changed {
