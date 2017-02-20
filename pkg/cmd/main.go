@@ -87,7 +87,7 @@ var (
                 NodeLegacyHostIP is not assigned or cannot be used.`)
 
 	defaultTLSSecret = flags.String("default-tls-secret", "",
-		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.`)
+		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permantently.`)
 
 	ingressClass = flags.String("ingress-class", "nghttpx",
 		`Ingress class which this controller is responsible for.`)

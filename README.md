@@ -113,6 +113,11 @@ spec:
     servicePort: 80
 ```
 
+If TLS is configured for a service, and it is accessed via cleartext
+HTTP, those requests are redirected to https URI.  If
+--default-tls-secret flag is used, all cleartext HTTP requests are
+redirected to https URI.
+
 ## Logs
 
 The access and error log of nghttpx are written to
@@ -227,7 +232,7 @@ I1226 09:31:32.305093       1 command.go:78] change in configuration detected. R
 
 - When no TLS is configured, ingress controller still listen on port 443 for cleartext HTTP.
 - TLS configuration is not bound to the specific service.  In general,
-  all proxied services are accessible via both TLS and cleartext HTTP.
+  all proxied services are accessible via TLS.
 - Ingress allows regular expression in
   `.spec.rules[*].http.paths[*].path`, but nghttpx does not support it.
 

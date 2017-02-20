@@ -646,7 +646,8 @@ func (lbc *LoadBalancerController) sync(key string) error {
 
 func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 	upstream := &nghttpx.Upstream{
-		Name: lbc.defaultSvc,
+		Name:             lbc.defaultSvc,
+		RedirectIfNotTLS: lbc.defaultTLSSecret != "",
 	}
 	svcKey := lbc.defaultSvc
 	svcObj, svcExists, err := lbc.svcLister.GetByKey(svcKey)
@@ -700,11 +701,13 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 		if !lbc.validateIngressClass(ing) {
 			continue
 		}
+		var requireTLS bool
 		if ingPems, err := lbc.getTLSCredFromIngress(ing); err != nil {
 			glog.Warningf("Ingress %v/%v is disabled because its TLS Secret cannot be processed: %v", ing.Namespace, ing.Name, err)
 			continue
 		} else {
 			pems = append(pems, ingPems...)
+			requireTLS = len(ingPems) > 0
 		}
 
 		backendConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getBackendConfig()
@@ -729,9 +732,10 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 				// The format of upsName is similar to backend option syntax of nghttpx.
 				upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, path.Backend.ServiceName, path.Backend.ServicePort.String(), rule.Host, normalizedPath)
 				ups := &nghttpx.Upstream{
-					Name: upsName,
-					Host: rule.Host,
-					Path: normalizedPath,
+					Name:             upsName,
+					Host:             rule.Host,
+					Path:             normalizedPath,
+					RedirectIfNotTLS: requireTLS || lbc.defaultTLSSecret != "",
 				}
 
 				glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
