@@ -49,8 +49,6 @@ type IngressConfig struct {
 	Workers string
 	// ExtraConfig is the extra configurations in a format that nghttpx accepts in --conf.
 	ExtraConfig string
-	// TLSCertificate    string
-	// TLSCertificateKey string
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.
