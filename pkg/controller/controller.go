@@ -791,7 +791,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 		}
 	}
 
-	sort.Sort(nghttpx.TLSCredKeyLess(pems))
+	sort.Slice(pems, func(i, j int) bool { return pems[i].Key.Path < pems[j].Key.Path })
 	pems = nghttpx.RemoveDuplicatePems(pems)
 
 	if ingConfig.DefaultTLSCred != nil {
@@ -823,14 +823,17 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 		upstreams = append(upstreams, lbc.getDefaultUpstream())
 	}
 
-	sort.Sort(nghttpx.UpstreamByNameServers(upstreams))
+	sort.Slice(upstreams, func(i, j int) bool { return upstreams[i].Name < upstreams[j].Name })
 
 	for _, value := range upstreams {
-		sort.Sort(nghttpx.UpstreamServerByAddrPort(value.Backends))
+		backends := value.Backends
+		sort.Slice(backends, func(i, j int) bool {
+			return backends[i].Address < backends[j].Address || (backends[i].Address == backends[j].Address && backends[i].Port < backends[j].Port)
+		})
 
 		// remove duplicate UpstreamServer
-		uniqBackends := []nghttpx.UpstreamServer{value.Backends[0]}
-		for _, sv := range value.Backends[1:] {
+		uniqBackends := []nghttpx.UpstreamServer{backends[0]}
+		for _, sv := range backends[1:] {
 			lastBackend := &uniqBackends[len(uniqBackends)-1]
 
 			if lastBackend.Address == sv.Address && lastBackend.Port == sv.Port {

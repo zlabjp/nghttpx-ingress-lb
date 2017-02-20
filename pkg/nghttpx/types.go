@@ -67,15 +67,6 @@ type Upstream struct {
 	RedirectIfNotTLS bool
 }
 
-// UpstreamByNameServers sorts upstreams by name
-type UpstreamByNameServers []*Upstream
-
-func (c UpstreamByNameServers) Len() int      { return len(c) }
-func (c UpstreamByNameServers) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
-func (c UpstreamByNameServers) Less(i, j int) bool {
-	return c[i].Name < c[j].Name
-}
-
 type Affinity string
 
 const (
@@ -103,35 +94,10 @@ type UpstreamServer struct {
 	Affinity Affinity
 }
 
-// UpstreamServerByAddrPort sorts upstream servers by address and port
-type UpstreamServerByAddrPort []UpstreamServer
-
-func (c UpstreamServerByAddrPort) Len() int      { return len(c) }
-func (c UpstreamServerByAddrPort) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
-func (c UpstreamServerByAddrPort) Less(i, j int) bool {
-	iName := c[i].Address
-	jName := c[j].Address
-	if iName != jName {
-		return iName < jName
-	}
-
-	iU := c[i].Port
-	jU := c[j].Port
-	return iU < jU
-}
-
 // TLS server private key and certificate file path
 type TLSCred struct {
 	Key  ChecksumFile
 	Cert ChecksumFile
-}
-
-type TLSCredKeyLess []*TLSCred
-
-func (c TLSCredKeyLess) Len() int      { return len(c) }
-func (c TLSCredKeyLess) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
-func (c TLSCredKeyLess) Less(i, j int) bool {
-	return c[i].Key.Path < c[j].Key.Path
 }
 
 // NewDefaultServer return an UpstreamServer to be use as default server that returns 503.
