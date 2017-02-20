@@ -33,7 +33,14 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/kubernetes/pkg/util/wait"
+
 	"github.com/golang/glog"
+)
+
+const (
+	backendReplaceURI = "http://127.0.0.1:3001/api/v1beta1/backendconfig"
+	configrevisionURI = "http://127.0.0.1:3001/api/v1beta1/configrevision"
 )
 
 // Start starts a nghttpx process, and wait.
@@ -103,6 +110,10 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 
 	switch changed {
 	case mainConfigChanged:
+		oldConfRev, err := ngx.getNghttpxConfigRevision()
+		if err != nil {
+			return false, err
+		}
 		if err := ngx.writeTLSKeyCert(ingressCfg); err != nil {
 			return false, err
 		}
@@ -115,10 +126,11 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 			return false, fmt.Errorf("failed to execute %v %v: %v", cmd, args, string(out))
 		}
 
-		// Wait for few seconds to give nghttpx enough time to reload configuration.  If this is too short, we may overwrite
-		// configuration files while nghttpx is still reloading previous configuration.  In the near future, we will add an feature
-		// to nghttpx so that controller can query the nghttpx process whether reloading has finished.
-		time.Sleep(5 * time.Second)
+		if err := ngx.waitUntilConfigRevisionChanges(oldConfRev); err != nil {
+			return false, err
+		}
+
+		glog.Info("nghttpx has finished reloading new configuration")
 	case backendConfigChanged:
 		if err := ngx.issueBackendReplaceRequest(); err != nil {
 			return false, fmt.Errorf("failed to issue backend replace request: %v", err)
@@ -127,10 +139,6 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 
 	return true, nil
 }
-
-const (
-	backendReplaceURI = "http://127.0.0.1:3001/api/v1beta1/backendconfig"
-)
 
 func (ngx *Manager) issueBackendReplaceRequest() error {
 	glog.Infof("Issuing API request %v", backendReplaceURI)
@@ -171,6 +179,70 @@ func (ngx *Manager) issueBackendReplaceRequest() error {
 	}
 
 	glog.Info("API request has completed successfully")
+
+	return nil
+}
+
+// apiResult is an object to store the result of nghttpx API.
+type apiResult struct {
+	Status string                 `json:"status,omitempty"`
+	Code   int32                  `json:"code,omitempty"`
+	Data   map[string]interface{} `json:"data,omitempty"`
+}
+
+// getNghttpxConfigRevision returns the current nghttpx configRevision through configrevision API call.
+func (ngx *Manager) getNghttpxConfigRevision() (string, error) {
+	glog.V(4).Infof("Issuing API request %v", configrevisionURI)
+
+	resp, err := ngx.httpClient.Get(configrevisionURI)
+	if err != nil {
+		return "", fmt.Errorf("Could not get nghttpx configRevision: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("configrevision API endpoint returned unsuccessful status code %v", resp.StatusCode)
+	}
+
+	d := json.NewDecoder(resp.Body)
+	d.UseNumber()
+
+	var r apiResult
+	if err := d.Decode(&r); err != nil {
+		return "", fmt.Errorf("Could not parse nghttpx configuration API result: %v", err)
+	}
+
+	if r.Data == nil {
+		return "", fmt.Errorf("nghttpx configuration API result has nil Data field")
+	}
+
+	s := r.Data["configRevision"]
+	confRev, ok := s.(json.Number)
+	if !ok {
+		return "", fmt.Errorf("nghttpx configuration API result has non json.Number configRevision")
+	}
+
+	glog.V(4).Infof("nghttpx configRevision is %v", confRev)
+
+	return confRev.String(), nil
+}
+
+// waitUntilConfigRevisionChanges waits for the current nghttpx configuration to change from old value, oldConfRev.
+func (ngx *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
+	glog.Infof("Waiting for nghttpx to finish reloading configuration")
+
+	if err := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
+		if newConfRev, err := ngx.getNghttpxConfigRevision(); err != nil {
+			return false, err
+		} else if newConfRev == oldConfRev {
+			return false, nil
+		} else {
+			return true, nil
+		}
+	}); err != nil {
+		return fmt.Errorf("Could not get new nghttpx configRevision: %v", err)
+	}
 
 	return nil
 }
