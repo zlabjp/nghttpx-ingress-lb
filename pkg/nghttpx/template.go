@@ -62,18 +62,14 @@ const (
 
 // generateCfg generates nghttpx's main and backend configurations.
 func (ngx *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error) {
-	conf := make(map[string]interface{})
-	conf["upstreams"] = ingConfig.Upstreams
-	conf["cfg"] = ingConfig
-
 	mainConfigBuffer := new(bytes.Buffer)
-	if err := ngx.template.Execute(mainConfigBuffer, conf); err != nil {
+	if err := ngx.template.Execute(mainConfigBuffer, ingConfig); err != nil {
 		glog.Infof("nghttpx error while executing main configuration template: %v", err)
 		return nil, nil, err
 	}
 
 	backendConfigBuffer := new(bytes.Buffer)
-	if err := ngx.backendTemplate.Execute(backendConfigBuffer, conf); err != nil {
+	if err := ngx.backendTemplate.Execute(backendConfigBuffer, ingConfig); err != nil {
 		glog.Infof("nghttpx error while executing backend configuration template: %v", err)
 		return nil, nil, err
 	}

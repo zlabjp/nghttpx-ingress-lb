@@ -1,4 +1,4 @@
-{{ range $upstream := .upstreams -}}
+{{ range $upstream := .Upstreams -}}
 # {{ $upstream.Name }}
 {{ range $backend := $upstream.Backends -}}
 backend={{ $backend.Address }},{{ $backend.Port }};{{ $upstream.Host }}{{ $upstream.Path }};proto={{ $backend.Protocol }}{{ if $backend.TLS }};tls{{ end }}{{ if $backend.SNI }};sni={{ $backend.SNI }}{{ end }}{{ if $backend.DNS }};dns{{ end }};affinity={{ $backend.Affinity }}{{ if $upstream.RedirectIfNotTLS }};redirect-if-not-tls{{ end}}
