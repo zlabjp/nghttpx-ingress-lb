@@ -60,10 +60,11 @@ func NewIngressConfig() *IngressConfig {
 
 // Upstream describes an nghttpx upstream
 type Upstream struct {
-	Name     string
-	Host     string
-	Path     string
-	Backends []UpstreamServer
+	Name             string
+	Host             string
+	Path             string
+	Backends         []UpstreamServer
+	RedirectIfNotTLS bool
 }
 
 // UpstreamByNameServers sorts upstreams by name

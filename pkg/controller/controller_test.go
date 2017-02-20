@@ -459,6 +459,10 @@ func TestSyncDefaultSecret(t *testing.T) {
 	if got, want := ingConfig.DefaultTLSCred.Cert.Checksum, nghttpx.Checksum(dCrt); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Cert.Checksum = %v, want %v", got, want)
 	}
+
+	if got, want := ingConfig.Upstreams[0].RedirectIfNotTLS, true; got != want {
+		t.Errorf("ingConfig.RedirectIfNotTLS = %v, want %v", got, want)
+	}
 }
 
 // TestSyncDupDefaultSecret verifies that duplicated default TLS secret is removed.
@@ -497,6 +501,12 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	}
 	if got, want := len(ingConfig.SubTLSCred), 0; got != want {
 		t.Errorf("len(ingConfig.SubTLSCred) = %v, want %v", got, want)
+	}
+
+	for i, _ := range ingConfig.Upstreams {
+		if got, want := ingConfig.Upstreams[i].RedirectIfNotTLS, true; got != want {
+			t.Errorf("ingConfig.Upstreams[%v].RedirectIfNotTLS = %v, want %v", i, got, want)
+		}
 	}
 }
 
