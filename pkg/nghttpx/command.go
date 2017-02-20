@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	backendReplaceURI = "http://127.0.0.1:3001/api/v1beta1/backendconfig"
+	backendconfigURI  = "http://127.0.0.1:3001/api/v1beta1/backendconfig"
 	configrevisionURI = "http://127.0.0.1:3001/api/v1beta1/configrevision"
 )
 
@@ -141,7 +141,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 }
 
 func (ngx *Manager) issueBackendReplaceRequest() error {
-	glog.Infof("Issuing API request %v", backendReplaceURI)
+	glog.Infof("Issuing API request %v", backendconfigURI)
 
 	in, err := os.Open(ngx.BackendConfigFile)
 	if err != nil {
@@ -150,7 +150,7 @@ func (ngx *Manager) issueBackendReplaceRequest() error {
 
 	defer in.Close()
 
-	req, err := http.NewRequest(http.MethodPost, backendReplaceURI, in)
+	req, err := http.NewRequest(http.MethodPost, backendconfigURI, in)
 	if err != nil {
 		return fmt.Errorf("Could not create API request: %v", err)
 	}
