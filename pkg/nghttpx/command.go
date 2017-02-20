@@ -166,7 +166,7 @@ func (ngx *Manager) issueBackendReplaceRequest() error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Received returned unsuccessful status code %v", resp.StatusCode)
+		return fmt.Errorf("backendconfig API endpoint returned unsuccessful status code %v", resp.StatusCode)
 	}
 
 	respBody, err := ioutil.ReadAll(resp.Body)
