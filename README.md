@@ -86,8 +86,8 @@ You can secure an Ingress by specifying a secret that contains a TLS private key
 ```yaml
 apiVersion: v1
 data:
-  tls.crt: base64 encoded cert
-  tls.key: base64 encoded key
+  tls.crt: <base64 encoded cert>
+  tls.key: <base64 encoded key>
 kind: Secret
 metadata:
   name: testsecret
