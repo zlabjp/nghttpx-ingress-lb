@@ -64,6 +64,10 @@ func NewManager() *Manager {
 		BackendConfigFile: "/etc/nghttpx/nghttpx-backend.conf",
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
+			Transport: &http.Transport{
+				// Disable keep alive connection, so that API request does not interfere graceful shutdown of nghttpx.
+				DisableKeepAlives: true,
+			},
 		},
 	}
 
