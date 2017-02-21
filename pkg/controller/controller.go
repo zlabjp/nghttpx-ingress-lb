@@ -25,6 +25,8 @@ package controller
 
 import (
 	"fmt"
+	"math/rand"
+	"net"
 	"reflect"
 	"sort"
 	"strconv"
@@ -35,6 +37,7 @@ import (
 	"github.com/golang/glog"
 
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/errors"
 	podutil "k8s.io/kubernetes/pkg/api/pod"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/cache"
@@ -72,12 +75,14 @@ type LoadBalancerController struct {
 	secretController *cache.Controller
 	cmController     *cache.Controller
 	podController    *cache.Controller
+	nodeController   *cache.Controller
 	ingLister        ingressLister
 	svcLister        serviceLister
 	epLister         cache.StoreToEndpointsLister
 	secretLister     secretLister
 	cmLister         configMapLister
 	podLister        cache.StoreToPodLister
+	nodeLister       cache.StoreToNodeLister
 	nghttpx          nghttpx.Interface
 	podInfo          *PodInfo
 	defaultSvc       string
@@ -85,6 +90,7 @@ type LoadBalancerController struct {
 	defaultTLSSecret string
 	watchNamespace   string
 	ingressClass     string
+	allowInternalIP  bool
 
 	recorder record.EventRecorder
 
@@ -115,7 +121,8 @@ type Config struct {
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret string
 	// IngressClass is the Ingress class this controller is responsible for.
-	IngressClass string
+	IngressClass    string
+	AllowInternalIP bool
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -134,6 +141,7 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		defaultTLSSecret:  config.DefaultTLSSecret,
 		watchNamespace:    config.WatchNamespace,
 		ingressClass:      config.IngressClass,
+		allowInternalIP:   config.AllowInternalIP,
 		recorder:          eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:         workqueue.New(),
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
@@ -229,6 +237,20 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 			DeleteFunc: lbc.deletePodNotification,
 		},
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+	)
+
+	lbc.nodeLister.Store, lbc.nodeController = cache.NewInformer(
+		&cache.ListWatch{
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return lbc.clientset.Core().Nodes().List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return lbc.clientset.Core().Nodes().Watch(options)
+			},
+		},
+		&api.Node{},
+		depResyncPeriod(),
+		cache.ResourceEventHandlerFuncs{},
 	)
 
 	var cmNamespace string
@@ -586,7 +608,8 @@ func (lbc *LoadBalancerController) controllersInSync() bool {
 		lbc.epController.HasSynced() &&
 		lbc.secretController.HasSynced() &&
 		lbc.cmController.HasSynced() &&
-		lbc.podController.HasSynced()
+		lbc.podController.HasSynced() &&
+		lbc.nodeController.HasSynced()
 }
 
 // getConfigMap returns ConfigMap denoted by cmKey.
@@ -611,13 +634,6 @@ func (lbc *LoadBalancerController) sync(key string) error {
 	retry := false
 
 	defer func() { lbc.retryOrForget(key, retry) }()
-
-	if !lbc.controllersInSyncHandler() {
-		glog.Infof("Deferring sync till endpoints controller has synced")
-		retry = true
-		time.Sleep(podStoreSyncedPollPeriod)
-		return nil
-	}
 
 	ings, err := lbc.ingLister.List(labels.Everything())
 	if err != nil {
@@ -1064,14 +1080,38 @@ func (lbc *LoadBalancerController) Run() {
 	go lbc.secretController.Run(lbc.stopCh)
 	go lbc.cmController.Run(lbc.stopCh)
 	go lbc.podController.Run(lbc.stopCh)
+	go lbc.nodeController.Run(lbc.stopCh)
+
+	ready := make(chan struct{})
+	go lbc.waitForControllerToSync(ready)
+	<-ready
 
 	go wait.Until(lbc.worker, time.Second, lbc.stopCh)
+	go lbc.syncIngress(lbc.stopCh)
 
 	<-lbc.stopCh
 
 	glog.Infof("Shutting down nghttpx loadbalancer controller")
 
 	lbc.syncQueue.ShutDown()
+}
+
+// waitForControllerToSync waits for controllers to sync their caches
+func (lbc *LoadBalancerController) waitForControllerToSync(ready chan<- struct{}) {
+Loop:
+	for {
+		if lbc.controllersInSyncHandler() {
+			break
+		}
+
+		select {
+		case <-lbc.stopCh:
+			break Loop
+		case <-time.After(podStoreSyncedPollPeriod):
+		}
+	}
+
+	close(ready)
 }
 
 func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) {
@@ -1089,4 +1129,209 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *extensions.Ingress)
 	default:
 		return false
 	}
+}
+
+// syncIngress udpates Ingress resource status.
+func (lbc *LoadBalancerController) syncIngress(stopCh <-chan struct{}) {
+	for {
+		if err := lbc.getNodeIPAndUpdateIngress(); err != nil {
+			glog.Errorf("Could not update Ingress status: %v", err)
+		}
+
+		select {
+		case <-stopCh:
+			if err := lbc.removeAddressFromLoadBalancerIngress(); err != nil {
+				glog.Error(err)
+			}
+			return
+		case <-time.After(time.Duration(float64(30*time.Second) * (rand.Float64() + 1))):
+		}
+	}
+}
+
+// getNodeIPAndUpdateIngress gets node IP where Ingress controller is running, and updates Ingress Status with them.
+func (lbc *LoadBalancerController) getNodeIPAndUpdateIngress() error {
+	thisPod, err := lbc.getThisPod()
+	if err != nil {
+		return err
+	}
+
+	selector := labels.Set(thisPod.Labels).AsSelector()
+	lbIngs, err := lbc.getLoadBalancerIngress(selector)
+	if err != nil {
+		return fmt.Errorf("Could not get Node IP of Ingress controller: %v", err)
+	}
+
+	sortLoadBalancerIngress(lbIngs)
+
+	return lbc.updateIngressStatus(uniqLoadBalancerIngress(lbIngs))
+}
+
+// getThisPod returns this controller's pod.
+func (lbc *LoadBalancerController) getThisPod() (*api.Pod, error) {
+	pod, err := lbc.podLister.Pods(lbc.podInfo.PodNamespace).Get(lbc.podInfo.PodName)
+	if err != nil {
+		return nil, fmt.Errorf("Could not get Pod %v/%v from lister: %v", lbc.podInfo.PodNamespace, lbc.podInfo.PodName, err)
+	}
+	return pod, nil
+}
+
+// updateIngressStatus updates LoadBalancerIngress field of all Ingresses.
+func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []api.LoadBalancerIngress) error {
+
+	ings, err := lbc.ingLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("Could not list Ingress: %v", err)
+	}
+
+	for _, ing := range ings {
+		select {
+		case <-lbc.stopCh:
+			return nil
+		default:
+		}
+
+		if !lbc.validateIngressClass(ing) {
+			continue
+		}
+
+		// Just pass ing.Status.LoadBalancerIngress.Ingress without sorting them.  This is OK since we write sorted
+		// LoadBalancerIngress array, and will eventually get sorted one.
+		if loadBalancerIngressesIPEqual(ing.Status.LoadBalancer.Ingress, lbIngs) {
+			continue
+		}
+
+		glog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %q", ing.Namespace, ing.Name, lbIngs)
+
+		newIng := *ing
+		newIng.Status.LoadBalancer.Ingress = lbIngs
+
+		if _, err := lbc.clientset.Extensions().Ingresses(ing.Namespace).UpdateStatus(&newIng); err != nil {
+			glog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// getLoadBalancerIngress creates array of api.LoadBalancerIngress based on cached Pods and Nodes.
+func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Selector) ([]api.LoadBalancerIngress, error) {
+	pods, err := lbc.podLister.List(selector)
+	if err != nil {
+		return nil, fmt.Errorf("Could not list Pods with label %v", selector)
+	}
+
+	var lbIngs []api.LoadBalancerIngress
+
+	for _, pod := range pods {
+		externalIP, err := lbc.getPodAddress(pod)
+		if err != nil {
+			glog.Error(err)
+			continue
+		}
+
+		lbIng := api.LoadBalancerIngress{}
+		// This is really a messy specification.
+		if net.ParseIP(externalIP) != nil {
+			lbIng.IP = externalIP
+		} else {
+			lbIng.Hostname = externalIP
+		}
+		lbIngs = append(lbIngs, lbIng)
+	}
+
+	return lbIngs, nil
+}
+
+// getPodAddress returns pod's address.  It prefers external IP.  It may return internal IP if configuration allows it.
+func (lbc *LoadBalancerController) getPodAddress(pod *api.Pod) (string, error) {
+	var node *api.Node
+	if obj, exists, err := lbc.nodeLister.GetByKey(pod.Spec.NodeName); err != nil {
+		return "", fmt.Errorf("Could not get Node %v for Pod %v/%v from lister: %v", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
+	} else if !exists {
+		return "", fmt.Errorf("Node %v for Pod %v/%v has been deleted", pod.Spec.NodeName, pod.Namespace, pod.Name)
+	} else {
+		node = obj.(*api.Node)
+	}
+	var externalIP string
+	for i, _ := range node.Status.Addresses {
+		address := &node.Status.Addresses[i]
+		if address.Type == api.NodeExternalIP {
+			if address.Address == "" {
+				continue
+			}
+			externalIP = address.Address
+			break
+		}
+
+		if externalIP == "" && ((lbc.allowInternalIP && address.Type == api.NodeInternalIP) || address.Type == api.NodeLegacyHostIP) {
+			externalIP = address.Address
+			// Continue to the next iteration because we may encounter api.NodeExternalIP later.
+		}
+	}
+
+	if externalIP == "" {
+		return "", fmt.Errorf("Node %v has no external IP", node.Name)
+	}
+
+	return externalIP, nil
+}
+
+// removeAddressFromLoadBalancerIngress removes this address from all Ingress.Status.LoadBalancer.Ingress.
+func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error {
+	glog.Infof("Remove this address from all Ingress.Status.LoadBalancer.Ingress.")
+
+	thisPod, err := lbc.getThisPod()
+	if err != nil {
+		return fmt.Errorf("Could not remove address from LoadBalancerIngress: %v", err)
+	}
+
+	addr, err := lbc.getPodAddress(thisPod)
+	if err != nil {
+		return fmt.Errorf("Could not remove address from LoadBalancerIngress: %v", err)
+	}
+
+	ings, err := lbc.ingLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("Could not remove address from LoadBalancerIngress: %v", err)
+	}
+
+	for _, ing := range ings {
+		if !lbc.validateIngressClass(ing) {
+			continue
+		}
+
+		// Time may be short because we should do all the work during Pod graceful shut down period.
+		if err := wait.Poll(250*time.Millisecond, 2*time.Second, func() (bool, error) {
+			ing, err := lbc.clientset.Extensions().Ingresses(ing.Namespace).Get(ing.Name)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					return false, err
+				}
+				glog.Errorf("Could not get Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
+				return false, nil
+			}
+
+			numOld := len(ing.Status.LoadBalancer.Ingress)
+			if numOld == 0 {
+				return true, nil
+			}
+
+			ing.Status.LoadBalancer.Ingress = removeAddressFromLoadBalancerIngress(ing.Status.LoadBalancer.Ingress, addr)
+
+			if numOld == len(ing.Status.LoadBalancer.Ingress) {
+				return true, nil
+			}
+
+			if _, err := lbc.clientset.Extensions().Ingresses(ing.Namespace).UpdateStatus(ing); err != nil {
+				glog.Errorf("Could not update Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
+				return false, nil
+			}
+			return true, nil
+		}); err != nil {
+			glog.Errorf("Could not remove address from LoadBalancerIngress from Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
+		}
+	}
+
+	return nil
 }

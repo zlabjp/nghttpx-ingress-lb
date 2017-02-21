@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -66,7 +67,6 @@ type serviceLister struct {
 type PodInfo struct {
 	PodName      string
 	PodNamespace string
-	NodeIP       string
 }
 
 // GetPodDetails  returns runtime information about the pod: name, namespace and IP of the node
@@ -84,39 +84,9 @@ func GetPodDetails(clientset internalclientset.Interface, allowInternalIP bool) 
 		return nil, fmt.Errorf("Unable to get POD information")
 	}
 
-	node, err := clientset.Core().Nodes().Get(pod.Spec.NodeName)
-	if err != nil {
-		return nil, err
-	}
-
-	var externalIP string
-	for i, _ := range node.Status.Addresses {
-		address := &node.Status.Addresses[i]
-		if address.Type == api.NodeExternalIP {
-			if address.Address != "" {
-				externalIP = address.Address
-				break
-			}
-		}
-
-		if externalIP == "" && address.Type == api.NodeInternalIP && allowInternalIP {
-			externalIP = address.Address
-			continue
-		}
-
-		if externalIP == "" && address.Type == api.NodeLegacyHostIP {
-			externalIP = address.Address
-		}
-	}
-
-	if externalIP == "" {
-		return nil, fmt.Errorf("no external IP found")
-	}
-
 	return &PodInfo{
 		PodName:      podName,
 		PodNamespace: podNs,
-		NodeIP:       externalIP,
 	}, nil
 }
 
@@ -186,4 +156,61 @@ func waitForPodCondition(clientset internalclientset.Interface, ns, podName stri
 func depResyncPeriod() time.Duration {
 	factor := rand.Float64() + 1
 	return time.Duration(float64(minDepResyncPeriod.Nanoseconds()) * factor)
+}
+
+// loadBalancerIngressesIPEqual compares a and b, and if their IP fields are equal, returns true.  a and b might not be sorted in the
+// particular order.  They just compared from first to last, and if there is a difference, this function returns false.
+func loadBalancerIngressesIPEqual(a, b []api.LoadBalancerIngress) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i, _ := range a {
+		if a[i].IP != b[i].IP {
+			return false
+		}
+	}
+
+	return true
+}
+
+// sortLoadBalancerIngress sorts a by IP and Hostname in the ascending order.
+func sortLoadBalancerIngress(a []api.LoadBalancerIngress) {
+	sort.Slice(a, func(i, j int) bool {
+		return a[i].IP < a[j].IP || (a[i].IP == a[j].IP && a[i].Hostname < a[j].Hostname)
+	})
+}
+
+// uniqLoadBalancerIngress removes duplicated items from a.  This function assumes a is sorted by sortLoadBalancerIngress.
+func uniqLoadBalancerIngress(a []api.LoadBalancerIngress) []api.LoadBalancerIngress {
+	if len(a) == 0 {
+		return a
+	}
+	p := 0
+	for i := 1; i < len(a); i++ {
+		if a[p] == a[i] {
+			continue
+		}
+		p++
+		if p != i {
+			a[p] = a[i]
+		}
+	}
+
+	return a[:p+1]
+}
+
+// removeAddressFromLoadBalancerIngress removes addr from a.  addr may match IP or Hostname.
+func removeAddressFromLoadBalancerIngress(a []api.LoadBalancerIngress, addr string) []api.LoadBalancerIngress {
+	p := 0
+	for i, _ := range a {
+		if a[i].IP == addr || a[i].Hostname == addr {
+			continue
+		}
+		if p != i {
+			a[p] = a[i]
+		}
+		p++
+	}
+	return a[:p]
 }

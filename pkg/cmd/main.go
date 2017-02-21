@@ -132,7 +132,7 @@ func main() {
 		glog.Fatalf("Failed to create clientset: %v", err)
 	}
 
-	runtimePodInfo := &controller.PodInfo{NodeIP: "127.0.0.1"}
+	runtimePodInfo := &controller.PodInfo{}
 	if *inCluster {
 		runtimePodInfo, err = controller.GetPodDetails(clientset, *allowInternalIP)
 		if err != nil {
@@ -163,6 +163,7 @@ func main() {
 		NghttpxConfigMap:      *ngxConfigMap,
 		DefaultTLSSecret:      *defaultTLSSecret,
 		IngressClass:          *ingressClass,
+		AllowInternalIP:       *allowInternalIP,
 	}
 
 	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), &controllerConfig, runtimePodInfo)

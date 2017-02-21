@@ -26,6 +26,7 @@ package controller
 import (
 	"encoding/base64"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
 	"k8s.io/kubernetes/pkg/client/testing/core"
 	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util/intstr"
 
@@ -54,6 +56,7 @@ type fixture struct {
 	secretStore []*api.Secret
 	cmStore     []*api.ConfigMap
 	podStore    []*api.Pod
+	nodeStore   []*api.Node
 
 	objects []runtime.Object
 
@@ -85,7 +88,10 @@ var (
 	defaultRuntimeInfo = PodInfo{
 		PodName:      "nghttpx-ingress-controller",
 		PodNamespace: "kube-system",
-		NodeIP:       "192.168.0.1",
+	}
+
+	defaultIngPodLables = map[string]string{
+		"k8s-app": "ingress",
 	}
 )
 
@@ -142,6 +148,9 @@ func (f *fixture) setupStore() {
 	for _, pod := range f.podStore {
 		f.lbc.podLister.Indexer.Add(pod)
 	}
+	for _, node := range f.nodeStore {
+		f.lbc.nodeLister.Add(node)
+	}
 }
 
 func (f *fixture) verifyActions() {
@@ -164,6 +173,16 @@ func (f *fixture) verifyActions() {
 // expectGetCMAction adds expectation that Get for cm should occur.
 func (f *fixture) expectGetCMAction(cm *api.ConfigMap) {
 	f.actions = append(f.actions, core.NewGetAction(unversioned.GroupVersionResource{Resource: "configmaps"}, cm.Namespace, cm.Name))
+}
+
+// expectGetIngAction adds an expectation that get for ing should occur.
+func (f *fixture) expectGetIngAction(ing *extensions.Ingress) {
+	f.actions = append(f.actions, core.NewGetAction(unversioned.GroupVersionResource{Resource: "ingresses"}, ing.Namespace, ing.Name))
+}
+
+// expectUpdateIngAction adds an expectation that update for ing should occur.
+func (f *fixture) expectUpdateIngAction(ing *extensions.Ingress) {
+	f.actions = append(f.actions, core.NewUpdateAction(unversioned.GroupVersionResource{Resource: "ingresses"}, ing.Namespace, ing))
 }
 
 // newFakeManager implements nghttpx.Interface.
@@ -634,5 +653,186 @@ func TestSyncIngressClass(t *testing.T) {
 	backend := ingConfig.Upstreams[0].Backends[0]
 	if got, want := backend.Address, "192.168.10.1"; got != want {
 		t.Errorf("backend.Address = %v, want %v", got, want)
+	}
+}
+
+// newIngPod creates Ingress controller pod.
+func newIngPod(name, nodeName string) *api.Pod {
+	return &api.Pod{
+		ObjectMeta: api.ObjectMeta{
+			Name:      name,
+			Namespace: defaultRuntimeInfo.PodNamespace,
+			Labels:    defaultIngPodLables,
+		},
+		Spec: api.PodSpec{
+			NodeName: nodeName,
+			Containers: []api.Container{
+				{
+					Ports: []api.ContainerPort{
+						{
+							Name:          "my-port",
+							ContainerPort: 80,
+							Protocol:      api.ProtocolTCP,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// newNode creates new Node.
+func newNode(name string, addrs ...api.NodeAddress) *api.Node {
+	return &api.Node{
+		ObjectMeta: api.ObjectMeta{
+			Name: name,
+		},
+		Status: api.NodeStatus{
+			Addresses: addrs,
+		},
+	}
+}
+
+// TestGetLoadBalancerIngress verifies that it collects node IPs from cache.
+func TestGetLoadBalancerIngress(t *testing.T) {
+	f := newFixture(t)
+
+	po1 := newIngPod(defaultRuntimeInfo.PodName, "alpha.test")
+	node1 := newNode("alpha.test", api.NodeAddress{Type: api.NodeExternalIP, Address: "192.168.0.1"})
+
+	po2 := newIngPod("bravo", "bravo.test")
+	node2 := newNode("bravo.test", api.NodeAddress{Type: api.NodeInternalIP, Address: "10.0.0.1"}, api.NodeAddress{Type: api.NodeExternalIP, Address: "192.168.0.2"})
+
+	f.podStore = append(f.podStore, po1, po2)
+	f.nodeStore = append(f.nodeStore, node1, node2)
+
+	f.objects = append(f.objects, po1, po2, node1, node2)
+
+	f.prepare()
+	f.setupStore()
+
+	lbIngs, err := f.lbc.getLoadBalancerIngress(labels.Set(defaultIngPodLables).AsSelector())
+
+	f.verifyActions()
+
+	if err != nil {
+		t.Fatalf("f.lbc.getLoadBalancerIngress() returned unexpected error %v", err)
+	}
+
+	if got, want := len(lbIngs), 2; got != want {
+		t.Errorf("len(lbIngs) = %v, want %v", got, want)
+	}
+
+	sortLoadBalancerIngress(lbIngs)
+
+	ans := []api.LoadBalancerIngress{
+		{IP: "192.168.0.1"}, {IP: "192.168.0.2"},
+	}
+
+	if got, want := lbIngs, ans; !reflect.DeepEqual(got, want) {
+		t.Errorf("lbIngs = %+v, want %+v", got, want)
+	}
+}
+
+// TestUpdateIngressStatus verifies that Ingress resources are updated with the given lbIngs.
+func TestUpdateIngressStatus(t *testing.T) {
+	f := newFixture(t)
+
+	lbIngs := []api.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
+
+	ing1 := newIngress(api.NamespaceDefault, "delta-ing", "delta", "80")
+	ing3 := newIngress(api.NamespaceDefault, "foxtrot-ing", "foxtrot", "80")
+	ing3.Annotations[ingressClassKey] = "not-nghttpx"
+	ing4 := newIngress(api.NamespaceDefault, "golf-ing", "golf", "80")
+	ing4.Status.LoadBalancer.Ingress = lbIngs
+	ing2 := newIngress(api.NamespaceDefault, "echo-ing", "echo", "80")
+
+	f.ingStore = append(f.ingStore, ing1, ing2, ing3, ing4)
+
+	f.objects = append(f.objects, ing1, ing2, ing3, ing4)
+
+	f.expectUpdateIngAction(ing1)
+	f.expectUpdateIngAction(ing2)
+
+	f.prepare()
+	f.setupStore()
+
+	err := f.lbc.updateIngressStatus(lbIngs)
+
+	f.verifyActions()
+
+	if err != nil {
+		t.Fatalf("f.lbc.updateIngressStatus(lbIngs) returned unexpected error %v", err)
+	}
+
+	if updatedIng, err := f.clientset.Extensions().Ingresses(ing1.Namespace).Get(ing1.Name); err != nil {
+		t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
+	} else {
+		if got, want := updatedIng.Status.LoadBalancer.Ingress, lbIngs; !reflect.DeepEqual(got, want) {
+			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
+		}
+	}
+	if updatedIng, err := f.clientset.Extensions().Ingresses(ing2.Namespace).Get(ing2.Name); err != nil {
+		t.Errorf("Could not get Ingress %v/%v: %v", ing2.Namespace, ing2.Name, err)
+	} else {
+		if got, want := updatedIng.Status.LoadBalancer.Ingress, lbIngs; !reflect.DeepEqual(got, want) {
+			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
+		}
+	}
+}
+
+// TestRemoveAddressFromLoadBalancerIngress verifies that removeAddressFromLoadBalancerIngress clears Ingress.Status.LoadBalancer.Ingress.
+func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
+	f := newFixture(t)
+
+	po := newIngPod(defaultRuntimeInfo.PodName, "alpha.test")
+	node := newNode("alpha.test", api.NodeAddress{Type: api.NodeExternalIP, Address: "192.168.0.1"})
+
+	lbIngs := []api.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
+
+	ing1 := newIngress(api.NamespaceDefault, "delta-ing", "delta", "80")
+	ing1.Status.LoadBalancer.Ingress = lbIngs
+
+	ing2 := newIngress(api.NamespaceDefault, "echo-ing", "echo", "80")
+	ing2.Status.LoadBalancer.Ingress = lbIngs
+
+	ing3 := newIngress(api.NamespaceDefault, "foxtrot-ing", "foxtrot", "80")
+	ing3.Annotations[ingressClassKey] = "not-nghttpx"
+	ing3.Status.LoadBalancer.Ingress = lbIngs
+
+	ing4 := newIngress(api.NamespaceDefault, "golf-ing", "golf", "80")
+	ing4.Status.LoadBalancer.Ingress = lbIngs[1:]
+
+	f.podStore = append(f.podStore, po)
+	f.nodeStore = append(f.nodeStore, node)
+	f.ingStore = append(f.ingStore, ing1, ing2, ing3, ing4)
+
+	f.objects = append(f.objects, po, node, ing1, ing2, ing3, ing4)
+
+	f.prepare()
+	f.setupStore()
+
+	err := f.lbc.removeAddressFromLoadBalancerIngress()
+
+	if err != nil {
+		t.Fatalf("f.lbc.removeAddressFromLoadBalancerIngress() returned unexpected error %v", err)
+	}
+
+	if updatedIng, err := f.lbc.clientset.Extensions().Ingresses(ing1.Namespace).Get(ing1.Name); err != nil {
+		t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
+	} else {
+		ans := []api.LoadBalancerIngress{{IP: "192.168.0.2"}}
+		if got, want := updatedIng.Status.LoadBalancer.Ingress, ans; !reflect.DeepEqual(got, want) {
+			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
+		}
+	}
+
+	if updatedIng, err := f.lbc.clientset.Extensions().Ingresses(ing4.Namespace).Get(ing4.Name); err != nil {
+		t.Errorf("Could not get Ingress %v/%v: %v", ing4.Namespace, ing4.Name, err)
+	} else {
+		ans := []api.LoadBalancerIngress{{IP: "192.168.0.2"}}
+		if got, want := updatedIng.Status.LoadBalancer.Ingress, ans; !reflect.DeepEqual(got, want) {
+			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
+		}
 	}
 }
