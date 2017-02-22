@@ -26,19 +26,14 @@ package controller
 import (
 	"fmt"
 	"math/rand"
-	"os"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
-
 	"k8s.io/kubernetes/pkg/api"
-	apierrs "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	extensionslisters "k8s.io/kubernetes/pkg/client/listers/extensions/internalversion"
-	"k8s.io/kubernetes/pkg/util/wait"
 )
 
 // ingressLister makes a Store that lists Ingresses.
@@ -69,27 +64,6 @@ type PodInfo struct {
 	PodNamespace string
 }
 
-// GetPodDetails  returns runtime information about the pod: name, namespace and IP of the node
-func GetPodDetails(clientset internalclientset.Interface, allowInternalIP bool) (*PodInfo, error) {
-	podName := os.Getenv("POD_NAME")
-	podNs := os.Getenv("POD_NAMESPACE")
-
-	err := waitForPodRunning(clientset, podNs, podName, time.Millisecond*200, time.Second*30)
-	if err != nil {
-		return nil, err
-	}
-
-	pod, _ := clientset.Core().Pods(podNs).Get(podName)
-	if pod == nil {
-		return nil, fmt.Errorf("Unable to get POD information")
-	}
-
-	return &PodInfo{
-		PodName:      podName,
-		PodNamespace: podNs,
-	}, nil
-}
-
 func IsValidService(clientset internalclientset.Interface, name string) error {
 	if name == "" {
 		return fmt.Errorf("empty string is not a valid service name")
@@ -111,43 +85,6 @@ func ParseNSName(input string) (string, string, error) {
 	}
 
 	return nsName[0], nsName[1], nil
-}
-
-func waitForPodRunning(clientset internalclientset.Interface, ns, podName string, interval, timeout time.Duration) error {
-	condition := func(pod *api.Pod) (bool, error) {
-		if pod.Status.Phase == api.PodRunning {
-			return true, nil
-		}
-		return false, nil
-	}
-
-	glog.Infof("ns=%v, podName=%v", ns, podName)
-
-	return waitForPodCondition(clientset, ns, podName, condition, interval, timeout)
-}
-
-// waitForPodCondition waits for a pod in state defined by a condition (func)
-func waitForPodCondition(clientset internalclientset.Interface, ns, podName string, condition func(pod *api.Pod) (bool, error),
-	interval, timeout time.Duration) error {
-	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		pod, err := clientset.Core().Pods(ns).Get(podName)
-		if err != nil {
-			if apierrs.IsNotFound(err) {
-				return false, err
-			}
-			return false, nil
-		}
-
-		done, err := condition(pod)
-		if err != nil {
-			return false, err
-		}
-		if done {
-			return true, nil
-		}
-
-		return false, nil
-	})
 }
 
 // depResyncPeriod returns duration between resync for resources other than Ingress.

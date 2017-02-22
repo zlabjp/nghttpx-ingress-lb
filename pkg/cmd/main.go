@@ -132,13 +132,6 @@ func main() {
 		glog.Fatalf("Failed to create clientset: %v", err)
 	}
 
-	runtimePodInfo := &controller.PodInfo{}
-	if *inCluster {
-		runtimePodInfo, err = controller.GetPodDetails(clientset, *allowInternalIP)
-		if err != nil {
-			glog.Fatalf("unexpected error getting runtime information: %v", err)
-		}
-	}
 	if err := controller.IsValidService(clientset, *defaultSvc); err != nil {
 		glog.Fatalf("no service with name %v found: %v", *defaultSvc, err)
 	}
@@ -154,6 +147,18 @@ func main() {
 		if _, _, err := controller.ParseNSName(*defaultTLSSecret); err != nil {
 			glog.Fatalf("could not parse Secret %v: %v", *defaultTLSSecret, err)
 		}
+	}
+
+	runtimePodInfo := &controller.PodInfo{
+		PodName:      os.Getenv("POD_NAME"),
+		PodNamespace: os.Getenv("POD_NAMESPACE"),
+	}
+
+	if runtimePodInfo.PodName == "" {
+		glog.Exit("POD_NAME environment variable cannot be empty.")
+	}
+	if runtimePodInfo.PodNamespace == "" {
+		glog.Exit("POD_NAMESPACE environment variable cannot be empty.")
 	}
 
 	controllerConfig := controller.Config{
