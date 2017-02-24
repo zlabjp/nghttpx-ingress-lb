@@ -1,14 +1,18 @@
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
-  name: nghttpx-ingress-lb
+  name: nghttpx-ingress-controller
   namespace: kube-system
+  labels:
+    k8s-app: nghttpx-ingress-lb
 spec:
   template:
     metadata:
       labels:
+        k8s-app: nghttpx-ingress-lb
         name: nghttpx-ingress-lb
     spec:
+      serviceAccountName: ingress
       terminationGracePeriodSeconds: 60
       containers:
       - image: zlabjp/nghttpx-ingress-controller:latest
@@ -39,4 +43,5 @@ spec:
           hostPort: 443
         args:
         - /nghttpx-ingress-controller
-        - --default-backend-service=default/default-http-backend
+        - --default-backend-service=$(POD_NAMESPACE)/default-http-backend
+        - --logtostderr
