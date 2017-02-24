@@ -75,9 +75,14 @@ echomap   -
 Check nghttpx it is running with the defined Ingress rules:
 
 ```
-$ LBIP=$(kubectl get node `kubectl get po -l name=nghttpx-ingress-lb --template '{{range .items}}{{.spec.nodeName}}{{end}}'` --template '{{range $i, $n := .status.addresses}}{{if eq $n.type "ExternalIP"}}{{$n.address}}{{end}}{{end}}')
+$ LBIP=$(kubectl get node `kubectl get po -l name=nghttpx-ingress-lb --namespace=kube-system --template '{{range .items}}{{.spec.nodeName}}{{end}}'` --template '{{range $i, $n := .status.addresses}}{{if eq $n.type "ExternalIP"}}{{$n.address}}{{end}}{{end}}')
 $ curl $LBIP/foo -H 'Host: foo.bar.com'
 ```
+
+The above command might not work properly.  In that case, check out
+Ingress resource's .Status.LoadBalancer.Ingress field.  nghttpx
+Ingress controller periodically (30 - 60 seconds) writes its IP
+address there.
 
 ## TLS
 
