@@ -8,13 +8,9 @@ documentation](../README.md) for details on how it works.
 nghttpx ingress controller is created based on
 [nginx ingress controller](https://github.com/kubernetes/contrib/tree/master/ingress/controllers/nginx).
 
-## What it provides?
+## Docker images
 
-- Ingress controller
-- nghttpx >= 1.10
-- TLS support
-- custom nghttpx configuration using [ConfigMap](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/configmap.md)
-
+The official Docker images are available at [Docker Hub](https://hub.docker.com/r/zlabjp/nghttpx-ingress-controller/).
 
 ## Requirements
 - default backend [404-server](https://github.com/kubernetes/contrib/tree/master/404-server)
