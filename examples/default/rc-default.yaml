@@ -6,6 +6,7 @@ metadata:
   labels:
     k8s-app: nghttpx-ingress-lb
 spec:
+  revisionHistoryLimit: 5
   replicas: 1
   template:
     metadata:

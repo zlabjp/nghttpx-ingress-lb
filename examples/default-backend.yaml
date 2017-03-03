@@ -4,6 +4,7 @@ metadata:
   name: default-http-backend
   namespace: kube-system
 spec:
+  revisionHistoryLimit: 5
   replicas: 1
   template:
     metadata:
