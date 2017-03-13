@@ -588,18 +588,24 @@ func (lbc *LoadBalancerController) enqueue(key string) {
 }
 
 func (lbc *LoadBalancerController) worker() {
-	for {
-		func() {
-			key, quit := lbc.syncQueue.Get()
-			if quit {
-				return
-			}
+	work := func() bool {
+		key, quit := lbc.syncQueue.Get()
+		if quit {
+			return true
+		}
 
-			defer lbc.syncQueue.Done(key)
-			if err := lbc.sync(key.(string)); err != nil {
-				glog.Error(err)
-			}
-		}()
+		defer lbc.syncQueue.Done(key)
+		if err := lbc.sync(key.(string)); err != nil {
+			glog.Error(err)
+		}
+
+		return false
+	}
+
+	for {
+		if quit := work(); quit {
+			return
+		}
 	}
 }
 
@@ -1087,7 +1093,7 @@ func (lbc *LoadBalancerController) Run() {
 	go lbc.waitForControllerToSync(ready)
 	<-ready
 
-	go wait.Until(lbc.worker, time.Second, lbc.stopCh)
+	go lbc.worker()
 	go lbc.syncIngress(lbc.stopCh)
 
 	<-lbc.stopCh
