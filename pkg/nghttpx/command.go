@@ -231,7 +231,8 @@ func (ngx *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
 
 	if err := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
 		if newConfRev, err := ngx.getNghttpxConfigRevision(); err != nil {
-			return false, err
+			glog.Error(err)
+			return false, nil
 		} else if newConfRev == oldConfRev {
 			return false, nil
 		} else {
