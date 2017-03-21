@@ -720,6 +720,8 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 		ingConfig.DefaultTLSCred = tlsCred
 	}
 
+	var defaultUpstream *nghttpx.Upstream
+
 	for _, ing := range ings {
 		if !lbc.validateIngressClass(ing) {
 			continue
@@ -735,81 +737,31 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 		backendConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getBackendConfig()
 
+		if ing.Spec.Backend != nil {
+			// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress resource
+			// specifies this.  But specification does not any rules how to deal with it.  Just use the one we meet last.
+			if ups, err := lbc.createUpstream(ing, "", "/", ing.Spec.Backend, false, backendConfig); err != nil {
+				glog.Errorf("Could not create default backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
+			} else {
+				defaultUpstream = ups
+			}
+		}
+
 		for i, _ := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
+
 			if rule.HTTP == nil {
 				continue
 			}
 
 			for i, _ := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
-				var normalizedPath string
-				if path.Path == "" {
-					normalizedPath = "/"
-				} else if !strings.HasPrefix(path.Path, "/") {
-					glog.Infof("Ingress %v/%v, host %v has Path which does not start /: %v", ing.Namespace, ing.Name, rule.Host, path.Path)
+				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, &path.Backend, requireTLS, backendConfig); err != nil {
+					glog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 					continue
 				} else {
-					normalizedPath = path.Path
+					upstreams = append(upstreams, ups)
 				}
-				// The format of upsName is similar to backend option syntax of nghttpx.
-				upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, path.Backend.ServiceName, path.Backend.ServicePort.String(), rule.Host, normalizedPath)
-				ups := &nghttpx.Upstream{
-					Name:             upsName,
-					Host:             rule.Host,
-					Path:             normalizedPath,
-					RedirectIfNotTLS: requireTLS || lbc.defaultTLSSecret != "",
-				}
-
-				glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
-
-				svcKey := fmt.Sprintf("%v/%v", ing.Namespace, path.Backend.ServiceName)
-				svcObj, svcExists, err := lbc.svcLister.GetByKey(svcKey)
-				if err != nil {
-					glog.Infof("error getting service %v from the cache: %v", svcKey, err)
-					continue
-				}
-
-				if !svcExists {
-					glog.Warningf("service %v does no exists", svcKey)
-					continue
-				}
-
-				svc := svcObj.(*api.Service)
-				glog.V(3).Infof("obtaining port information for service %v", svcKey)
-				bp := path.Backend.ServicePort.String()
-
-				svcBackendConfig := backendConfig[path.Backend.ServiceName]
-
-				for i, _ := range svc.Spec.Ports {
-					servicePort := &svc.Spec.Ports[i]
-					// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use
-					// servicePort.Port.  servicePort.TargetPort could be a string.  This is really messy.
-					if strconv.Itoa(int(servicePort.Port)) == bp || servicePort.TargetPort.String() == bp || servicePort.Name == bp {
-						portBackendConfig, ok := svcBackendConfig[bp]
-						if ok {
-							portBackendConfig = nghttpx.FixupPortBackendConfig(portBackendConfig, svcKey, bp)
-						} else {
-							portBackendConfig = nghttpx.DefaultPortBackendConfig()
-						}
-
-						eps := lbc.getEndpoints(svc, servicePort, api.ProtocolTCP, &portBackendConfig)
-						if len(eps) == 0 {
-							glog.Warningf("service %v does no have any active endpoints", svcKey)
-							break
-						}
-
-						ups.Backends = append(ups.Backends, eps...)
-						break
-					}
-				}
-
-				if len(ups.Backends) == 0 {
-					glog.Warningf("no backend service port found for service %v", svcKey)
-					continue
-				}
-
-				upstreams = append(upstreams, ups)
 			}
 		}
 	}
@@ -843,7 +795,10 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 	}
 
 	if !defaultUpstreamFound {
-		upstreams = append(upstreams, lbc.getDefaultUpstream())
+		if defaultUpstream == nil {
+			defaultUpstream = lbc.getDefaultUpstream()
+		}
+		upstreams = append(upstreams, defaultUpstream)
 	}
 
 	sort.Slice(upstreams, func(i, j int) bool { return upstreams[i].Name < upstreams[j].Name })
@@ -872,6 +827,74 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 	ingConfig.Upstreams = upstreams
 
 	return ingConfig, nil
+}
+
+// createUpstream creates new nghttpx.Upstream for ing, host, path and backend.
+func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host, path string, backend *extensions.IngressBackend,
+	requireTLS bool, backendConfig map[string]map[string]nghttpx.PortBackendConfig) (*nghttpx.Upstream, error) {
+	var normalizedPath string
+	if path == "" {
+		normalizedPath = "/"
+	} else if !strings.HasPrefix(path, "/") {
+		return nil, fmt.Errorf("Host %v has Path which does not start /: %v", host, path)
+	} else {
+		normalizedPath = path
+	}
+	// The format of upsName is similar to backend option syntax of nghttpx.
+	upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, backend.ServiceName, backend.ServicePort.String(), host, normalizedPath)
+	ups := &nghttpx.Upstream{
+		Name:             upsName,
+		Host:             host,
+		Path:             normalizedPath,
+		RedirectIfNotTLS: requireTLS || lbc.defaultTLSSecret != "",
+	}
+
+	glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
+
+	svcKey := fmt.Sprintf("%v/%v", ing.Namespace, backend.ServiceName)
+	svcObj, svcExists, err := lbc.svcLister.GetByKey(svcKey)
+	if err != nil {
+		return nil, fmt.Errorf("error getting service %v from the cache: %v", svcKey, err)
+	}
+
+	if !svcExists {
+		return nil, fmt.Errorf("service %v does no exists", svcKey)
+	}
+
+	svc := svcObj.(*api.Service)
+	glog.V(3).Infof("obtaining port information for service %v", svcKey)
+	bp := backend.ServicePort.String()
+
+	svcBackendConfig := backendConfig[backend.ServiceName]
+
+	for i, _ := range svc.Spec.Ports {
+		servicePort := &svc.Spec.Ports[i]
+		// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use
+		// servicePort.Port.  servicePort.TargetPort could be a string.  This is really messy.
+		if strconv.Itoa(int(servicePort.Port)) == bp || servicePort.TargetPort.String() == bp || servicePort.Name == bp {
+			portBackendConfig, ok := svcBackendConfig[bp]
+			if ok {
+				portBackendConfig = nghttpx.FixupPortBackendConfig(portBackendConfig, svcKey, bp)
+			} else {
+				portBackendConfig = nghttpx.DefaultPortBackendConfig()
+			}
+
+			eps := lbc.getEndpoints(svc, servicePort, api.ProtocolTCP, &portBackendConfig)
+			if len(eps) == 0 {
+				glog.Warningf("service %v does no have any active endpoints", svcKey)
+				break
+			}
+
+			ups.Backends = append(ups.Backends, eps...)
+			break
+		}
+	}
+
+	if len(ups.Backends) == 0 {
+		return nil, fmt.Errorf("no backend service port found for service %v", svcKey)
+	}
+
+	return ups, nil
 }
 
 // getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.

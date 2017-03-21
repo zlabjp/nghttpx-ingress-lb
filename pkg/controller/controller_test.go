@@ -693,6 +693,49 @@ func TestSyncIngressClass(t *testing.T) {
 	}
 }
 
+// TestSyncIngressDefaultBackend verfies that Ingress.Spec.Backend is considered.
+func TestSyncIngressDefaultBackend(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps := newDefaultBackend()
+
+	bs1, be1 := newBackend(api.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs2, be2 := newBackend(api.NamespaceDefault, "bravo", []string{"192.168.10.2"})
+	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
+	ing1.Spec.Backend = &extensions.IngressBackend{
+		ServiceName: "bravo",
+		ServicePort: bs2.Spec.Ports[0].TargetPort,
+	}
+
+	f.svcStore = append(f.svcStore, svc, bs1, bs2)
+	f.epStore = append(f.epStore, eps, be1, be2)
+	f.ingStore = append(f.ingStore, ing1)
+
+	f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bs2, be2)
+
+	f.prepare()
+	f.run(getKey(svc, t))
+
+	fm := f.lbc.nghttpx.(*fakeManager)
+	ingConfig := fm.ingConfig
+
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	}
+
+	var found bool
+	for _, upstream := range ingConfig.Upstreams {
+		if upstream.Name == "default/bravo,80;/" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("Ingress default backend is not found")
+	}
+}
+
 // newIngPod creates Ingress controller pod.
 func newIngPod(name, nodeName string) *api.Pod {
 	return &api.Pod{
