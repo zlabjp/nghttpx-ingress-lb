@@ -622,6 +622,42 @@ func TestSyncNumericTargetPort(t *testing.T) {
 	}
 }
 
+// TestSyncEmptyTargetPort verifies that if target port is empty, port is used instead.  In practice, target port is always filled out.
+func TestSyncEmptyTargetPort(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps := newDefaultBackend()
+
+	bs1, be1 := newBackend(api.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1.Spec.Ports[0] = api.ServicePort{
+		Port:       80,
+		TargetPort: intstr.FromString(""),
+		Protocol:   api.ProtocolTCP,
+	}
+	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
+
+	f.svcStore = append(f.svcStore, svc, bs1)
+	f.epStore = append(f.epStore, eps, be1)
+	f.ingStore = append(f.ingStore, ing1)
+
+	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+
+	f.prepare()
+	f.run(getKey(svc, t))
+
+	fm := f.lbc.nghttpx.(*fakeManager)
+	ingConfig := fm.ingConfig
+
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	}
+
+	backend := ingConfig.Upstreams[0].Backends[0]
+	if got, want := backend.Port, "80"; got != want {
+		t.Errorf("backend.Port = %v, want %v", got, want)
+	}
+}
+
 // TestSyncIngressClass validates that Ingress resource bearing Ingress class "foo" is not processed.
 func TestSyncIngressClass(t *testing.T) {
 	f := newFixture(t)

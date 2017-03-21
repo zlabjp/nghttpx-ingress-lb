@@ -970,7 +970,7 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 // service/target port combination.  portBackendConfig is additional
 // per-port configuration for backend, which must not be nil.
 func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort *api.ServicePort, proto api.Protocol, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
-	glog.V(3).Infof("getting endpoints for service %v/%v and port %v protocol %v", s.Namespace, s.Name, servicePort.TargetPort.String(), servicePort.Protocol)
+	glog.V(3).Infof("getting endpoints for service %v/%v and port %v target port %v protocol %v", s.Namespace, s.Name, servicePort.Port, servicePort.TargetPort.String(), servicePort.Protocol)
 	ep, err := lbc.epLister.GetServiceEndpoints(s)
 	if err != nil {
 		glog.Warningf("unexpected error obtaining service endpoints: %v", err)
@@ -989,28 +989,34 @@ func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort *api
 
 			var targetPort int32
 
-			switch servicePort.TargetPort.Type {
-			case intstr.Int:
-				if epPort.Port == servicePort.TargetPort.IntVal {
+			if servicePort.TargetPort.String() == "" {
+				if epPort.Port == servicePort.Port {
 					targetPort = epPort.Port
 				}
-			case intstr.String:
-				// TODO Is this necessary?
-				if servicePort.TargetPort.StrVal == "" {
-					break
-				}
-				var port int32
-				if p, err := strconv.Atoi(servicePort.TargetPort.StrVal); err != nil {
-					port, err = lbc.getNamedPortFromPod(s, servicePort)
-					if err != nil {
-						glog.Warningf("Could not find named port %v in Pod spec: %v", servicePort.TargetPort.String(), err)
-						continue
+			} else {
+				switch servicePort.TargetPort.Type {
+				case intstr.Int:
+					if epPort.Port == servicePort.TargetPort.IntVal {
+						targetPort = epPort.Port
 					}
-				} else {
-					port = int32(p)
-				}
-				if epPort.Port == port {
-					targetPort = port
+				case intstr.String:
+					// TODO Is this necessary?
+					if servicePort.TargetPort.StrVal == "" {
+						break
+					}
+					var port int32
+					if p, err := strconv.Atoi(servicePort.TargetPort.StrVal); err != nil {
+						port, err = lbc.getNamedPortFromPod(s, servicePort)
+						if err != nil {
+							glog.Warningf("Could not find named port %v in Pod spec: %v", servicePort.TargetPort.String(), err)
+							continue
+						}
+					} else {
+						port = int32(p)
+					}
+					if epPort.Port == port {
+						targetPort = port
+					}
 				}
 			}
 
