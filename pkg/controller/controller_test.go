@@ -239,7 +239,7 @@ func newDefaultBackend() (*api.Service, *api.Endpoints) {
 		Spec: api.ServiceSpec{
 			Ports: []api.ServicePort{
 				{
-					Port:       8080,
+					Port:       8081,
 					TargetPort: intstr.FromInt(8080),
 					Protocol:   api.ProtocolTCP,
 				},
@@ -279,7 +279,7 @@ func newBackend(namespace, name string, addrs []string) (*api.Service, *api.Endp
 		Spec: api.ServiceSpec{
 			Ports: []api.ServicePort{
 				{
-					Port:       80,
+					Port:       81,
 					TargetPort: intstr.FromInt(80),
 					Protocol:   api.ProtocolTCP,
 				},
