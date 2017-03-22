@@ -119,6 +119,15 @@ HTTP, those requests are redirected to https URI.  If
 --default-tls-secret flag is used, all cleartext HTTP requests are
 redirected to https URI.
 
+## Default backend
+
+The default backend is used when the request does not match any given
+rules.  The default backend must be set in command-line flag of
+nghttpx Ingress controller.  It can be overridden by specifying
+Ingress.Spec.Backend.  If multiple Ingress resources have
+.Spec.Backend, one of them is used, but it is undefined which one is
+used.  The default backend always does not require TLS.
+
 ## Logs
 
 The access and error log of nghttpx are written to
