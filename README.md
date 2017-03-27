@@ -196,6 +196,7 @@ Note that Ingress allows regular expression in
 ## Custom nghttpx configuration
 
 Using a ConfigMap it is possible to customize the defaults in nghttpx.
+The content of configuration is specified under `nghttpx-conf` key.
 All nghttpx options can be used to customize behavior of nghttpx.
 
 ```yaml
@@ -206,6 +207,7 @@ metadata:
 data:
   nghttpx-conf: |
     log-level=INFO
+    accesslog-file=/dev/null
 ```
 
 nghttpx ingress controller, by default, overrides the following default configuration:
