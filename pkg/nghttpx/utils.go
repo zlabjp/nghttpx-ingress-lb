@@ -41,11 +41,21 @@ import (
 const (
 	// NghttpxExtraConfigKey is a field name of extra nghttpx configuration in ConfigMap.
 	NghttpxExtraConfigKey = "nghttpx-conf"
+	// NghttpxMrubyFileContentKey is a field name of mruby script in ConfigMap.
+	NghttpxMrubyFileContentKey = "nghttpx-mruby-file-content"
 )
 
 // ReadConfig obtains the configuration defined by the user merged with the defaults.
 func ReadConfig(ingConfig *IngressConfig, config *api.ConfigMap) {
 	ingConfig.ExtraConfig = config.Data[NghttpxExtraConfigKey]
+	if mrubyFileContent, ok := config.Data[NghttpxMrubyFileContentKey]; ok {
+		b := []byte(mrubyFileContent)
+		ingConfig.MrubyFile = &ChecksumFile{
+			Path:     "/etc/nghttpx/mruby.rb",
+			Content:  b,
+			Checksum: Checksum(b),
+		}
+	}
 }
 
 // needsReload first checks that configuration is changed.  filename

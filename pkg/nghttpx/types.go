@@ -50,6 +50,9 @@ type IngressConfig struct {
 	Workers string
 	// ExtraConfig is the extra configurations in a format that nghttpx accepts in --conf.
 	ExtraConfig string
+	// MrubyFileContent is the extra mruby script.  It is saved in the container disk space, and will be referenced by mruby-file from
+	// configuration file.
+	MrubyFile *ChecksumFile
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.

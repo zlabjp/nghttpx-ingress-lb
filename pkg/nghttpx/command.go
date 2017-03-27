@@ -114,6 +114,9 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		if err := ngx.writeTLSKeyCert(ingressCfg); err != nil {
 			return false, err
 		}
+		if err := ngx.writeMrubyFile(ingressCfg); err != nil {
+			return false, err
+		}
 
 		cmd := "killall"
 		args := []string{"-HUP", "nghttpx"}
@@ -240,6 +243,20 @@ func (ngx *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
 		}
 	}); err != nil {
 		return fmt.Errorf("Could not get new nghttpx configRevision: %v", err)
+	}
+
+	return nil
+}
+
+// writeMrubyFile writes mruby script file.  If ingConfig.MrubyFile is nil, this function does nothing, and succeeds.
+func (ngx *Manager) writeMrubyFile(ingConfig *IngressConfig) error {
+	if ingConfig.MrubyFile == nil {
+		return nil
+	}
+
+	f := ingConfig.MrubyFile
+	if err := writeFile(f.Path, f.Content); err != nil {
+		return fmt.Errorf("failed to write mruby file: %v", err)
 	}
 
 	return nil

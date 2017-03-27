@@ -35,3 +35,8 @@ workers={{ .Workers }}
 # from ConfigMap
 
 {{ .ExtraConfig }}
+
+{{ if .MrubyFile }}
+# checksum: {{ .MrubyFile.Checksum }}
+mruby-file={{ .MrubyFile.Path }}
+{{ end }}

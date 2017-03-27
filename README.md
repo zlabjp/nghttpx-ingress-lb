@@ -217,6 +217,30 @@ nghttpx ingress controller, by default, overrides the following default configur
 
 User can override `workers` using ConfigMap.
 
+Since `mruby-file` option takes a path to mruby script file, user has
+to include mruby script to the image or mount the external volume.  In
+order to make it easier to specify mruby script, user can write mruby
+script under `nghttpx-mruby-file-content` key, like so:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nghttpx-ingress-lb
+data:
+  nghttpx-mruby-file-content: |
+    class App
+      def on_req(env)
+        env.req.path = "/apps#{env.req.path}"
+      end
+    end
+
+    App.new
+```
+
+The controller saves the content, and mruby-file option which refers
+to the saved file is added to the configuration.
+
 ## Troubleshooting
 
 TBD
