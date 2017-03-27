@@ -384,6 +384,8 @@ func TestSyncDefaultBackend(t *testing.T) {
 
 	cm := newEmptyConfigMap()
 	cm.Data[nghttpx.NghttpxExtraConfigKey] = "Test"
+	const mrubyContent = "mruby"
+	cm.Data[nghttpx.NghttpxMrubyFileContentKey] = mrubyContent
 	svc, eps := newDefaultBackend()
 
 	f.cmStore = append(f.cmStore, cm)
@@ -421,6 +423,13 @@ func TestSyncDefaultBackend(t *testing.T) {
 
 	if got, want := fm.ingConfig.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
 		t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
+	}
+	if got, want := fm.ingConfig.MrubyFile, (&nghttpx.ChecksumFile{
+		Path:     "/etc/nghttpx/mruby.rb",
+		Content:  []byte(mrubyContent),
+		Checksum: nghttpx.Checksum([]byte(mrubyContent)),
+	}); !reflect.DeepEqual(got, want) {
+		t.Errorf("fm.ingConfig.MrubyFile = %q, want %q", got, want)
 	}
 }
 
