@@ -385,6 +385,10 @@ func (lbc *LoadBalancerController) endpointsReferenced(ep *api.Endpoints) bool {
 		if !lbc.validateIngressClass(ing) {
 			continue
 		}
+		if ing.Spec.Backend != nil && ep.Name == ing.Spec.Backend.ServiceName {
+			glog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
+			return true
+		}
 		for i, _ := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
 			if rule.HTTP == nil {
@@ -557,6 +561,16 @@ func (lbc *LoadBalancerController) podReferenced(pod *api.Pod) bool {
 	for _, ing := range ings {
 		if !lbc.validateIngressClass(ing) {
 			continue
+		}
+		if ing.Spec.Backend != nil {
+			if obj, exists, err := lbc.svcLister.GetByKey(fmt.Sprintf("%v/%v", pod.Namespace, ing.Spec.Backend.ServiceName)); err == nil && exists {
+				svc := obj.(*api.Service)
+				if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
+					glog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
+						pod.Namespace, pod.Name, ing.Namespace, ing.Name, svc.Namespace, svc.Name)
+					return true
+				}
+			}
 		}
 		for i, _ := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
