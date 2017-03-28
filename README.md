@@ -1,9 +1,8 @@
 # nghttpx Ingress Controller
 
-This is a nghttpx Ingress controller that uses
-[ConfigMap](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/configmap.md)
-to store the nghttpx configuration. See [Ingress controller
-documentation](../README.md) for details on how it works.
+This is an Ingress Controller which uses
+[nghttpx](https://nghttp2.org/documentation/nghttpx.1.html) as L7 load
+balancer.
 
 nghttpx ingress controller is created based on
 [nginx ingress controller](https://github.com/kubernetes/contrib/tree/master/ingress/controllers/nginx).
@@ -13,8 +12,11 @@ nghttpx ingress controller is created based on
 The official Docker images are available at [Docker Hub](https://hub.docker.com/r/zlabjp/nghttpx-ingress-controller/).
 
 ## Requirements
+
 - default backend [404-server](https://github.com/kubernetes/contrib/tree/master/404-server)
 
+Actually, any backend web server will suffice as long as it returns
+some kind of error code for any requests.
 
 ## Deploy the Ingress controller
 
@@ -24,7 +26,7 @@ $ kubectl create -f examples/default-backend.yaml
 $ kubectl expose deployment default-http-backend --port=80 --target-port=8080 --name=default-http-backend
 ```
 
-Loadbalancers are created via a ReplicationController or Daemonset:
+Loadbalancers are created via a Deployment or Daemonset:
 
 ```
 $ kubectl create -f examples/default/service-account.yaml
@@ -33,14 +35,17 @@ $ kubectl create -f examples/default/rc-default.yaml
 
 ## Ingress class
 
-This controller supports "kubernetes.io/ingress.class" Ingress
+This controller supports `kubernetes.io/ingress.class` Ingress
 annotation.  By default, the controller processes "nghttpx" class.  It
 also processes the Ingress object which has no Ingress class
 annotation, or its value is empty.
 
 ## HTTP
 
-First we need to deploy some application to publish. To keep this simple we will use the [echoheaders app](https://github.com/kubernetes/contrib/blob/master/ingress/echoheaders/echo-app.yaml) that just returns information about the http request as output
+First we need to deploy some application to publish. To keep this
+simple we will use the [echoheaders app](https://github.com/kubernetes/contrib/blob/master/ingress/echoheaders/echo-app.yaml)
+that just returns information about the http request as output
+
 ```
 kubectl run echoheaders --image=gcr.io/google_containers/echoserver:1.4 --replicas=1 --port=8080
 ```
@@ -197,7 +202,10 @@ Note that Ingress allows regular expression in
 
 Using a ConfigMap it is possible to customize the defaults in nghttpx.
 The content of configuration is specified under `nghttpx-conf` key.
-All nghttpx options can be used to customize behavior of nghttpx.
+All nghttpx options can be used to customize behavior of nghttpx.  See
+[FILES](https://nghttp2.org/documentation/nghttpx.1.html#files)
+section of nghttpx(1) manual page for the syntax of configuration
+file.
 
 ```yaml
 apiVersion: v1
@@ -212,15 +220,17 @@ data:
 
 nghttpx ingress controller, by default, overrides the following default configuration:
 
-- `workers`: set to the number of cores that the nghttpx ingress
-  controller runs.
+- [workers](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-n):
+  set the number of cores that nghttpx uses.
 
 User can override `workers` using ConfigMap.
 
-Since `mruby-file` option takes a path to mruby script file, user has
-to include mruby script to the image or mount the external volume.  In
-order to make it easier to specify mruby script, user can write mruby
-script under `nghttpx-mruby-file-content` key, like so:
+Since
+[mruby-file](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--mruby-file)
+option takes a path to mruby script file, user has to include mruby
+script to the image or mount the external volume.  In order to make it
+easier to specify mruby script, user can write mruby script under
+`nghttpx-mruby-file-content` key, like so:
 
 ```yaml
 apiVersion: v1
@@ -240,6 +250,8 @@ data:
 
 The controller saves the content, and mruby-file option which refers
 to the saved file is added to the configuration.
+Read [MRUBY SCRIPTING](https://nghttp2.org/documentation/nghttpx.1.html#mruby-scripting)
+section of nghttpx(1) manual page about mruby API.
 
 ## Troubleshooting
 
