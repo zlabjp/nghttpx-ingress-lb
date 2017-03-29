@@ -12,19 +12,19 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 // TestSortLoadBalancerIngress verifies that sortLoadBalancerIngress sorts given items.
 func TestSortLoadBalancerIngress(t *testing.T) {
-	input := []api.LoadBalancerIngress{
+	input := []v1.LoadBalancerIngress{
 		{IP: "delta", Hostname: "alpha"},
 		{IP: "alpha", Hostname: "delta"},
 		{IP: "alpha", Hostname: "charlie"},
 		{IP: "bravo", Hostname: ""},
 	}
 
-	ans := []api.LoadBalancerIngress{
+	ans := []v1.LoadBalancerIngress{
 		{IP: "alpha", Hostname: "charlie"},
 		{IP: "alpha", Hostname: "delta"},
 		{IP: "bravo", Hostname: ""},
@@ -41,22 +41,22 @@ func TestSortLoadBalancerIngress(t *testing.T) {
 // TestUniqLoadBalancerIngress verifies that uniqLoadBalancerIngress removes duplicated items.
 func TestUniqLoadBalancerIngress(t *testing.T) {
 	tests := []struct {
-		input []api.LoadBalancerIngress
-		ans   []api.LoadBalancerIngress
+		input []v1.LoadBalancerIngress
+		ans   []v1.LoadBalancerIngress
 	}{
 		{
 			input: nil,
 			ans:   nil,
 		},
 		{
-			input: []api.LoadBalancerIngress{
+			input: []v1.LoadBalancerIngress{
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "bravo", Hostname: "alpha"},
 				{IP: "delta", Hostname: ""},
 				{IP: "delta", Hostname: ""},
 			},
-			ans: []api.LoadBalancerIngress{
+			ans: []v1.LoadBalancerIngress{
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "bravo", Hostname: "alpha"},
 				{IP: "delta", Hostname: ""},
@@ -75,8 +75,8 @@ func TestUniqLoadBalancerIngress(t *testing.T) {
 func TestUtilRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 	tests := []struct {
 		addr  string
-		input []api.LoadBalancerIngress
-		ans   []api.LoadBalancerIngress
+		input []v1.LoadBalancerIngress
+		ans   []v1.LoadBalancerIngress
 	}{
 		{
 			addr:  "alpha",
@@ -85,35 +85,35 @@ func TestUtilRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		},
 		{
 			addr: "alpha",
-			input: []api.LoadBalancerIngress{
+			input: []v1.LoadBalancerIngress{
 				{IP: "alpha"},
 				{IP: "bravo"},
 				{Hostname: "alpha"},
 				{IP: "charlie"},
 				{IP: "alpha"},
 			},
-			ans: []api.LoadBalancerIngress{
+			ans: []v1.LoadBalancerIngress{
 				{IP: "bravo"},
 				{IP: "charlie"},
 			},
 		},
 		{
 			addr: "alpha",
-			input: []api.LoadBalancerIngress{
+			input: []v1.LoadBalancerIngress{
 				{IP: "bravo"},
 				{IP: "charlie"},
 			},
-			ans: []api.LoadBalancerIngress{
+			ans: []v1.LoadBalancerIngress{
 				{IP: "bravo"},
 				{IP: "charlie"},
 			},
 		},
 		{
 			addr: "alpha",
-			input: []api.LoadBalancerIngress{
+			input: []v1.LoadBalancerIngress{
 				{IP: "alpha"},
 			},
-			ans: []api.LoadBalancerIngress{},
+			ans: []v1.LoadBalancerIngress{},
 		},
 	}
 

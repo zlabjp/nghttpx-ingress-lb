@@ -31,10 +31,12 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/cache"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	extensionslisters "k8s.io/kubernetes/pkg/client/listers/extensions/internalversion"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
+	extensionslisters "k8s.io/kubernetes/pkg/client/listers/extensions/v1beta1"
 )
 
 // ingressLister makes a Store that lists Ingresses.
@@ -46,17 +48,44 @@ type ingressLister struct {
 
 // secrLister makes a Store that lists Secrets.
 type secretLister struct {
-	cache.Store
+	// indexer is added here so that object can be added to indexer in test.
+	indexer cache.Indexer
+	corelisters.SecretLister
 }
 
 // configMapLister makes a Store that lists ConfigMaps.
 type configMapLister struct {
-	cache.Store
+	// indexer is added here so that object can be added to indexer in test.
+	indexer cache.Indexer
+	corelisters.ConfigMapLister
 }
 
 // serviceLister makes a Store that lists Services.
 type serviceLister struct {
-	cache.Store
+	// indexer is added here so that object can be added to indexer in test.
+	indexer cache.Indexer
+	corelisters.ServiceLister
+}
+
+// endpointsLister makes a Store that lists Endpoints.
+type endpointsLister struct {
+	// indexer is added here so that object can be added to indexer in test.
+	indexer cache.Indexer
+	corelisters.EndpointsLister
+}
+
+// podLister makes a Store that lists Pods.
+type podLister struct {
+	// indexer is added here so that object can be added to indexer in test.
+	indexer cache.Indexer
+	corelisters.PodLister
+}
+
+// nodeLister makes a Store that lists Nodes.
+type nodeLister struct {
+	// indexer is added here so that object can be added to indexer in test.
+	indexer cache.Indexer
+	corelisters.NodeLister
 }
 
 // podInfo contains runtime information about the pod
@@ -65,7 +94,7 @@ type PodInfo struct {
 	PodNamespace string
 }
 
-func IsValidService(clientset internalclientset.Interface, name string) error {
+func IsValidService(clientset clientset.Interface, name string) error {
 	if name == "" {
 		return fmt.Errorf("empty string is not a valid service name")
 	}
@@ -75,7 +104,7 @@ func IsValidService(clientset internalclientset.Interface, name string) error {
 		return fmt.Errorf("invalid name format (namespace/name) in service '%v'", name)
 	}
 
-	_, err := clientset.Core().Services(parts[0]).Get(parts[1])
+	_, err := clientset.CoreV1().Services(parts[0]).Get(parts[1], metav1.GetOptions{})
 	return err
 }
 
@@ -98,7 +127,7 @@ func depResyncPeriod() time.Duration {
 
 // loadBalancerIngressesIPEqual compares a and b, and if their IP fields are equal, returns true.  a and b might not be sorted in the
 // particular order.  They just compared from first to last, and if there is a difference, this function returns false.
-func loadBalancerIngressesIPEqual(a, b []api.LoadBalancerIngress) bool {
+func loadBalancerIngressesIPEqual(a, b []v1.LoadBalancerIngress) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -113,14 +142,14 @@ func loadBalancerIngressesIPEqual(a, b []api.LoadBalancerIngress) bool {
 }
 
 // sortLoadBalancerIngress sorts a by IP and Hostname in the ascending order.
-func sortLoadBalancerIngress(a []api.LoadBalancerIngress) {
+func sortLoadBalancerIngress(a []v1.LoadBalancerIngress) {
 	sort.Slice(a, func(i, j int) bool {
 		return a[i].IP < a[j].IP || (a[i].IP == a[j].IP && a[i].Hostname < a[j].Hostname)
 	})
 }
 
 // uniqLoadBalancerIngress removes duplicated items from a.  This function assumes a is sorted by sortLoadBalancerIngress.
-func uniqLoadBalancerIngress(a []api.LoadBalancerIngress) []api.LoadBalancerIngress {
+func uniqLoadBalancerIngress(a []v1.LoadBalancerIngress) []v1.LoadBalancerIngress {
 	if len(a) == 0 {
 		return a
 	}
@@ -139,7 +168,7 @@ func uniqLoadBalancerIngress(a []api.LoadBalancerIngress) []api.LoadBalancerIngr
 }
 
 // removeAddressFromLoadBalancerIngress removes addr from a.  addr may match IP or Hostname.
-func removeAddressFromLoadBalancerIngress(a []api.LoadBalancerIngress, addr string) []api.LoadBalancerIngress {
+func removeAddressFromLoadBalancerIngress(a []v1.LoadBalancerIngress, addr string) []v1.LoadBalancerIngress {
 	p := 0
 	for i, _ := range a {
 		if a[i].IP == addr || a[i].Hostname == addr {
