@@ -35,7 +35,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 const (
@@ -46,7 +46,7 @@ const (
 )
 
 // ReadConfig obtains the configuration defined by the user merged with the defaults.
-func ReadConfig(ingConfig *IngressConfig, config *api.ConfigMap) {
+func ReadConfig(ingConfig *IngressConfig, config *v1.ConfigMap) {
 	ingConfig.ExtraConfig = config.Data[NghttpxExtraConfigKey]
 	if mrubyFileContent, ok := config.Data[NghttpxMrubyFileContentKey]; ok {
 		b := []byte(mrubyFileContent)

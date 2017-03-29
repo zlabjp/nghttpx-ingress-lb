@@ -37,22 +37,26 @@ import (
 
 	"github.com/golang/glog"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
+	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	clientv1 "k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/errors"
-	podutil "k8s.io/kubernetes/pkg/api/pod"
-	"k8s.io/kubernetes/pkg/apis/extensions"
-	"k8s.io/kubernetes/pkg/client/cache"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	unversionedcore "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
-	extensionslisters "k8s.io/kubernetes/pkg/client/listers/extensions/internalversion"
-	"k8s.io/kubernetes/pkg/client/record"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/util/flowcontrol"
-	"k8s.io/kubernetes/pkg/util/intstr"
-	"k8s.io/kubernetes/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/util/workqueue"
-	"k8s.io/kubernetes/pkg/watch"
+	"k8s.io/kubernetes/pkg/api/v1"
+	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
+	extensionslisters "k8s.io/kubernetes/pkg/client/listers/extensions/v1beta1"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -69,21 +73,21 @@ const (
 // LoadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
 type LoadBalancerController struct {
-	clientset        internalclientset.Interface
-	ingController    *cache.Controller
-	epController     *cache.Controller
-	svcController    *cache.Controller
-	secretController *cache.Controller
-	cmController     *cache.Controller
-	podController    *cache.Controller
-	nodeController   *cache.Controller
+	clientset        clientset.Interface
+	ingController    cache.Controller
+	epController     cache.Controller
+	svcController    cache.Controller
+	secretController cache.Controller
+	cmController     cache.Controller
+	podController    cache.Controller
+	nodeController   cache.Controller
 	ingLister        ingressLister
 	svcLister        serviceLister
-	epLister         cache.StoreToEndpointsLister
+	epLister         endpointsLister
 	secretLister     secretLister
 	cmLister         configMapLister
-	podLister        cache.StoreToPodLister
-	nodeLister       cache.StoreToNodeLister
+	podLister        podLister
+	nodeLister       nodeLister
 	nghttpx          nghttpx.Interface
 	podInfo          *PodInfo
 	defaultSvc       string
@@ -127,10 +131,10 @@ type Config struct {
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
-func NewLoadBalancerController(clientset internalclientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *PodInfo) *LoadBalancerController {
+func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *PodInfo) *LoadBalancerController {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
-	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: clientset.Core().Events(config.WatchNamespace)})
+	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(clientset.CoreV1().RESTClient()).Events(config.WatchNamespace)})
 
 	lbc := LoadBalancerController{
 		clientset:         clientset,
@@ -143,116 +147,152 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		watchNamespace:    config.WatchNamespace,
 		ingressClass:      config.IngressClass,
 		allowInternalIP:   config.AllowInternalIP,
-		recorder:          eventBroadcaster.NewRecorder(api.EventSource{Component: "nghttpx-ingress-controller"}),
+		recorder:          eventBroadcaster.NewRecorder(api.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:         workqueue.New(),
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
 	}
 
-	ingIndexer, ingController := cache.NewIndexerInformer(
-		&cache.ListWatch{
-			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Extensions().Ingresses(config.WatchNamespace).List(options)
+	{
+		indexer, controller := cache.NewIndexerInformer(
+			&cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					return lbc.clientset.Extensions().Ingresses(config.WatchNamespace).List(options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					return lbc.clientset.Extensions().Ingresses(config.WatchNamespace).Watch(options)
+				},
 			},
-			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Extensions().Ingresses(config.WatchNamespace).Watch(options)
+			&extensions.Ingress{},
+			config.ResyncPeriod,
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    lbc.addIngressNotification,
+				UpdateFunc: lbc.updateIngressNotification,
+				DeleteFunc: lbc.deleteIngressNotification,
 			},
-		},
-		&extensions.Ingress{},
-		config.ResyncPeriod,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    lbc.addIngressNotification,
-			UpdateFunc: lbc.updateIngressNotification,
-			DeleteFunc: lbc.deleteIngressNotification,
-		},
-		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-	)
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
 
-	lbc.ingLister.indexer = ingIndexer
-	lbc.ingLister.IngressLister = extensionslisters.NewIngressLister(ingIndexer)
-	lbc.ingController = ingController
+		lbc.ingLister.indexer = indexer
+		lbc.ingLister.IngressLister = extensionslisters.NewIngressLister(indexer)
+		lbc.ingController = controller
+	}
 
-	lbc.epLister.Store, lbc.epController = cache.NewInformer(
-		&cache.ListWatch{
-			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Endpoints(api.NamespaceAll).List(options)
+	{
+		indexer, controller := cache.NewIndexerInformer(
+			&cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					return lbc.clientset.CoreV1().Endpoints(metav1.NamespaceAll).List(options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					return lbc.clientset.CoreV1().Endpoints(metav1.NamespaceAll).Watch(options)
+				},
 			},
-			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Endpoints(api.NamespaceAll).Watch(options)
+			&v1.Endpoints{},
+			depResyncPeriod(),
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    lbc.addEndpointsNotification,
+				UpdateFunc: lbc.updateEndpointsNotification,
+				DeleteFunc: lbc.deleteEndpointsNotification,
 			},
-		},
-		&api.Endpoints{},
-		depResyncPeriod(),
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    lbc.addEndpointsNotification,
-			UpdateFunc: lbc.updateEndpointsNotification,
-			DeleteFunc: lbc.deleteEndpointsNotification,
-		},
-	)
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
 
-	lbc.svcLister.Store, lbc.svcController = cache.NewInformer(
-		&cache.ListWatch{
-			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Services(api.NamespaceAll).List(options)
-			},
-			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Services(api.NamespaceAll).Watch(options)
-			},
-		},
-		&api.Service{},
-		depResyncPeriod(),
-		cache.ResourceEventHandlerFuncs{},
-	)
+		lbc.epLister.indexer = indexer
+		lbc.epLister.EndpointsLister = corelisters.NewEndpointsLister(indexer)
+		lbc.epController = controller
+	}
 
-	lbc.secretLister.Store, lbc.secretController = cache.NewInformer(
-		&cache.ListWatch{
-			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Secrets(api.NamespaceAll).List(options)
+	{
+		indexer, controller := cache.NewIndexerInformer(
+			&cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					return lbc.clientset.CoreV1().Services(metav1.NamespaceAll).List(options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					return lbc.clientset.CoreV1().Services(metav1.NamespaceAll).Watch(options)
+				},
 			},
-			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Secrets(api.NamespaceAll).Watch(options)
-			},
-		},
-		&api.Secret{},
-		depResyncPeriod(),
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    lbc.addSecretNotification,
-			UpdateFunc: lbc.updateSecretNotification,
-			DeleteFunc: lbc.deleteSecretNotification,
-		},
-	)
+			&v1.Service{},
+			depResyncPeriod(),
+			cache.ResourceEventHandlerFuncs{},
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
 
-	lbc.podLister.Indexer, lbc.podController = cache.NewIndexerInformer(
-		&cache.ListWatch{
-			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Pods(api.NamespaceAll).List(options)
-			},
-			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Pods(api.NamespaceAll).Watch(options)
-			},
-		},
-		&api.Pod{},
-		depResyncPeriod(),
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    lbc.addPodNotification,
-			UpdateFunc: lbc.updatePodNotification,
-			DeleteFunc: lbc.deletePodNotification,
-		},
-		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-	)
+		lbc.svcLister.indexer = indexer
+		lbc.svcLister.ServiceLister = corelisters.NewServiceLister(indexer)
+		lbc.svcController = controller
+	}
 
-	lbc.nodeLister.Store, lbc.nodeController = cache.NewInformer(
-		&cache.ListWatch{
-			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().Nodes().List(options)
+	{
+		indexer, controller := cache.NewIndexerInformer(
+			&cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					return lbc.clientset.CoreV1().Secrets(metav1.NamespaceAll).List(options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					return lbc.clientset.CoreV1().Secrets(metav1.NamespaceAll).Watch(options)
+				},
 			},
-			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().Nodes().Watch(options)
+			&v1.Secret{},
+			depResyncPeriod(),
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    lbc.addSecretNotification,
+				UpdateFunc: lbc.updateSecretNotification,
+				DeleteFunc: lbc.deleteSecretNotification,
 			},
-		},
-		&api.Node{},
-		depResyncPeriod(),
-		cache.ResourceEventHandlerFuncs{},
-	)
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
+
+		lbc.secretLister.indexer = indexer
+		lbc.secretLister.SecretLister = corelisters.NewSecretLister(indexer)
+		lbc.secretController = controller
+	}
+
+	{
+		indexer, controller := cache.NewIndexerInformer(
+			&cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					return lbc.clientset.CoreV1().Pods(metav1.NamespaceAll).List(options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					return lbc.clientset.CoreV1().Pods(metav1.NamespaceAll).Watch(options)
+				},
+			},
+			&v1.Pod{},
+			depResyncPeriod(),
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    lbc.addPodNotification,
+				UpdateFunc: lbc.updatePodNotification,
+				DeleteFunc: lbc.deletePodNotification,
+			},
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
+
+		lbc.podLister.indexer = indexer
+		lbc.podLister.PodLister = corelisters.NewPodLister(indexer)
+		lbc.podController = controller
+	}
+
+	{
+		indexer, controller := cache.NewIndexerInformer(
+			&cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					return lbc.clientset.CoreV1().Nodes().List(options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					return lbc.clientset.CoreV1().Nodes().Watch(options)
+				},
+			},
+			&v1.Node{},
+			depResyncPeriod(),
+			cache.ResourceEventHandlerFuncs{},
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
+
+		lbc.nodeLister.indexer = indexer
+		lbc.nodeLister.NodeLister = corelisters.NewNodeLister(indexer)
+		lbc.nodeController = controller
+	}
 
 	var cmNamespace string
 	if lbc.ngxConfigMap != "" {
@@ -263,23 +303,30 @@ func NewLoadBalancerController(clientset internalclientset.Interface, manager ng
 		cmNamespace = runtimeInfo.PodNamespace
 	}
 
-	lbc.cmLister.Store, lbc.cmController = cache.NewInformer(
-		&cache.ListWatch{
-			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return lbc.clientset.Core().ConfigMaps(cmNamespace).List(options)
+	{
+		indexer, controller := cache.NewIndexerInformer(
+			&cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					return lbc.clientset.CoreV1().ConfigMaps(cmNamespace).List(options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					return lbc.clientset.CoreV1().ConfigMaps(cmNamespace).Watch(options)
+				},
 			},
-			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return lbc.clientset.Core().ConfigMaps(cmNamespace).Watch(options)
+			&v1.ConfigMap{},
+			depResyncPeriod(),
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    lbc.addConfigMapNotification,
+				UpdateFunc: lbc.updateConfigMapNotification,
+				DeleteFunc: lbc.deleteConfigMapNotification,
 			},
-		},
-		&api.ConfigMap{},
-		depResyncPeriod(),
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    lbc.addConfigMapNotification,
-			UpdateFunc: lbc.updateConfigMapNotification,
-			DeleteFunc: lbc.deleteConfigMapNotification,
-		},
-	)
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
+
+		lbc.cmLister.indexer = indexer
+		lbc.cmLister.ConfigMapLister = corelisters.NewConfigMapLister(indexer)
+		lbc.cmController = controller
+	}
 
 	lbc.controllersInSyncHandler = lbc.controllersInSync
 
@@ -327,7 +374,7 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 }
 
 func (lbc *LoadBalancerController) addEndpointsNotification(obj interface{}) {
-	ep := obj.(*api.Endpoints)
+	ep := obj.(*v1.Endpoints)
 	if !lbc.endpointsReferenced(ep) {
 		return
 	}
@@ -340,8 +387,8 @@ func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interfac
 		return
 	}
 
-	oldEp := old.(*api.Endpoints)
-	curEp := cur.(*api.Endpoints)
+	oldEp := old.(*v1.Endpoints)
+	curEp := cur.(*v1.Endpoints)
 	if !lbc.endpointsReferenced(oldEp) && !lbc.endpointsReferenced(curEp) {
 		return
 	}
@@ -350,14 +397,14 @@ func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interfac
 }
 
 func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) {
-	ep, ok := obj.(*api.Endpoints)
+	ep, ok := obj.(*v1.Endpoints)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			glog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
-		ep, ok = tombstone.Obj.(*api.Endpoints)
+		ep, ok = tombstone.Obj.(*v1.Endpoints)
 		if !ok {
 			glog.Errorf("Tombstone contained object that is not Endpoints %+v", obj)
 			return
@@ -371,7 +418,7 @@ func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) 
 }
 
 // endpointsReferenced returns true if we are interested in ep.
-func (lbc *LoadBalancerController) endpointsReferenced(ep *api.Endpoints) bool {
+func (lbc *LoadBalancerController) endpointsReferenced(ep *v1.Endpoints) bool {
 	if fmt.Sprintf("%v/%v", ep.Namespace, ep.Name) == lbc.defaultSvc {
 		return true
 	}
@@ -407,7 +454,7 @@ func (lbc *LoadBalancerController) endpointsReferenced(ep *api.Endpoints) bool {
 }
 
 func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
-	s := obj.(*api.Secret)
+	s := obj.(*v1.Secret)
 	if !lbc.secretReferenced(s.Namespace, s.Name) {
 		return
 	}
@@ -421,8 +468,8 @@ func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}
 		return
 	}
 
-	oldS := old.(*api.Secret)
-	curS := cur.(*api.Secret)
+	oldS := old.(*v1.Secret)
+	curS := cur.(*v1.Secret)
 	if !lbc.secretReferenced(oldS.Namespace, oldS.Name) && !lbc.secretReferenced(curS.Namespace, curS.Name) {
 		return
 	}
@@ -432,14 +479,14 @@ func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}
 }
 
 func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
-	s, ok := obj.(*api.Secret)
+	s, ok := obj.(*v1.Secret)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			glog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
-		s, ok = tombstone.Obj.(*api.Secret)
+		s, ok = tombstone.Obj.(*v1.Secret)
 		if !ok {
 			glog.Errorf("Tombstone contained object that is not a Secret %+v", obj)
 			return
@@ -453,7 +500,7 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 }
 
 func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
-	c := obj.(*api.ConfigMap)
+	c := obj.(*v1.ConfigMap)
 	cKey := fmt.Sprintf("%v/%v", c.Namespace, c.Name)
 	if cKey != lbc.ngxConfigMap {
 		return
@@ -467,7 +514,7 @@ func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interfac
 		return
 	}
 
-	curC := cur.(*api.ConfigMap)
+	curC := cur.(*v1.ConfigMap)
 	cKey := fmt.Sprintf("%v/%v", curC.Namespace, curC.Name)
 	// updates to configuration configmaps can trigger an update
 	if cKey != lbc.ngxConfigMap {
@@ -478,14 +525,14 @@ func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interfac
 }
 
 func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) {
-	c, ok := obj.(*api.ConfigMap)
+	c, ok := obj.(*v1.ConfigMap)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			glog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
-		c, ok = tombstone.Obj.(*api.ConfigMap)
+		c, ok = tombstone.Obj.(*v1.ConfigMap)
 		if !ok {
 			glog.Errorf("Tombstone contained object that is not a ConfigMap %+v", obj)
 			return
@@ -500,7 +547,7 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 }
 
 func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
-	pod := obj.(*api.Pod)
+	pod := obj.(*v1.Pod)
 	if !lbc.podReferenced(pod) {
 		return
 	}
@@ -513,8 +560,8 @@ func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
 		return
 	}
 
-	oldPod := old.(*api.Pod)
-	curPod := cur.(*api.Pod)
+	oldPod := old.(*v1.Pod)
+	curPod := cur.(*v1.Pod)
 	if !lbc.podReferenced(oldPod) && !lbc.podReferenced(curPod) {
 		return
 	}
@@ -523,14 +570,14 @@ func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
 }
 
 func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
-	pod, ok := obj.(*api.Pod)
+	pod, ok := obj.(*v1.Pod)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			glog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
-		pod, ok = tombstone.Obj.(*api.Pod)
+		pod, ok = tombstone.Obj.(*v1.Pod)
 		if !ok {
 			glog.Errorf("Tombstone contained object that is not Pod %+v", obj)
 			return
@@ -544,9 +591,9 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 }
 
 // podReferenced returns true if we are interested in pod.
-func (lbc *LoadBalancerController) podReferenced(pod *api.Pod) bool {
-	if obj, exists, err := lbc.svcLister.GetByKey(lbc.defaultSvc); err == nil && exists {
-		svc := obj.(*api.Service)
+func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
+	defaultSvcNS, defaultSvcName, _ := ParseNSName(lbc.defaultSvc)
+	if svc, err := lbc.svcLister.Services(defaultSvcNS).Get(defaultSvcName); err == nil {
 		if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
 			glog.V(4).Infof("Pod %v/%v is referenced by default Service %v", pod.Namespace, pod.Name, lbc.defaultSvc)
 			return true
@@ -563,8 +610,7 @@ func (lbc *LoadBalancerController) podReferenced(pod *api.Pod) bool {
 			continue
 		}
 		if ing.Spec.Backend != nil {
-			if obj, exists, err := lbc.svcLister.GetByKey(fmt.Sprintf("%v/%v", pod.Namespace, ing.Spec.Backend.ServiceName)); err == nil && exists {
-				svc := obj.(*api.Service)
+			if svc, err := lbc.svcLister.Services(pod.Namespace).Get(ing.Spec.Backend.ServiceName); err == nil {
 				if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
 					glog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
 						pod.Namespace, pod.Name, ing.Namespace, ing.Name, svc.Namespace, svc.Name)
@@ -579,11 +625,9 @@ func (lbc *LoadBalancerController) podReferenced(pod *api.Pod) bool {
 			}
 			for i, _ := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
-				var svc *api.Service
-				if obj, exists, err := lbc.svcLister.GetByKey(fmt.Sprintf("%v/%v", pod.Namespace, path.Backend.ServiceName)); err != nil || !exists {
+				svc, err := lbc.svcLister.Services(pod.Namespace).Get(path.Backend.ServiceName)
+				if err != nil {
 					continue
-				} else {
-					svc = obj.(*api.Service)
 				}
 				if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
 					glog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
@@ -634,19 +678,21 @@ func (lbc *LoadBalancerController) controllersInSync() bool {
 }
 
 // getConfigMap returns ConfigMap denoted by cmKey.
-func (lbc *LoadBalancerController) getConfigMap(cmKey string) (*api.ConfigMap, error) {
+func (lbc *LoadBalancerController) getConfigMap(cmKey string) (*v1.ConfigMap, error) {
 	if cmKey == "" {
-		return &api.ConfigMap{}, nil
+		return &v1.ConfigMap{}, nil
 	}
 
-	obj, exists, err := lbc.cmLister.GetByKey(cmKey)
+	ns, name, _ := ParseNSName(cmKey)
+	cm, err := lbc.cmLister.ConfigMaps(ns).Get(name)
+	if errors.IsNotFound(err) {
+		glog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
+		return &v1.ConfigMap{}, nil
+	}
 	if err != nil {
 		return nil, err
-	} else if !exists {
-		glog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
-		return &api.ConfigMap{}, nil
 	}
-	return obj.(*api.ConfigMap), nil
+	return cm, nil
 }
 
 func (lbc *LoadBalancerController) sync(key string) error {
@@ -687,24 +733,23 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 		RedirectIfNotTLS: lbc.defaultTLSSecret != "",
 	}
 	svcKey := lbc.defaultSvc
-	svcObj, svcExists, err := lbc.svcLister.GetByKey(svcKey)
+	defaultSvcNS, defaultSvcName, _ := ParseNSName(svcKey)
+	svc, err := lbc.svcLister.Services(defaultSvcNS).Get(defaultSvcName)
+	if errors.IsNotFound(err) {
+		glog.Warningf("service %v does no exists", svcKey)
+		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
+		return upstream
+	}
+
 	if err != nil {
 		glog.Warningf("unexpected error searching the default backend %v: %v", lbc.defaultSvc, err)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
 		return upstream
 	}
 
-	if !svcExists {
-		glog.Warningf("service %v does no exists", svcKey)
-		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
-		return upstream
-	}
-
-	svc := svcObj.(*api.Service)
-
 	portBackendConfig := nghttpx.DefaultPortBackendConfig()
 
-	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], api.ProtocolTCP, &portBackendConfig)
+	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], v1.ProtocolTCP, &portBackendConfig)
 	if len(eps) == 0 {
 		glog.Warningf("service %v does no have any active endpoints", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
@@ -866,16 +911,15 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 	glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
 
 	svcKey := fmt.Sprintf("%v/%v", ing.Namespace, backend.ServiceName)
-	svcObj, svcExists, err := lbc.svcLister.GetByKey(svcKey)
+	svc, err := lbc.svcLister.Services(ing.Namespace).Get(backend.ServiceName)
+	if errors.IsNotFound(err) {
+		return nil, fmt.Errorf("service %v does no exists", svcKey)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("error getting service %v from the cache: %v", svcKey, err)
 	}
 
-	if !svcExists {
-		return nil, fmt.Errorf("service %v does no exists", svcKey)
-	}
-
-	svc := svcObj.(*api.Service)
 	glog.V(3).Infof("obtaining port information for service %v", svcKey)
 	bp := backend.ServicePort.String()
 
@@ -893,7 +937,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 				portBackendConfig = nghttpx.DefaultPortBackendConfig()
 			}
 
-			eps := lbc.getEndpoints(svc, servicePort, api.ProtocolTCP, &portBackendConfig)
+			eps := lbc.getEndpoints(svc, servicePort, v1.ProtocolTCP, &portBackendConfig)
 			if len(eps) == 0 {
 				glog.Warningf("service %v does no have any active endpoints", svcKey)
 				break
@@ -913,14 +957,15 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 
 // getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.
 func (lbc *LoadBalancerController) getTLSCredFromSecret(secretKey string) (*nghttpx.TLSCred, error) {
-	obj, exists, err := lbc.secretLister.GetByKey(secretKey)
+	ns, name, _ := ParseNSName(secretKey)
+	secret, err := lbc.secretLister.Secrets(ns).Get(name)
+	if errors.IsNotFound(err) {
+		return nil, fmt.Errorf("Secret %v has been deleted", secretKey)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Could not get TLS secret %v: %v", secretKey, err)
 	}
-	if !exists {
-		return nil, fmt.Errorf("Secret %v has been deleted", secretKey)
-	}
-	tlsCred, err := lbc.createTLSCredFromSecret(obj.(*api.Secret))
+	tlsCred, err := lbc.createTLSCredFromSecret(secret)
 	if err != nil {
 		return nil, err
 	}
@@ -934,14 +979,14 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *extensions.Ingress
 	for i, _ := range ing.Spec.TLS {
 		tls := &ing.Spec.TLS[i]
 		secretKey := fmt.Sprintf("%s/%s", ing.Namespace, tls.SecretName)
-		obj, exists, err := lbc.secretLister.GetByKey(secretKey)
+		secret, err := lbc.secretLister.Secrets(ing.Namespace).Get(tls.SecretName)
+		if errors.IsNotFound(err) {
+			return nil, fmt.Errorf("Secret %v has been deleted", secretKey)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("Error retrieving Secret %v for Ingress %v/%v: %v", secretKey, ing.Namespace, ing.Name, err)
 		}
-		if !exists {
-			return nil, fmt.Errorf("Secret %v has been deleted", secretKey)
-		}
-		tlsCred, err := lbc.createTLSCredFromSecret(obj.(*api.Secret))
+		tlsCred, err := lbc.createTLSCredFromSecret(secret)
 		if err != nil {
 			return nil, err
 		}
@@ -953,12 +998,12 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *extensions.Ingress
 }
 
 // createTLSCredFromSecret creates nghttpx.TLSCred from secret.
-func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *api.Secret) (*nghttpx.TLSCred, error) {
-	cert, ok := secret.Data[api.TLSCertKey]
+func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*nghttpx.TLSCred, error) {
+	cert, ok := secret.Data[v1.TLSCertKey]
 	if !ok {
 		return nil, fmt.Errorf("Secret %v/%v has no certificate", secret.Namespace, secret.Name)
 	}
-	key, ok := secret.Data[api.TLSPrivateKeyKey]
+	key, ok := secret.Data[v1.TLSPrivateKeyKey]
 	if !ok {
 		return nil, fmt.Errorf("Secret %v/%v has no private key", secret.Namespace, secret.Name)
 	}
@@ -1006,9 +1051,9 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 // getEndpoints returns a list of <endpoint ip>:<port> for a given
 // service/target port combination.  portBackendConfig is additional
 // per-port configuration for backend, which must not be nil.
-func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort *api.ServicePort, proto api.Protocol, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.ServicePort, proto v1.Protocol, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
 	glog.V(3).Infof("getting endpoints for service %v/%v and port %v target port %v protocol %v", s.Namespace, s.Name, servicePort.Port, servicePort.TargetPort.String(), servicePort.Protocol)
-	ep, err := lbc.epLister.GetServiceEndpoints(s)
+	ep, err := lbc.epLister.Endpoints(s.Namespace).Get(s.Name)
 	if err != nil {
 		glog.Warningf("unexpected error obtaining service endpoints: %v", err)
 		return []nghttpx.UpstreamServer{}
@@ -1083,7 +1128,7 @@ func (lbc *LoadBalancerController) getEndpoints(s *api.Service, servicePort *api
 }
 
 // getNamedPortFromPod returns port number from Pod sharing the same port name with servicePort.
-func (lbc *LoadBalancerController) getNamedPortFromPod(svc *api.Service, servicePort *api.ServicePort) (int32, error) {
+func (lbc *LoadBalancerController) getNamedPortFromPod(svc *v1.Service, servicePort *v1.ServicePort) (int32, error) {
 	pods, err := lbc.podLister.Pods(svc.Namespace).List(labels.Set(svc.Spec.Selector).AsSelector())
 	if err != nil {
 		return 0, fmt.Errorf("Could not get Pods %v/%v: %v", svc.Namespace, svc.Name, err)
@@ -1218,7 +1263,7 @@ func (lbc *LoadBalancerController) getNodeIPAndUpdateIngress() error {
 }
 
 // getThisPod returns this controller's pod.
-func (lbc *LoadBalancerController) getThisPod() (*api.Pod, error) {
+func (lbc *LoadBalancerController) getThisPod() (*v1.Pod, error) {
 	pod, err := lbc.podLister.Pods(lbc.podInfo.PodNamespace).Get(lbc.podInfo.PodName)
 	if err != nil {
 		return nil, fmt.Errorf("Could not get Pod %v/%v from lister: %v", lbc.podInfo.PodNamespace, lbc.podInfo.PodName, err)
@@ -1227,7 +1272,7 @@ func (lbc *LoadBalancerController) getThisPod() (*api.Pod, error) {
 }
 
 // updateIngressStatus updates LoadBalancerIngress field of all Ingresses.
-func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []api.LoadBalancerIngress) error {
+func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []v1.LoadBalancerIngress) error {
 
 	ings, err := lbc.ingLister.List(labels.Everything())
 	if err != nil {
@@ -1264,14 +1309,14 @@ func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []api.LoadBalancer
 	return nil
 }
 
-// getLoadBalancerIngress creates array of api.LoadBalancerIngress based on cached Pods and Nodes.
-func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Selector) ([]api.LoadBalancerIngress, error) {
+// getLoadBalancerIngress creates array of v1.LoadBalancerIngress based on cached Pods and Nodes.
+func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Selector) ([]v1.LoadBalancerIngress, error) {
 	pods, err := lbc.podLister.List(selector)
 	if err != nil {
 		return nil, fmt.Errorf("Could not list Pods with label %v", selector)
 	}
 
-	var lbIngs []api.LoadBalancerIngress
+	var lbIngs []v1.LoadBalancerIngress
 
 	for _, pod := range pods {
 		externalIP, err := lbc.getPodAddress(pod)
@@ -1280,7 +1325,7 @@ func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Select
 			continue
 		}
 
-		lbIng := api.LoadBalancerIngress{}
+		lbIng := v1.LoadBalancerIngress{}
 		// This is really a messy specification.
 		if net.ParseIP(externalIP) != nil {
 			lbIng.IP = externalIP
@@ -1294,19 +1339,18 @@ func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Select
 }
 
 // getPodAddress returns pod's address.  It prefers external IP.  It may return internal IP if configuration allows it.
-func (lbc *LoadBalancerController) getPodAddress(pod *api.Pod) (string, error) {
-	var node *api.Node
-	if obj, exists, err := lbc.nodeLister.GetByKey(pod.Spec.NodeName); err != nil {
-		return "", fmt.Errorf("Could not get Node %v for Pod %v/%v from lister: %v", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
-	} else if !exists {
+func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
+	node, err := lbc.nodeLister.Get(pod.Spec.NodeName)
+	if errors.IsNotFound(err) {
 		return "", fmt.Errorf("Node %v for Pod %v/%v has been deleted", pod.Spec.NodeName, pod.Namespace, pod.Name)
-	} else {
-		node = obj.(*api.Node)
+	}
+	if err != nil {
+		return "", fmt.Errorf("Could not get Node %v for Pod %v/%v from lister: %v", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
 	}
 	var externalIP string
 	for i, _ := range node.Status.Addresses {
 		address := &node.Status.Addresses[i]
-		if address.Type == api.NodeExternalIP {
+		if address.Type == v1.NodeExternalIP {
 			if address.Address == "" {
 				continue
 			}
@@ -1314,9 +1358,9 @@ func (lbc *LoadBalancerController) getPodAddress(pod *api.Pod) (string, error) {
 			break
 		}
 
-		if externalIP == "" && ((lbc.allowInternalIP && address.Type == api.NodeInternalIP) || address.Type == api.NodeLegacyHostIP) {
+		if externalIP == "" && ((lbc.allowInternalIP && address.Type == v1.NodeInternalIP) || address.Type == v1.NodeLegacyHostIP) {
 			externalIP = address.Address
-			// Continue to the next iteration because we may encounter api.NodeExternalIP later.
+			// Continue to the next iteration because we may encounter v1.NodeExternalIP later.
 		}
 	}
 
@@ -1353,7 +1397,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 
 		// Time may be short because we should do all the work during Pod graceful shut down period.
 		if err := wait.Poll(250*time.Millisecond, 2*time.Second, func() (bool, error) {
-			ing, err := lbc.clientset.Extensions().Ingresses(ing.Namespace).Get(ing.Name)
+			ing, err := lbc.clientset.Extensions().Ingresses(ing.Namespace).Get(ing.Name, metav1.GetOptions{})
 			if err != nil {
 				if errors.IsNotFound(err) {
 					return false, err

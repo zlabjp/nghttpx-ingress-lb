@@ -36,7 +36,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 //CreateTLSKeyPath returns TLS private key file path.
@@ -180,6 +180,6 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 }
 
 // TLSCredPrefix returns prefix of TLS certificate/private key files.
-func TLSCredPrefix(secret *api.Secret) string {
+func TLSCredPrefix(secret *v1.Secret) string {
 	return fmt.Sprintf("%v_%v", secret.Namespace, secret.Name)
 }

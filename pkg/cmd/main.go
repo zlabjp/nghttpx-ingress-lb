@@ -38,10 +38,10 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	"k8s.io/kubernetes/pkg/client/restclient"
-	"k8s.io/kubernetes/pkg/healthz"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apiserver/pkg/server/healthz"
+	"k8s.io/client-go/rest"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	kubectl_util "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
@@ -74,7 +74,7 @@ var (
 	resyncPeriod = flags.Duration("sync-period", 30*time.Second,
 		`Relist and confirm cloud resources this often.`)
 
-	watchNamespace = flags.String("watch-namespace", api.NamespaceAll,
+	watchNamespace = flags.String("watch-namespace", metav1.NamespaceAll,
 		`Namespace to watch for Ingress. Default is to watch all namespaces`)
 
 	healthzPort = flags.Int("healthz-port", healthPort, "port for healthz endpoint.")
@@ -115,9 +115,9 @@ func main() {
 	}
 
 	var err error
-	var config *restclient.Config
+	var config *rest.Config
 	if *inCluster {
-		config, err = restclient.InClusterConfig()
+		config, err = rest.InClusterConfig()
 		if err != nil {
 			glog.Fatalf("Could not get clientConfig: %v", err)
 		}
@@ -128,7 +128,7 @@ func main() {
 		}
 	}
 
-	clientset, err := internalclientset.NewForConfig(config)
+	clientset, err := clientset.NewForConfig(config)
 	if err != nil {
 		glog.Fatalf("Failed to create clientset: %v", err)
 	}
