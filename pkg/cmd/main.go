@@ -114,6 +114,9 @@ func main() {
 	if *defaultSvc == "" {
 		glog.Fatalf("Please specify --default-backend-service")
 	}
+	if _, _, err := cache.SplitMetaNamespaceKey(*defaultSvc); err != nil {
+		glog.Fatalf("could not parse default-backend-service %v: %v", *defaultSvc, err)
+	}
 
 	var err error
 	var config *rest.Config
