@@ -288,7 +288,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 
 	var cmNamespace string
 	if lbc.ngxConfigMap != "" {
-		ns, _, _ := ParseNSName(lbc.ngxConfigMap)
+		ns, _, _ := cache.SplitMetaNamespaceKey(lbc.ngxConfigMap)
 		cmNamespace = ns
 	} else {
 		// Just watch runtimeInfo.PodNamespace to make codebase simple
@@ -583,7 +583,7 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 
 // podReferenced returns true if we are interested in pod.
 func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
-	defaultSvcNS, defaultSvcName, _ := ParseNSName(lbc.defaultSvc)
+	defaultSvcNS, defaultSvcName, _ := cache.SplitMetaNamespaceKey(lbc.defaultSvc)
 	if svc, err := lbc.svcLister.Services(defaultSvcNS).Get(defaultSvcName); err == nil {
 		if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
 			glog.V(4).Infof("Pod %v/%v is referenced by default Service %v", pod.Namespace, pod.Name, lbc.defaultSvc)
@@ -674,7 +674,7 @@ func (lbc *LoadBalancerController) getConfigMap(cmKey string) (*v1.ConfigMap, er
 		return &v1.ConfigMap{}, nil
 	}
 
-	ns, name, _ := ParseNSName(cmKey)
+	ns, name, _ := cache.SplitMetaNamespaceKey(cmKey)
 	cm, err := lbc.cmLister.ConfigMaps(ns).Get(name)
 	if errors.IsNotFound(err) {
 		glog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
@@ -724,7 +724,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 		RedirectIfNotTLS: lbc.defaultTLSSecret != "",
 	}
 	svcKey := lbc.defaultSvc
-	defaultSvcNS, defaultSvcName, _ := ParseNSName(svcKey)
+	defaultSvcNS, defaultSvcName, _ := cache.SplitMetaNamespaceKey(svcKey)
 	svc, err := lbc.svcLister.Services(defaultSvcNS).Get(defaultSvcName)
 	if errors.IsNotFound(err) {
 		glog.Warningf("service %v does no exists", svcKey)
@@ -948,7 +948,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 
 // getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.
 func (lbc *LoadBalancerController) getTLSCredFromSecret(secretKey string) (*nghttpx.TLSCred, error) {
-	ns, name, _ := ParseNSName(secretKey)
+	ns, name, _ := cache.SplitMetaNamespaceKey(secretKey)
 	secret, err := lbc.secretLister.Secrets(ns).Get(name)
 	if errors.IsNotFound(err) {
 		return nil, fmt.Errorf("Secret %v has been deleted", secretKey)

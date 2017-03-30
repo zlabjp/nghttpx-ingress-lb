@@ -41,6 +41,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/server/healthz"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	kubectl_util "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 
@@ -139,13 +140,13 @@ func main() {
 	glog.Infof("Validated %v as the default backend", *defaultSvc)
 
 	if *ngxConfigMap != "" {
-		if _, _, err := controller.ParseNSName(*ngxConfigMap); err != nil {
+		if _, _, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
 			glog.Fatalf("could not parse configmap name %v: %v", *ngxConfigMap, err)
 		}
 	}
 
 	if *defaultTLSSecret != "" {
-		if _, _, err := controller.ParseNSName(*defaultTLSSecret); err != nil {
+		if _, _, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
 			glog.Fatalf("could not parse Secret %v: %v", *defaultTLSSecret, err)
 		}
 	}

@@ -56,15 +56,6 @@ func IsValidService(clientset clientset.Interface, name string) error {
 	return err
 }
 
-func ParseNSName(input string) (string, string, error) {
-	nsName := strings.Split(input, "/")
-	if len(nsName) != 2 {
-		return "", "", fmt.Errorf("invalid format (namespace/name) found in '%v'", input)
-	}
-
-	return nsName[0], nsName[1], nil
-}
-
 // depResyncPeriod returns duration between resync for resources other than Ingress.
 //
 // Inspired by Kubernetes apiserver: k8s.io/kubernetes/cmd/kube-controller-manager/app/controllermanager.go
