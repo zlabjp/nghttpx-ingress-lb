@@ -32,61 +32,9 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
-	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
-	extensionslisters "k8s.io/kubernetes/pkg/client/listers/extensions/v1beta1"
 )
-
-// ingressLister makes a Store that lists Ingresses.
-type ingressLister struct {
-	// indexer is added here so that object can be added to indexer in test.
-	indexer cache.Indexer
-	extensionslisters.IngressLister
-}
-
-// secrLister makes a Store that lists Secrets.
-type secretLister struct {
-	// indexer is added here so that object can be added to indexer in test.
-	indexer cache.Indexer
-	corelisters.SecretLister
-}
-
-// configMapLister makes a Store that lists ConfigMaps.
-type configMapLister struct {
-	// indexer is added here so that object can be added to indexer in test.
-	indexer cache.Indexer
-	corelisters.ConfigMapLister
-}
-
-// serviceLister makes a Store that lists Services.
-type serviceLister struct {
-	// indexer is added here so that object can be added to indexer in test.
-	indexer cache.Indexer
-	corelisters.ServiceLister
-}
-
-// endpointsLister makes a Store that lists Endpoints.
-type endpointsLister struct {
-	// indexer is added here so that object can be added to indexer in test.
-	indexer cache.Indexer
-	corelisters.EndpointsLister
-}
-
-// podLister makes a Store that lists Pods.
-type podLister struct {
-	// indexer is added here so that object can be added to indexer in test.
-	indexer cache.Indexer
-	corelisters.PodLister
-}
-
-// nodeLister makes a Store that lists Nodes.
-type nodeLister struct {
-	// indexer is added here so that object can be added to indexer in test.
-	indexer cache.Indexer
-	corelisters.NodeLister
-}
 
 // podInfo contains runtime information about the pod
 type PodInfo struct {

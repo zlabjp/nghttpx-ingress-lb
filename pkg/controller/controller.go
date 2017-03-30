@@ -55,8 +55,6 @@ import (
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
-	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
-	extensionslisters "k8s.io/kubernetes/pkg/client/listers/extensions/v1beta1"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -81,13 +79,13 @@ type LoadBalancerController struct {
 	cmController     cache.Controller
 	podController    cache.Controller
 	nodeController   cache.Controller
-	ingLister        ingressLister
-	svcLister        serviceLister
-	epLister         endpointsLister
-	secretLister     secretLister
-	cmLister         configMapLister
-	podLister        podLister
-	nodeLister       nodeLister
+	ingLister        *ingressLister
+	svcLister        *serviceLister
+	epLister         *endpointsLister
+	secretLister     *secretLister
+	cmLister         *configMapLister
+	podLister        *podLister
+	nodeLister       *nodeLister
 	nghttpx          nghttpx.Interface
 	podInfo          *PodInfo
 	defaultSvc       string
@@ -172,8 +170,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		)
 
-		lbc.ingLister.indexer = indexer
-		lbc.ingLister.IngressLister = extensionslisters.NewIngressLister(indexer)
+		lbc.ingLister = newIngressLister(indexer)
 		lbc.ingController = controller
 	}
 
@@ -197,8 +194,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		)
 
-		lbc.epLister.indexer = indexer
-		lbc.epLister.EndpointsLister = corelisters.NewEndpointsLister(indexer)
+		lbc.epLister = newEndpointsLister(indexer)
 		lbc.epController = controller
 	}
 
@@ -218,8 +214,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		)
 
-		lbc.svcLister.indexer = indexer
-		lbc.svcLister.ServiceLister = corelisters.NewServiceLister(indexer)
+		lbc.svcLister = newServiceLister(indexer)
 		lbc.svcController = controller
 	}
 
@@ -243,8 +238,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		)
 
-		lbc.secretLister.indexer = indexer
-		lbc.secretLister.SecretLister = corelisters.NewSecretLister(indexer)
+		lbc.secretLister = newSecretLister(indexer)
 		lbc.secretController = controller
 	}
 
@@ -268,8 +262,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		)
 
-		lbc.podLister.indexer = indexer
-		lbc.podLister.PodLister = corelisters.NewPodLister(indexer)
+		lbc.podLister = newPodLister(indexer)
 		lbc.podController = controller
 	}
 
@@ -289,8 +282,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		)
 
-		lbc.nodeLister.indexer = indexer
-		lbc.nodeLister.NodeLister = corelisters.NewNodeLister(indexer)
+		lbc.nodeLister = newNodeLister(indexer)
 		lbc.nodeController = controller
 	}
 
@@ -323,8 +315,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		)
 
-		lbc.cmLister.indexer = indexer
-		lbc.cmLister.ConfigMapLister = corelisters.NewConfigMapLister(indexer)
+		lbc.cmLister = newConfigMapLister(indexer)
 		lbc.cmController = controller
 	}
 
