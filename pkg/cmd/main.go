@@ -112,10 +112,10 @@ func main() {
 	}
 
 	if *defaultSvc == "" {
-		glog.Fatalf("Please specify --default-backend-service")
+		glog.Exitf("Please specify --default-backend-service")
 	}
 	if _, _, err := cache.SplitMetaNamespaceKey(*defaultSvc); err != nil {
-		glog.Fatalf("could not parse default-backend-service %v: %v", *defaultSvc, err)
+		glog.Exitf("could not parse default-backend-service %v: %v", *defaultSvc, err)
 	}
 
 	var err error
@@ -123,34 +123,34 @@ func main() {
 	if *inCluster {
 		config, err = rest.InClusterConfig()
 		if err != nil {
-			glog.Fatalf("Could not get clientConfig: %v", err)
+			glog.Exitf("Could not get clientConfig: %v", err)
 		}
 	} else {
 		config, err = clientConfig.ClientConfig()
 		if err != nil {
-			glog.Fatalf("error connecting to the client: %v", err)
+			glog.Exitf("error connecting to the client: %v", err)
 		}
 	}
 
 	clientset, err := clientset.NewForConfig(config)
 	if err != nil {
-		glog.Fatalf("Failed to create clientset: %v", err)
+		glog.Exitf("Failed to create clientset: %v", err)
 	}
 
 	if err := controller.IsValidService(clientset, *defaultSvc); err != nil {
-		glog.Fatalf("no service with name %v found: %v", *defaultSvc, err)
+		glog.Exitf("no service with name %v found: %v", *defaultSvc, err)
 	}
 	glog.Infof("Validated %v as the default backend", *defaultSvc)
 
 	if *ngxConfigMap != "" {
 		if _, _, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
-			glog.Fatalf("could not parse configmap name %v: %v", *ngxConfigMap, err)
+			glog.Exitf("could not parse configmap name %v: %v", *ngxConfigMap, err)
 		}
 	}
 
 	if *defaultTLSSecret != "" {
 		if _, _, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
-			glog.Fatalf("could not parse Secret %v: %v", *defaultTLSSecret, err)
+			glog.Exitf("could not parse Secret %v: %v", *defaultTLSSecret, err)
 		}
 	}
 
@@ -235,7 +235,7 @@ func registerHandlers(lbc *controller.LoadBalancerController) {
 		Addr:    fmt.Sprintf(":%v", *healthzPort),
 		Handler: mux,
 	}
-	glog.Fatal(server.ListenAndServe())
+	glog.Exit(server.ListenAndServe())
 }
 
 func handleSigterm(lbc *controller.LoadBalancerController) {
