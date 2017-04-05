@@ -5,7 +5,7 @@ include=/etc/nghttpx/nghttpx-backend.conf
 frontend=*,80;no-tls
 
 # API endpoints
-frontend=127.0.0.1,3001;api;no-tls
+frontend=127.0.0.1,{{ .APIPort }};api;no-tls
 
 {{ if .TLS }}
 frontend=*,443
@@ -27,7 +27,7 @@ frontend=*,443;no-tls
 {{ end }}
 
 # for health check
-frontend=127.0.0.1,8080;healthmon;no-tls
+frontend=127.0.0.1,{{ .HealthPort }};healthmon;no-tls
 
 # default configuration by controller
 workers={{ .Workers }}

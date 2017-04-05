@@ -71,29 +71,31 @@ const (
 // LoadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
 type LoadBalancerController struct {
-	clientset        clientset.Interface
-	ingController    cache.Controller
-	epController     cache.Controller
-	svcController    cache.Controller
-	secretController cache.Controller
-	cmController     cache.Controller
-	podController    cache.Controller
-	nodeController   cache.Controller
-	ingLister        *ingressLister
-	svcLister        *serviceLister
-	epLister         *endpointsLister
-	secretLister     *secretLister
-	cmLister         *configMapLister
-	podLister        *podLister
-	nodeLister       *nodeLister
-	nghttpx          nghttpx.Interface
-	podInfo          *PodInfo
-	defaultSvc       string
-	ngxConfigMap     string
-	defaultTLSSecret string
-	watchNamespace   string
-	ingressClass     string
-	allowInternalIP  bool
+	clientset         clientset.Interface
+	ingController     cache.Controller
+	epController      cache.Controller
+	svcController     cache.Controller
+	secretController  cache.Controller
+	cmController      cache.Controller
+	podController     cache.Controller
+	nodeController    cache.Controller
+	ingLister         *ingressLister
+	svcLister         *serviceLister
+	epLister          *endpointsLister
+	secretLister      *secretLister
+	cmLister          *configMapLister
+	podLister         *podLister
+	nodeLister        *nodeLister
+	nghttpx           nghttpx.Interface
+	podInfo           *PodInfo
+	defaultSvc        string
+	ngxConfigMap      string
+	nghttpxHealthPort int
+	nghttpxAPIPort    int
+	defaultTLSSecret  string
+	watchNamespace    string
+	ingressClass      string
+	allowInternalIP   bool
 
 	recorder record.EventRecorder
 
@@ -121,6 +123,10 @@ type Config struct {
 	WatchNamespace string
 	// NghttpxConfigMap is the name of ConfigMap resource which contains additional configuration for nghttpx.
 	NghttpxConfigMap string
+	// NghttpxHealthPort is the port for nghttpx health monitor endpoint.
+	NghttpxHealthPort int
+	// NghttpxAPIPort is the port for nghttpx API endpoint.
+	NghttpxAPIPort int
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret string
 	// IngressClass is the Ingress class this controller is responsible for.
@@ -140,6 +146,8 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		podInfo:           runtimeInfo,
 		nghttpx:           manager,
 		ngxConfigMap:      config.NghttpxConfigMap,
+		nghttpxHealthPort: config.NghttpxHealthPort,
+		nghttpxAPIPort:    config.NghttpxAPIPort,
 		defaultSvc:        config.DefaultBackendService,
 		defaultTLSSecret:  config.DefaultTLSSecret,
 		watchNamespace:    config.WatchNamespace,
@@ -708,6 +716,8 @@ func (lbc *LoadBalancerController) sync(key string) error {
 	}
 
 	nghttpx.ReadConfig(ingConfig, cm)
+	ingConfig.HealthPort = lbc.nghttpxHealthPort
+	ingConfig.APIPort = lbc.nghttpxAPIPort
 
 	if reloaded, err := lbc.nghttpx.CheckAndReload(ingConfig); err != nil {
 		return err

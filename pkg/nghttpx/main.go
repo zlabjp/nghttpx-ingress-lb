@@ -25,6 +25,7 @@ limitations under the License.
 package nghttpx
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"text/template"
@@ -40,10 +41,6 @@ var (
 
 // Manager ...
 type Manager struct {
-	// nghttpx main configuration file path
-	ConfigFile string
-	// nghttpx backend configuration file path
-	BackendConfigFile string
 	// httpClient is used to issue backend API request to nghttpx
 	httpClient *http.Client
 
@@ -56,13 +53,22 @@ type Manager struct {
 	// backend configuration without reloading nghttpx if main
 	// configuration has not changed.
 	backendTemplate *template.Template
+	// backendconfigURI is the nghttpx backendconfig endpoint.
+	backendconfigURI string
+	// configrevisionURI is the nghttpx configrevision endpoint.
+	configrevisionURI string
 }
 
+const (
+	// nghttpx main configuration file path
+	ConfigFile = "/etc/nghttpx/nghttpx.conf"
+	// nghttpx backend configuration file path
+	BackendConfigFile = "/etc/nghttpx/nghttpx-backend.conf"
+)
+
 // NewManager ...
-func NewManager() *Manager {
+func NewManager(apiPort int) *Manager {
 	ngx := &Manager{
-		ConfigFile:        "/etc/nghttpx/nghttpx.conf",
-		BackendConfigFile: "/etc/nghttpx/nghttpx-backend.conf",
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
 			Transport: &http.Transport{
@@ -70,6 +76,8 @@ func NewManager() *Manager {
 				DisableKeepAlives: true,
 			},
 		},
+		backendconfigURI:  fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", apiPort),
+		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", apiPort),
 	}
 
 	ngx.createCertsDir(tlsDirectory)

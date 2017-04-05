@@ -1,6 +1,6 @@
 # A very simple nghttpx configuration file that forces nghttpx to start.
-frontend=127.0.0.1,3001;api;no-tls
+frontend=127.0.0.1,{{ .APIPort }};api;no-tls
 # health check
-frontend=127.0.0.1,8080;healthmon;no-tls
+frontend=127.0.0.1,{{ .HealthPort }};healthmon;no-tls
 # logs
 accesslog-file=/dev/stdout

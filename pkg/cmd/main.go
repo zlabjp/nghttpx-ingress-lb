@@ -33,6 +33,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"text/template"
 	"time"
 
 	"github.com/golang/glog"
@@ -47,10 +48,6 @@ import (
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
-)
-
-const (
-	healthPort = 10249
 )
 
 var (
@@ -78,7 +75,11 @@ var (
 	watchNamespace = flags.String("watch-namespace", metav1.NamespaceAll,
 		`Namespace to watch for Ingress. Default is to watch all namespaces`)
 
-	healthzPort = flags.Int("healthz-port", healthPort, "port for healthz endpoint.")
+	healthzPort = flags.Int("healthz-port", 11249, "port for healthz endpoint.")
+
+	nghttpxHealthPort = flags.Int("nghttpx-health-port", 10901, "port for nghttpx health monitor endpoint.")
+
+	nghttpxAPIPort = flags.Int("nghttpx-api-port", 10902, "port for nghttpx API endpoint.")
 
 	buildCfg = flags.Bool("dump-nghttpx-configuration", false, `Deprecated`)
 
@@ -171,12 +172,18 @@ func main() {
 		DefaultBackendService: *defaultSvc,
 		WatchNamespace:        *watchNamespace,
 		NghttpxConfigMap:      *ngxConfigMap,
+		NghttpxHealthPort:     *nghttpxHealthPort,
+		NghttpxAPIPort:        *nghttpxAPIPort,
 		DefaultTLSSecret:      *defaultTLSSecret,
 		IngressClass:          *ingressClass,
 		AllowInternalIP:       *allowInternalIP,
 	}
 
-	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), &controllerConfig, runtimePodInfo)
+	if err := generateDefaultNghttpxConfig(*nghttpxHealthPort, *nghttpxAPIPort); err != nil {
+		glog.Exit(err)
+	}
+
+	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(*nghttpxAPIPort), &controllerConfig, runtimePodInfo)
 
 	go registerHandlers(lbc)
 	go handleSigterm(lbc)
@@ -190,7 +197,17 @@ func main() {
 }
 
 // healthzChecker implements healthz.HealthzChecker interface.
-type healthzChecker struct{}
+type healthzChecker struct {
+	// targetURI is the nghttpx health monitor endpoint.
+	targetURI string
+}
+
+// newHealthChecker returns new healthzChecker.
+func newHealthzChecker(healthPort int) *healthzChecker {
+	return &healthzChecker{
+		targetURI: fmt.Sprintf("http://127.0.0.1:%v/healthz", healthPort),
+	}
+}
 
 // Name returns the healthcheck name
 func (hc healthzChecker) Name() string {
@@ -199,7 +216,7 @@ func (hc healthzChecker) Name() string {
 
 // Check returns if the nghttpx healthz endpoint is returning ok (status code 200)
 func (hc healthzChecker) Check(_ *http.Request) error {
-	res, err := http.Get("http://127.0.0.1:8080/healthz")
+	res, err := http.Get(hc.targetURI)
 	if err != nil {
 		return err
 	}
@@ -214,7 +231,7 @@ func (hc healthzChecker) Check(_ *http.Request) error {
 
 func registerHandlers(lbc *controller.LoadBalancerController) {
 	mux := http.NewServeMux()
-	healthz.InstallHandler(mux, &healthzChecker{})
+	healthz.InstallHandler(mux, newHealthzChecker(*nghttpxHealthPort))
 
 	http.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -245,4 +262,22 @@ func handleSigterm(lbc *controller.LoadBalancerController) {
 	glog.Infof("Received SIGTERM, shutting down")
 
 	lbc.Stop()
+}
+
+// generateDefaultNghttpxConfig generates default configuration file for nghttpx.
+func generateDefaultNghttpxConfig(nghttpxHealthPort, nghttpxAPIPort int) error {
+	f, err := os.OpenFile(nghttpx.ConfigFile, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("Could not open configuration file %v: %v", nghttpx.ConfigFile, err)
+	}
+	defer f.Close()
+
+	t := template.Must(template.New("default.tmpl").ParseFiles("./default.tmpl"))
+	if err := t.Execute(f, map[string]interface{}{
+		"HealthPort": nghttpxHealthPort,
+		"APIPort":    nghttpxAPIPort,
+	}); err != nil {
+		return fmt.Errorf("Could not create default configuration file for nghttpx: %v", err)
+	}
+	return nil
 }

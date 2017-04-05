@@ -80,26 +80,26 @@ func (ngx *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error
 
 func (ngx *Manager) checkAndWriteCfg(mainConfig, backendConfig []byte) (int, error) {
 	// If main configuration has changed, we need to reload nghttpx
-	mainChanged, err := needsReload(ngx.ConfigFile, mainConfig)
+	mainChanged, err := needsReload(ConfigFile, mainConfig)
 	if err != nil {
 		return configNotChanged, err
 	}
 
 	// If backend configuration has changed, we need to issue
 	// backend replace API to nghttpx
-	backendChanged, err := needsReload(ngx.BackendConfigFile, backendConfig)
+	backendChanged, err := needsReload(BackendConfigFile, backendConfig)
 	if err != nil {
 		return configNotChanged, err
 	}
 
 	if mainChanged {
-		if err := writeFile(ngx.ConfigFile, mainConfig); err != nil {
+		if err := writeFile(ConfigFile, mainConfig); err != nil {
 			return configNotChanged, err
 		}
 	}
 
 	if backendChanged {
-		if err := writeFile(ngx.BackendConfigFile, backendConfig); err != nil {
+		if err := writeFile(BackendConfigFile, backendConfig); err != nil {
 			return configNotChanged, err
 		}
 	}
