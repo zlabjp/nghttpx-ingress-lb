@@ -53,6 +53,8 @@ type IngressConfig struct {
 	// MrubyFileContent is the extra mruby script.  It is saved in the container disk space, and will be referenced by mruby-file from
 	// configuration file.
 	MrubyFile *ChecksumFile
+	// HealthPort is the port for health monitor endpoint.
+	HealthPort int
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.

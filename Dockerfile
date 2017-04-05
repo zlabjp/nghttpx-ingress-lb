@@ -44,7 +44,7 @@ RUN touch /etc/nghttpx/nghttpx-backend.conf
 COPY nghttpx-ingress-controller /
 COPY nghttpx.tmpl /
 COPY nghttpx-backend.tmpl /
-COPY default.conf /etc/nghttpx/nghttpx.conf
+COPY default.tmpl /
 
 WORKDIR /
 
