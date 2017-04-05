@@ -79,6 +79,8 @@ var (
 
 	nghttpxHealthPort = flags.Int("nghttpx-health-port", 10901, "port for nghttpx health monitor endpoint.")
 
+	nghttpxAPIPort = flags.Int("nghttpx-api-port", 10902, "port for nghttpx API endpoint.")
+
 	buildCfg = flags.Bool("dump-nghttpx-configuration", false, `Deprecated`)
 
 	profiling = flags.Bool("profiling", true, `Enable profiling via web interface host:port/debug/pprof/`)
@@ -171,16 +173,17 @@ func main() {
 		WatchNamespace:        *watchNamespace,
 		NghttpxConfigMap:      *ngxConfigMap,
 		NghttpxHealthPort:     *nghttpxHealthPort,
+		NghttpxAPIPort:        *nghttpxAPIPort,
 		DefaultTLSSecret:      *defaultTLSSecret,
 		IngressClass:          *ingressClass,
 		AllowInternalIP:       *allowInternalIP,
 	}
 
-	if err := generateDefaultNghttpxConfig(*nghttpxHealthPort); err != nil {
+	if err := generateDefaultNghttpxConfig(*nghttpxHealthPort, *nghttpxAPIPort); err != nil {
 		glog.Exit(err)
 	}
 
-	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(), &controllerConfig, runtimePodInfo)
+	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(*nghttpxAPIPort), &controllerConfig, runtimePodInfo)
 
 	go registerHandlers(lbc)
 	go handleSigterm(lbc)
@@ -262,7 +265,7 @@ func handleSigterm(lbc *controller.LoadBalancerController) {
 }
 
 // generateDefaultNghttpxConfig generates default configuration file for nghttpx.
-func generateDefaultNghttpxConfig(nghttpxHealthPort int) error {
+func generateDefaultNghttpxConfig(nghttpxHealthPort, nghttpxAPIPort int) error {
 	f, err := os.OpenFile(nghttpx.ConfigFile, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("Could not open configuration file %v: %v", nghttpx.ConfigFile, err)
@@ -270,7 +273,10 @@ func generateDefaultNghttpxConfig(nghttpxHealthPort int) error {
 	defer f.Close()
 
 	t := template.Must(template.New("default.tmpl").ParseFiles("./default.tmpl"))
-	if err := t.Execute(f, map[string]interface{}{"HealthPort": nghttpxHealthPort}); err != nil {
+	if err := t.Execute(f, map[string]interface{}{
+		"HealthPort": nghttpxHealthPort,
+		"APIPort":    nghttpxAPIPort,
+	}); err != nil {
 		return fmt.Errorf("Could not create default configuration file for nghttpx: %v", err)
 	}
 	return nil

@@ -55,6 +55,8 @@ type IngressConfig struct {
 	MrubyFile *ChecksumFile
 	// HealthPort is the port for health monitor endpoint.
 	HealthPort int
+	// APIPort is the port for API endpoint.
+	APIPort int
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.

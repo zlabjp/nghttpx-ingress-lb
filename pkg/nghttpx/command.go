@@ -39,11 +39,6 @@ import (
 	"github.com/golang/glog"
 )
 
-const (
-	backendconfigURI  = "http://127.0.0.1:3001/api/v1beta1/backendconfig"
-	configrevisionURI = "http://127.0.0.1:3001/api/v1beta1/configrevision"
-)
-
 // Start starts a nghttpx process, and wait.
 func (ngx *Manager) Start(stopCh <-chan struct{}) {
 	glog.Info("Starting nghttpx process...")
@@ -141,7 +136,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 }
 
 func (ngx *Manager) issueBackendReplaceRequest() error {
-	glog.Infof("Issuing API request %v", backendconfigURI)
+	glog.Infof("Issuing API request %v", ngx.backendconfigURI)
 
 	in, err := os.Open(BackendConfigFile)
 	if err != nil {
@@ -150,7 +145,7 @@ func (ngx *Manager) issueBackendReplaceRequest() error {
 
 	defer in.Close()
 
-	req, err := http.NewRequest(http.MethodPost, backendconfigURI, in)
+	req, err := http.NewRequest(http.MethodPost, ngx.backendconfigURI, in)
 	if err != nil {
 		return fmt.Errorf("Could not create API request: %v", err)
 	}
@@ -192,9 +187,9 @@ type apiResult struct {
 
 // getNghttpxConfigRevision returns the current nghttpx configRevision through configrevision API call.
 func (ngx *Manager) getNghttpxConfigRevision() (string, error) {
-	glog.V(4).Infof("Issuing API request %v", configrevisionURI)
+	glog.V(4).Infof("Issuing API request %v", ngx.configrevisionURI)
 
-	resp, err := ngx.httpClient.Get(configrevisionURI)
+	resp, err := ngx.httpClient.Get(ngx.configrevisionURI)
 	if err != nil {
 		return "", fmt.Errorf("Could not get nghttpx configRevision: %v", err)
 	}

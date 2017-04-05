@@ -91,6 +91,7 @@ type LoadBalancerController struct {
 	defaultSvc        string
 	ngxConfigMap      string
 	nghttpxHealthPort int
+	nghttpxAPIPort    int
 	defaultTLSSecret  string
 	watchNamespace    string
 	ingressClass      string
@@ -124,6 +125,8 @@ type Config struct {
 	NghttpxConfigMap string
 	// NghttpxHealthPort is the port for nghttpx health monitor endpoint.
 	NghttpxHealthPort int
+	// NghttpxAPIPort is the port for nghttpx API endpoint.
+	NghttpxAPIPort int
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret string
 	// IngressClass is the Ingress class this controller is responsible for.
@@ -144,6 +147,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		nghttpx:           manager,
 		ngxConfigMap:      config.NghttpxConfigMap,
 		nghttpxHealthPort: config.NghttpxHealthPort,
+		nghttpxAPIPort:    config.NghttpxAPIPort,
 		defaultSvc:        config.DefaultBackendService,
 		defaultTLSSecret:  config.DefaultTLSSecret,
 		watchNamespace:    config.WatchNamespace,
@@ -713,6 +717,7 @@ func (lbc *LoadBalancerController) sync(key string) error {
 
 	nghttpx.ReadConfig(ingConfig, cm)
 	ingConfig.HealthPort = lbc.nghttpxHealthPort
+	ingConfig.APIPort = lbc.nghttpxAPIPort
 
 	if reloaded, err := lbc.nghttpx.CheckAndReload(ingConfig); err != nil {
 		return err

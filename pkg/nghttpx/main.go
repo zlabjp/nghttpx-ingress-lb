@@ -25,6 +25,7 @@ limitations under the License.
 package nghttpx
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"text/template"
@@ -52,6 +53,10 @@ type Manager struct {
 	// backend configuration without reloading nghttpx if main
 	// configuration has not changed.
 	backendTemplate *template.Template
+	// backendconfigURI is the nghttpx backendconfig endpoint.
+	backendconfigURI string
+	// configrevisionURI is the nghttpx configrevision endpoint.
+	configrevisionURI string
 }
 
 const (
@@ -62,7 +67,7 @@ const (
 )
 
 // NewManager ...
-func NewManager() *Manager {
+func NewManager(apiPort int) *Manager {
 	ngx := &Manager{
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
@@ -71,6 +76,8 @@ func NewManager() *Manager {
 				DisableKeepAlives: true,
 			},
 		},
+		backendconfigURI:  fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", apiPort),
+		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", apiPort),
 	}
 
 	ngx.createCertsDir(tlsDirectory)
