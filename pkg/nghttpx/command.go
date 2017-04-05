@@ -143,9 +143,9 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 func (ngx *Manager) issueBackendReplaceRequest() error {
 	glog.Infof("Issuing API request %v", backendconfigURI)
 
-	in, err := os.Open(ngx.BackendConfigFile)
+	in, err := os.Open(BackendConfigFile)
 	if err != nil {
-		return fmt.Errorf("Could not open backend configuration file %v: %v", ngx.BackendConfigFile, err)
+		return fmt.Errorf("Could not open backend configuration file %v: %v", BackendConfigFile, err)
 	}
 
 	defer in.Close()

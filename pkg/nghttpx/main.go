@@ -40,10 +40,6 @@ var (
 
 // Manager ...
 type Manager struct {
-	// nghttpx main configuration file path
-	ConfigFile string
-	// nghttpx backend configuration file path
-	BackendConfigFile string
 	// httpClient is used to issue backend API request to nghttpx
 	httpClient *http.Client
 
@@ -58,11 +54,16 @@ type Manager struct {
 	backendTemplate *template.Template
 }
 
+const (
+	// nghttpx main configuration file path
+	ConfigFile = "/etc/nghttpx/nghttpx.conf"
+	// nghttpx backend configuration file path
+	BackendConfigFile = "/etc/nghttpx/nghttpx-backend.conf"
+)
+
 // NewManager ...
 func NewManager() *Manager {
 	ngx := &Manager{
-		ConfigFile:        "/etc/nghttpx/nghttpx.conf",
-		BackendConfigFile: "/etc/nghttpx/nghttpx-backend.conf",
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
 			Transport: &http.Transport{
