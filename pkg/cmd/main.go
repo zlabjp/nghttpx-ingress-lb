@@ -49,10 +49,6 @@ import (
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
 
-const (
-	healthPort = 10249
-)
-
 var (
 	// value overwritten during build. This can be used to resolve issues.
 	version = "0.5"
@@ -78,7 +74,7 @@ var (
 	watchNamespace = flags.String("watch-namespace", metav1.NamespaceAll,
 		`Namespace to watch for Ingress. Default is to watch all namespaces`)
 
-	healthzPort = flags.Int("healthz-port", healthPort, "port for healthz endpoint.")
+	healthzPort = flags.Int("healthz-port", 11249, "port for healthz endpoint.")
 
 	buildCfg = flags.Bool("dump-nghttpx-configuration", false, `Deprecated`)
 
