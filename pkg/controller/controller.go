@@ -162,10 +162,10 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		indexer, controller := cache.NewIndexerInformer(
 			&cache.ListWatch{
 				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					return lbc.clientset.Extensions().Ingresses(config.WatchNamespace).List(options)
+					return lbc.clientset.ExtensionsV1beta1().Ingresses(config.WatchNamespace).List(options)
 				},
 				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					return lbc.clientset.Extensions().Ingresses(config.WatchNamespace).Watch(options)
+					return lbc.clientset.ExtensionsV1beta1().Ingresses(config.WatchNamespace).Watch(options)
 				},
 			},
 			&extensions.Ingress{},
@@ -1302,7 +1302,7 @@ func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []v1.LoadBalancerI
 		newIng := *ing
 		newIng.Status.LoadBalancer.Ingress = lbIngs
 
-		if _, err := lbc.clientset.Extensions().Ingresses(ing.Namespace).UpdateStatus(&newIng); err != nil {
+		if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).UpdateStatus(&newIng); err != nil {
 			glog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
 		}
 	}
@@ -1398,7 +1398,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 
 		// Time may be short because we should do all the work during Pod graceful shut down period.
 		if err := wait.Poll(250*time.Millisecond, 2*time.Second, func() (bool, error) {
-			ing, err := lbc.clientset.Extensions().Ingresses(ing.Namespace).Get(ing.Name, metav1.GetOptions{})
+			ing, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).Get(ing.Name, metav1.GetOptions{})
 			if err != nil {
 				if errors.IsNotFound(err) {
 					return false, err
@@ -1418,7 +1418,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 				return true, nil
 			}
 
-			if _, err := lbc.clientset.Extensions().Ingresses(ing.Namespace).UpdateStatus(ing); err != nil {
+			if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).UpdateStatus(ing); err != nil {
 				glog.Errorf("Could not update Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 				return false, nil
 			}

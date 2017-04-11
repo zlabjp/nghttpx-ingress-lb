@@ -855,14 +855,14 @@ func TestUpdateIngressStatus(t *testing.T) {
 		t.Fatalf("f.lbc.updateIngressStatus(lbIngs) returned unexpected error %v", err)
 	}
 
-	if updatedIng, err := f.clientset.Extensions().Ingresses(ing1.Namespace).Get(ing1.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.clientset.ExtensionsV1beta1().Ingresses(ing1.Namespace).Get(ing1.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
 	} else {
 		if got, want := updatedIng.Status.LoadBalancer.Ingress, lbIngs; !reflect.DeepEqual(got, want) {
 			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
 		}
 	}
-	if updatedIng, err := f.clientset.Extensions().Ingresses(ing2.Namespace).Get(ing2.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.clientset.ExtensionsV1beta1().Ingresses(ing2.Namespace).Get(ing2.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing2.Namespace, ing2.Name, err)
 	} else {
 		if got, want := updatedIng.Status.LoadBalancer.Ingress, lbIngs; !reflect.DeepEqual(got, want) {
@@ -908,7 +908,7 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		t.Fatalf("f.lbc.removeAddressFromLoadBalancerIngress() returned unexpected error %v", err)
 	}
 
-	if updatedIng, err := f.lbc.clientset.Extensions().Ingresses(ing1.Namespace).Get(ing1.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.lbc.clientset.ExtensionsV1beta1().Ingresses(ing1.Namespace).Get(ing1.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
 	} else {
 		ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
@@ -917,7 +917,7 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		}
 	}
 
-	if updatedIng, err := f.lbc.clientset.Extensions().Ingresses(ing4.Namespace).Get(ing4.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.lbc.clientset.ExtensionsV1beta1().Ingresses(ing4.Namespace).Get(ing4.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing4.Namespace, ing4.Name, err)
 	} else {
 		ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
