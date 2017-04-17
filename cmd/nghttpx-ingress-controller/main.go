@@ -101,9 +101,9 @@ func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	flags.AddGoFlagSet(flag.CommandLine)
-	flags.Parse(os.Args)
-
 	clientConfig := kubectl_util.DefaultClientConfig(flags)
+
+	flags.Parse(os.Args)
 
 	glog.Infof("Using build: %v - %v", gitRepo, version)
 
