@@ -80,6 +80,7 @@ const (
 	defaultConfigMapName      = "ing-config"
 	defaultConfigMapNamespace = "kube-system"
 	defaultIngressClass       = "nghttpx"
+	defaultConfDir            = "conf"
 
 	// openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/tls.key -out /tmp/tls.crt -subj "/CN=echoheaders/O=echoheaders"
 	tlsCrt = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURhakNDQWxLZ0F3SUJBZ0lKQUxHUXR5VVBKTFhYTUEwR0NTcUdTSWIzRFFFQkJRVUFNQ3d4RkRBU0JnTlYKQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3RWdZRFZRUUtFd3RsWTJodmFHVmhaR1Z5Y3pBZUZ3MHhOakF6TXpFeQpNekU1TkRoYUZ3MHhOekF6TXpFeU16RTVORGhhTUN3eEZEQVNCZ05WQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3CkVnWURWUVFLRXd0bFkyaHZhR1ZoWkdWeWN6Q0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0MKZ2dFQkFONzVmS0N5RWwxanFpMjUxTlNabDYzeGQweG5HMHZTVjdYL0xxTHJveVNraW5nbnI0NDZZWlE4UEJWOAo5TUZzdW5RRGt1QVoyZzA3NHM1YWhLSm9BRGJOMzhld053RXNsVDJkRzhRTUw0TktrTUNxL1hWbzRQMDFlWG1PCmkxR2txZFA1ZUExUHlPZCtHM3gzZmxPN2xOdmtJdHVHYXFyc0tvMEhtMHhqTDVtRUpwWUlOa0tGSVhsWWVLZS8KeHRDR25CU2tLVHFMTG0yeExKSGFFcnJpaDZRdkx4NXF5U2gzZTU2QVpEcTlkTERvcWdmVHV3Z2IzekhQekc2NwppZ0E0dkYrc2FRNHpZUE1NMHQyU1NiVkx1M2pScWNvL3lxZysrOVJBTTV4bjRubnorL0hUWFhHKzZ0RDBaeGI1CmVVRDNQakVhTnlXaUV2dTN6UFJmdysyNURMY0NBd0VBQWFPQmpqQ0JpekFkQmdOVkhRNEVGZ1FVcktMZFhHeUUKNUlEOGRvd2lZNkdzK3dNMHFKc3dYQVlEVlIwakJGVXdVNEFVcktMZFhHeUU1SUQ4ZG93aVk2R3Mrd00wcUp1aApNS1F1TUN3eEZEQVNCZ05WQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3RWdZRFZRUUtFd3RsWTJodmFHVmhaR1Z5CmM0SUpBTEdRdHlVUEpMWFhNQXdHQTFVZEV3UUZNQU1CQWY4d0RRWUpLb1pJaHZjTkFRRUZCUUFEZ2dFQkFNZVMKMHFia3VZa3Z1enlSWmtBeE1PdUFaSDJCK0Evb3N4ODhFRHB1ckV0ZWN5RXVxdnRvMmpCSVdCZ2RkR3VBYU5jVQorUUZDRm9NakJOUDVWVUxIWVhTQ3VaczN2Y25WRDU4N3NHNlBaLzhzbXJuYUhTUjg1ZVpZVS80bmFyNUErdWErClIvMHJrSkZnOTlQSmNJd3JmcWlYOHdRcWdJVVlLNE9nWEJZcUJRL0VZS2YvdXl6UFN3UVZYRnVJTTZTeDBXcTYKTUNML3d2RlhLS0FaWDBqb3J4cHRjcldkUXNCcmYzWVRnYmx4TE1sN20zL2VuR1drcEhDUHdYeVRCOC9rRkw3SApLL2ZHTU1NWGswUkVSbGFPM1hTSUhrZUQ2SXJiRnRNV3R1RlJwZms2ZFA2TXlMOHRmTmZ6a3VvUHVEWUFaWllWCnR1NnZ0c0FRS0xWb0pGaGV0b1k9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
@@ -105,6 +106,7 @@ func (f *fixture) prepare() {
 		DefaultBackendService: fmt.Sprintf("%v/%v", defaultBackendNamespace, defaultBackendName),
 		WatchNamespace:        defaultIngNamespace,
 		NghttpxConfigMap:      fmt.Sprintf("%v/%v", defaultConfigMapNamespace, defaultConfigMapName),
+		NghttpxConfDir:        defaultConfDir,
 		IngressClass:          defaultIngressClass,
 	}
 	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo)
@@ -201,7 +203,7 @@ func newFakeManager() *fakeManager {
 	return fm
 }
 
-func (fm *fakeManager) Start(stopCh <-chan struct{}) {}
+func (fm *fakeManager) Start(path, confPath string, stopCh <-chan struct{}) {}
 
 func (fm *fakeManager) CheckAndReload(ingConfig *nghttpx.IngressConfig) (bool, error) {
 	return fm.checkAndReloadHandler(ingConfig)
@@ -426,7 +428,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 		t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
 	}
 	if got, want := fm.ingConfig.MrubyFile, (&nghttpx.ChecksumFile{
-		Path:     "/etc/nghttpx/mruby.rb",
+		Path:     nghttpx.NghttpxMrubyRbPath(defaultConfDir),
 		Content:  []byte(mrubyContent),
 		Checksum: nghttpx.Checksum([]byte(mrubyContent)),
 	}); !reflect.DeepEqual(got, want) {
@@ -477,10 +479,10 @@ func TestSyncDefaultSecret(t *testing.T) {
 	}
 
 	prefix := nghttpx.TLSCredPrefix(tlsSecret)
-	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(prefix); got != want {
+	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, prefix); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
-	if got, want := ingConfig.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(prefix); got != want {
+	if got, want := ingConfig.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(defaultConfDir, prefix); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Cert.Path = %v, want %v", got, want)
 	}
 	if got, want := ingConfig.DefaultTLSCred.Key.Checksum, nghttpx.Checksum(dKey); got != want {
@@ -526,7 +528,7 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	}
 
 	prefix := nghttpx.TLSCredPrefix(tlsSecret)
-	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(prefix); got != want {
+	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, prefix); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
 	if got, want := len(ingConfig.SubTLSCred), 0; got != want {

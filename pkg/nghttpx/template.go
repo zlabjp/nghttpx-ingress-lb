@@ -78,28 +78,35 @@ func (ngx *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error
 	return mainConfigBuffer.Bytes(), backendConfigBuffer.Bytes(), nil
 }
 
-func (ngx *Manager) checkAndWriteCfg(mainConfig, backendConfig []byte) (int, error) {
+func (ngx *Manager) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backendConfig []byte) (int, error) {
+	configPath := NghttpxConfigPath(ingConfig.ConfDir)
+	backendConfigPath := NghttpxBackendConfigPath(ingConfig.ConfDir)
+
+	if err := MkdirAll(ingConfig.ConfDir); err != nil {
+		return configNotChanged, err
+	}
+
 	// If main configuration has changed, we need to reload nghttpx
-	mainChanged, err := needsReload(ConfigFile, mainConfig)
+	mainChanged, err := needsReload(configPath, mainConfig)
 	if err != nil {
 		return configNotChanged, err
 	}
 
 	// If backend configuration has changed, we need to issue
 	// backend replace API to nghttpx
-	backendChanged, err := needsReload(BackendConfigFile, backendConfig)
+	backendChanged, err := needsReload(backendConfigPath, backendConfig)
 	if err != nil {
 		return configNotChanged, err
 	}
 
 	if mainChanged {
-		if err := writeFile(ConfigFile, mainConfig); err != nil {
+		if err := WriteFile(configPath, mainConfig); err != nil {
 			return configNotChanged, err
 		}
 	}
 
 	if backendChanged {
-		if err := writeFile(BackendConfigFile, backendConfig); err != nil {
+		if err := WriteFile(backendConfigPath, backendConfig); err != nil {
 			return configNotChanged, err
 		}
 	}

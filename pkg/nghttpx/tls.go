@@ -39,26 +39,31 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 )
 
+const (
+	// tlsDir is the directory where TLS certificates and private keys are stored.
+	tlsDir = "tls"
+)
+
 //CreateTLSKeyPath returns TLS private key file path.
-func CreateTLSKeyPath(name string) string {
-	return filepath.Join(tlsDirectory, fmt.Sprintf("%v.key", name))
+func CreateTLSKeyPath(dir, name string) string {
+	return filepath.Join(dir, tlsDir, fmt.Sprintf("%v.key", name))
 }
 
 // CreateTLSCertPath returns TLS certificate file path.
-func CreateTLSCertPath(name string) string {
-	return filepath.Join(tlsDirectory, fmt.Sprintf("%v.crt", name))
+func CreateTLSCertPath(dir, name string) string {
+	return filepath.Join(dir, tlsDir, fmt.Sprintf("%v.crt", name))
 }
 
 // CreateTLSCred creates TLSCred for given private key and certificate.
-func CreateTLSCred(name string, cert, key []byte) (*TLSCred, error) {
+func CreateTLSCred(dir, name string, cert, key []byte) (*TLSCred, error) {
 	return &TLSCred{
 		Key: ChecksumFile{
-			Path:     CreateTLSKeyPath(name),
+			Path:     CreateTLSKeyPath(dir, name),
 			Content:  key,
 			Checksum: Checksum(key),
 		},
 		Cert: ChecksumFile{
-			Path:     CreateTLSCertPath(name),
+			Path:     CreateTLSCertPath(dir, name),
 			Content:  cert,
 			Checksum: Checksum(cert),
 		},
@@ -67,6 +72,10 @@ func CreateTLSCred(name string, cert, key []byte) (*TLSCred, error) {
 
 // writeTLSKeyCert writes TLS private keys and certificates to their files.
 func (ngx *Manager) writeTLSKeyCert(ingConfig *IngressConfig) error {
+	if err := MkdirAll(filepath.Join(ingConfig.ConfDir, tlsDir)); err != nil {
+		return fmt.Errorf("Couldn't create tls directory: %v", err)
+	}
+
 	if ingConfig.DefaultTLSCred != nil {
 		if err := writeTLSKeyCert(ingConfig.DefaultTLSCred); err != nil {
 			return err
@@ -84,11 +93,11 @@ func (ngx *Manager) writeTLSKeyCert(ingConfig *IngressConfig) error {
 
 // writeTLSKeyCert writes TLS private key and certificate to tlsCred in their files.
 func writeTLSKeyCert(tlsCred *TLSCred) error {
-	if err := writeFile(tlsCred.Key.Path, tlsCred.Key.Content); err != nil {
+	if err := WriteFile(tlsCred.Key.Path, tlsCred.Key.Content); err != nil {
 		return fmt.Errorf("failed to write TLS private key: %v", err)
 	}
 
-	if err := writeFile(tlsCred.Cert.Path, tlsCred.Cert.Content); err != nil {
+	if err := WriteFile(tlsCred.Cert.Path, tlsCred.Cert.Content); err != nil {
 		return fmt.Errorf("failed to write TLS certificate: %v", err)
 	}
 

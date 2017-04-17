@@ -92,6 +92,10 @@ type LoadBalancerController struct {
 	ngxConfigMap      string
 	nghttpxHealthPort int
 	nghttpxAPIPort    int
+	nghttpxConfDir    string
+	nghttpxExecPath   string
+	nghttpxHTTPPort   int
+	nghttpxHTTPSPort  int
 	defaultTLSSecret  string
 	watchNamespace    string
 	ingressClass      string
@@ -127,6 +131,14 @@ type Config struct {
 	NghttpxHealthPort int
 	// NghttpxAPIPort is the port for nghttpx API endpoint.
 	NghttpxAPIPort int
+	// NghttpxConfDir is the directory which contains nghttpx configuration files.
+	NghttpxConfDir string
+	// NghttpxExecPath is a path to nghttpx executable.
+	NghttpxExecPath string
+	// NghttpxHTTPPort is a port to listen to for HTTP (non-TLS) requests.
+	NghttpxHTTPPort int
+	// NghttpxHTTPSPort is a port to listen to for HTTPS (TLS) requests.
+	NghttpxHTTPSPort int
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret string
 	// IngressClass is the Ingress class this controller is responsible for.
@@ -148,6 +160,10 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		ngxConfigMap:      config.NghttpxConfigMap,
 		nghttpxHealthPort: config.NghttpxHealthPort,
 		nghttpxAPIPort:    config.NghttpxAPIPort,
+		nghttpxConfDir:    config.NghttpxConfDir,
+		nghttpxExecPath:   config.NghttpxExecPath,
+		nghttpxHTTPPort:   config.NghttpxHTTPPort,
+		nghttpxHTTPSPort:  config.NghttpxHTTPSPort,
 		defaultSvc:        config.DefaultBackendService,
 		defaultTLSSecret:  config.DefaultTLSSecret,
 		watchNamespace:    config.WatchNamespace,
@@ -716,8 +732,6 @@ func (lbc *LoadBalancerController) sync(key string) error {
 	}
 
 	nghttpx.ReadConfig(ingConfig, cm)
-	ingConfig.HealthPort = lbc.nghttpxHealthPort
-	ingConfig.APIPort = lbc.nghttpxAPIPort
 
 	if reloaded, err := lbc.nghttpx.CheckAndReload(ingConfig); err != nil {
 		return err
@@ -764,6 +778,11 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 // in nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
 func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress) (*nghttpx.IngressConfig, error) {
 	ingConfig := nghttpx.NewIngressConfig()
+	ingConfig.HealthPort = lbc.nghttpxHealthPort
+	ingConfig.APIPort = lbc.nghttpxAPIPort
+	ingConfig.ConfDir = lbc.nghttpxConfDir
+	ingConfig.HTTPPort = lbc.nghttpxHTTPPort
+	ingConfig.HTTPSPort = lbc.nghttpxHTTPSPort
 
 	var (
 		upstreams []*nghttpx.Upstream
@@ -1017,7 +1036,7 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 		return nil, fmt.Errorf("No valid TLS private key found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
 
-	tlsCred, err := nghttpx.CreateTLSCred(nghttpx.TLSCredPrefix(secret), cert, key)
+	tlsCred, err := nghttpx.CreateTLSCred(lbc.nghttpxConfDir, nghttpx.TLSCredPrefix(secret), cert, key)
 	if err != nil {
 		return nil, fmt.Errorf("Could not create private key and certificate files for Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
@@ -1168,7 +1187,7 @@ func (lbc *LoadBalancerController) Stop() {
 // Run starts the loadbalancer controller.
 func (lbc *LoadBalancerController) Run() {
 	glog.Infof("Starting nghttpx loadbalancer controller")
-	go lbc.nghttpx.Start(lbc.stopCh)
+	go lbc.nghttpx.Start(lbc.nghttpxExecPath, nghttpx.NghttpxConfigPath(lbc.nghttpxConfDir), lbc.stopCh)
 
 	go lbc.ingController.Run(lbc.stopCh)
 	go lbc.epController.Run(lbc.stopCh)

@@ -38,8 +38,6 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
     apt-get clean
 
 RUN mkdir -p /var/log/nghttpx
-RUN mkdir -p /etc/nghttpx
-RUN touch /etc/nghttpx/nghttpx-backend.conf
 
 COPY nghttpx-ingress-controller /
 COPY nghttpx.tmpl /
