@@ -31,8 +31,9 @@ import (
 
 // Interface is the API to update underlying load balancer.
 type Interface interface {
-	// Start starts a nghttpx process, and wait.  If stopCh becomes readable, kill nghttpx process, and return.
-	Start(stopCh <-chan struct{})
+	// Start starts a nghttpx process using executable at path with configuration file at confPath, and wait.  If stopCh becomes
+	// readable, kill nghttpx process, and return.
+	Start(path, confPath string, stopCh <-chan struct{})
 	// CheckAndReload checks whether the nghttpx configuration changed, and if so, make nghttpx reload its configuration.  If reloading
 	// is required, and it successfully issues reloading, returns true.  If there is no need to reloading, it returns false.  On error,
 	// it returns false, and non-nil error.
@@ -57,6 +58,12 @@ type IngressConfig struct {
 	HealthPort int
 	// APIPort is the port for API endpoint.
 	APIPort int
+	// ConfDir is the path to the directory which includes nghttpx configuration files.
+	ConfDir string
+	// HTTPPort is the port to listen to for HTTP (non-TLS) request.
+	HTTPPort int
+	// HTTPSPort is the port to listen to for HTTPS (TLS) request.
+	HTTPSPort int
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.

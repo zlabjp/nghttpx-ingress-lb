@@ -25,6 +25,7 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -94,6 +95,18 @@ var (
 
 	ingressClass = flags.String("ingress-class", "nghttpx",
 		`Ingress class which this controller is responsible for.`)
+
+	nghttpxConfDir = flags.String("nghttpx-conf-dir", "/etc/nghttpx",
+		`Path to the directory which contains nghttpx configuration files.  The controller reads and writes these configuration files.`)
+
+	nghttpxExecPath = flags.String("nghttpx-exec-path", "/usr/local/bin/nghttpx",
+		`Path to the nghttpx executable.`)
+
+	nghttpxHTTPPort = flags.Int("nghttpx-http-port", 80,
+		`Port to listen to for HTTP (non-TLS) requests.`)
+
+	nghttpxHTTPSPort = flags.Int("nghttpx-https-port", 443,
+		`Port to listen to for HTTPS (TLS) requests.`)
 )
 
 func main() {
@@ -174,12 +187,16 @@ func main() {
 		NghttpxConfigMap:      *ngxConfigMap,
 		NghttpxHealthPort:     *nghttpxHealthPort,
 		NghttpxAPIPort:        *nghttpxAPIPort,
+		NghttpxConfDir:        *nghttpxConfDir,
+		NghttpxExecPath:       *nghttpxExecPath,
+		NghttpxHTTPPort:       *nghttpxHTTPPort,
+		NghttpxHTTPSPort:      *nghttpxHTTPSPort,
 		DefaultTLSSecret:      *defaultTLSSecret,
 		IngressClass:          *ingressClass,
 		AllowInternalIP:       *allowInternalIP,
 	}
 
-	if err := generateDefaultNghttpxConfig(*nghttpxHealthPort, *nghttpxAPIPort); err != nil {
+	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {
 		glog.Exit(err)
 	}
 
@@ -265,19 +282,23 @@ func handleSigterm(lbc *controller.LoadBalancerController) {
 }
 
 // generateDefaultNghttpxConfig generates default configuration file for nghttpx.
-func generateDefaultNghttpxConfig(nghttpxHealthPort, nghttpxAPIPort int) error {
-	f, err := os.OpenFile(nghttpx.ConfigFile, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("Could not open configuration file %v: %v", nghttpx.ConfigFile, err)
+func generateDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nghttpxAPIPort int) error {
+	if err := nghttpx.MkdirAll(nghttpxConfDir); err != nil {
+		return err
 	}
-	defer f.Close()
 
+	var buf bytes.Buffer
 	t := template.Must(template.New("default.tmpl").ParseFiles("./default.tmpl"))
-	if err := t.Execute(f, map[string]interface{}{
+	if err := t.Execute(&buf, map[string]interface{}{
 		"HealthPort": nghttpxHealthPort,
 		"APIPort":    nghttpxAPIPort,
 	}); err != nil {
 		return fmt.Errorf("Could not create default configuration file for nghttpx: %v", err)
 	}
+
+	if err := nghttpx.WriteFile(nghttpx.NghttpxConfigPath(nghttpxConfDir), buf.Bytes()); err != nil {
+		return fmt.Errorf("Could not create default configuration file for nghttpx: %v", err)
+	}
+
 	return nil
 }

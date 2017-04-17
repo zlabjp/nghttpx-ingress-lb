@@ -39,10 +39,10 @@ import (
 	"github.com/golang/glog"
 )
 
-// Start starts a nghttpx process, and wait.
-func (ngx *Manager) Start(stopCh <-chan struct{}) {
-	glog.Info("Starting nghttpx process...")
-	cmd := exec.Command("/usr/local/bin/nghttpx")
+// Start starts a nghttpx process using nghttpx executable at path, and wait.
+func (ngx *Manager) Start(path, confPath string, stopCh <-chan struct{}) {
+	glog.Infof("Starting nghttpx process: %v --conf %v", path, confPath)
+	cmd := exec.Command(path, "--conf", confPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -83,7 +83,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		return false, err
 	}
 
-	changed, err := ngx.checkAndWriteCfg(mainConfig, backendConfig)
+	changed, err := ngx.checkAndWriteCfg(ingressCfg, mainConfig, backendConfig)
 	if err != nil {
 		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %v", err)
 	}
@@ -127,7 +127,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 
 		glog.Info("nghttpx has finished reloading new configuration")
 	case backendConfigChanged:
-		if err := ngx.issueBackendReplaceRequest(); err != nil {
+		if err := ngx.issueBackendReplaceRequest(ingressCfg); err != nil {
 			return false, fmt.Errorf("failed to issue backend replace request: %v", err)
 		}
 	}
@@ -135,12 +135,14 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 	return true, nil
 }
 
-func (ngx *Manager) issueBackendReplaceRequest() error {
+func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 	glog.Infof("Issuing API request %v", ngx.backendconfigURI)
 
-	in, err := os.Open(BackendConfigFile)
+	backendConfigPath := NghttpxBackendConfigPath(ingConfig.ConfDir)
+
+	in, err := os.Open(backendConfigPath)
 	if err != nil {
-		return fmt.Errorf("Could not open backend configuration file %v: %v", BackendConfigFile, err)
+		return fmt.Errorf("Could not open backend configuration file %v: %v", backendConfigPath, err)
 	}
 
 	defer in.Close()
@@ -250,7 +252,7 @@ func (ngx *Manager) writeMrubyFile(ingConfig *IngressConfig) error {
 	}
 
 	f := ingConfig.MrubyFile
-	if err := writeFile(f.Path, f.Content); err != nil {
+	if err := WriteFile(f.Path, f.Content); err != nil {
 		return fmt.Errorf("failed to write mruby file: %v", err)
 	}
 

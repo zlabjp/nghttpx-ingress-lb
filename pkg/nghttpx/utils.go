@@ -51,7 +51,7 @@ func ReadConfig(ingConfig *IngressConfig, config *v1.ConfigMap) {
 	if mrubyFileContent, ok := config.Data[NghttpxMrubyFileContentKey]; ok {
 		b := []byte(mrubyFileContent)
 		ingConfig.MrubyFile = &ChecksumFile{
-			Path:     "/etc/nghttpx/mruby.rb",
+			Path:     NghttpxMrubyRbPath(ingConfig.ConfDir),
 			Content:  b,
 			Checksum: Checksum(b),
 		}
@@ -66,6 +66,9 @@ func ReadConfig(ingConfig *IngressConfig, config *v1.ConfigMap) {
 func needsReload(filename string, newCfg []byte) (bool, error) {
 	in, err := os.Open(filename)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
 		return false, err
 	}
 
@@ -154,7 +157,7 @@ func DefaultPortBackendConfig() PortBackendConfig {
 	}
 }
 
-func writeFile(path string, content []byte) error {
+func WriteFile(path string, content []byte) error {
 	dir := filepath.Dir(path)
 	tempFile, err := ioutil.TempFile(dir, "nghttpx")
 	if err != nil {
@@ -178,4 +181,27 @@ func Checksum(b []byte) string {
 	h := sha256.New()
 	h.Write(b)
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// NghttpxConfigPath returns the path to nghttpx configuration file.
+func NghttpxConfigPath(dir string) string {
+	return filepath.Join(dir, "nghttpx.conf")
+}
+
+// NghttpxBackendConfigPath returns the path to nghttpx backend configuration file.
+func NghttpxBackendConfigPath(dir string) string {
+	return filepath.Join(dir, "nghttpx-backend.conf")
+}
+
+// NghttpxMrubyRbPath returns the path to nghttpx mruby.rb file.
+func NghttpxMrubyRbPath(dir string) string {
+	return filepath.Join(dir, "mruby.rb")
+}
+
+// MkdirAll creates directory given as path.
+func MkdirAll(path string) error {
+	if err := os.MkdirAll(path, os.ModeDir); err != nil {
+		return err
+	}
+	return nil
 }

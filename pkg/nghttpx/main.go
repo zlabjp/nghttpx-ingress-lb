@@ -27,16 +27,8 @@ package nghttpx
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"text/template"
 	"time"
-
-	"github.com/golang/glog"
-)
-
-var (
-	// Base directory that contains the mounted secrets with TLS certificates, keys and
-	tlsDirectory = "/etc/nghttpx-tls"
 )
 
 // Manager ...
@@ -59,13 +51,6 @@ type Manager struct {
 	configrevisionURI string
 }
 
-const (
-	// nghttpx main configuration file path
-	ConfigFile = "/etc/nghttpx/nghttpx.conf"
-	// nghttpx backend configuration file path
-	BackendConfigFile = "/etc/nghttpx/nghttpx-backend.conf"
-)
-
 // NewManager ...
 func NewManager(apiPort int) *Manager {
 	ngx := &Manager{
@@ -80,19 +65,7 @@ func NewManager(apiPort int) *Manager {
 		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", apiPort),
 	}
 
-	ngx.createCertsDir(tlsDirectory)
-
 	ngx.loadTemplate()
 
 	return ngx
-}
-
-func (nghttpx *Manager) createCertsDir(base string) {
-	if err := os.Mkdir(base, os.ModeDir); err != nil {
-		if os.IsExist(err) {
-			glog.Infof("%v already exists", err)
-			return
-		}
-		glog.Fatalf("Couldn't create directory %v: %v", base, err)
-	}
 }

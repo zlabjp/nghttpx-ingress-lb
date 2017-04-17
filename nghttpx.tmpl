@@ -1,14 +1,14 @@
 accesslog-file=/dev/stdout
 
-include=/etc/nghttpx/nghttpx-backend.conf
+include={{ .ConfDir }}/nghttpx-backend.conf
 
-frontend=*,80;no-tls
+frontend=*,{{ .HTTPPort }};no-tls
 
 # API endpoints
 frontend=127.0.0.1,{{ .APIPort }};api;no-tls
 
 {{ if .TLS }}
-frontend=*,443
+frontend=*,{{ .HTTPSPort }}
 
 {{ $defaultCred := .DefaultTLSCred }}
 # checksum is required to detect changes in the generated configuration and force a reload
@@ -22,8 +22,8 @@ subcert={{ $cred.Key.Path }}:{{ $cred.Cert.Path }}
 {{ end }}
 
 {{ else }}
-# just listen 443 to gain port 443, so that we can always bind that address.
-frontend=*,443;no-tls
+# just listen {{ .HTTPSPort }} to gain port {{ .HTTPSPort }}, so that we can always bind that address.
+frontend=*,{{ .HTTPSPort }};no-tls
 {{ end }}
 
 # for health check
