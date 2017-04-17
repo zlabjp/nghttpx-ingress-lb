@@ -42,7 +42,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	clientv1 "k8s.io/client-go/pkg/api/v1"
@@ -55,6 +54,7 @@ import (
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	"k8s.io/kubernetes/pkg/client/retry"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -1397,32 +1397,27 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 		}
 
 		// Time may be short because we should do all the work during Pod graceful shut down period.
-		if err := wait.Poll(250*time.Millisecond, 2*time.Second, func() (bool, error) {
+		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 			ing, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).Get(ing.Name, metav1.GetOptions{})
 			if err != nil {
-				if errors.IsNotFound(err) {
-					return false, err
-				}
-				glog.Errorf("Could not get Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
-				return false, nil
+				return err
 			}
 
 			numOld := len(ing.Status.LoadBalancer.Ingress)
 			if numOld == 0 {
-				return true, nil
+				return nil
 			}
 
 			ing.Status.LoadBalancer.Ingress = removeAddressFromLoadBalancerIngress(ing.Status.LoadBalancer.Ingress, addr)
 
 			if numOld == len(ing.Status.LoadBalancer.Ingress) {
-				return true, nil
+				return nil
 			}
 
 			if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).UpdateStatus(ing); err != nil {
-				glog.Errorf("Could not update Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
-				return false, nil
+				return err
 			}
-			return true, nil
+			return nil
 		}); err != nil {
 			glog.Errorf("Could not remove address from LoadBalancerIngress from Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 		}
