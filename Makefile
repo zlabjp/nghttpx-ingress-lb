@@ -15,8 +15,7 @@ endif
 controller: clean
 	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags \
 		"-w -X main.version=${VERSION} -X main.gitRepo=${REPO_INFO}" \
-		-o nghttpx-ingress-controller \
-		github.com/zlabjp/nghttpx-ingress-lb/pkg/cmd
+		github.com/zlabjp/nghttpx-ingress-lb/cmd/...
 
 container: controller
 	docker build -t "${PREFIX}:${TAG}" .
@@ -31,7 +30,7 @@ vet:
 	go tool vet -printfuncs Infof,Warningf,Errorf,Fatalf,Exitf pkg
 
 fmt:
-	go fmt github.com/zlabjp/nghttpx-ingress-lb/pkg/...
+	go fmt github.com/zlabjp/nghttpx-ingress-lb/pkg/... github.com/zlabjp/nghttpx-ingress-lb/cmd/...
 
 check:
-	go test github.com/zlabjp/nghttpx-ingress-lb/pkg/...
+	go test github.com/zlabjp/nghttpx-ingress-lb/pkg/... github.com/zlabjp/nghttpx-ingress-lb/cmd/...
