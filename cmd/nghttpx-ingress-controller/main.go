@@ -206,11 +206,6 @@ func main() {
 	go handleSigterm(lbc)
 
 	lbc.Run()
-
-	for {
-		glog.Infof("Waiting for pod deletion...")
-		time.Sleep(30 * time.Second)
-	}
 }
 
 // healthzChecker implements healthz.HealthzChecker interface.

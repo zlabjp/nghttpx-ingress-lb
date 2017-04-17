@@ -1187,7 +1187,14 @@ func (lbc *LoadBalancerController) Stop() {
 // Run starts the loadbalancer controller.
 func (lbc *LoadBalancerController) Run() {
 	glog.Infof("Starting nghttpx loadbalancer controller")
-	go lbc.nghttpx.Start(lbc.nghttpxExecPath, nghttpx.NghttpxConfigPath(lbc.nghttpxConfDir), lbc.stopCh)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		lbc.nghttpx.Start(lbc.nghttpxExecPath, nghttpx.NghttpxConfigPath(lbc.nghttpxConfDir), lbc.stopCh)
+	}()
 
 	go lbc.ingController.Run(lbc.stopCh)
 	go lbc.epController.Run(lbc.stopCh)
@@ -1202,13 +1209,20 @@ func (lbc *LoadBalancerController) Run() {
 	<-ready
 
 	go lbc.worker()
-	go lbc.syncIngress(lbc.stopCh)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		lbc.syncIngress(lbc.stopCh)
+	}()
 
 	<-lbc.stopCh
 
 	glog.Infof("Shutting down nghttpx loadbalancer controller")
 
 	lbc.syncQueue.ShutDown()
+
+	wg.Wait()
 }
 
 // waitForControllerToSync waits for controllers to sync their caches
