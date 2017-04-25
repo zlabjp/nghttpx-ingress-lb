@@ -218,6 +218,25 @@ data:
     accesslog-file=/dev/null
 ```
 
+nghttpx historically strips an incoming X-Forwarded-Proto header
+field, and adds its own one.  To change this behaviour, use the
+combination of
+[no-add-x-forwarded-proto](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--no-add-x-forwarded-proto)
+and
+[no-strip-incoming-x-forwarded-proto](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--no-strip-incoming-x-forwarded-proto).
+For example, in order to retain the incoming X-Forwarded-Proto header
+field, add `no-strip-incoming-x-forwarded-proto=yes`:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nghttpx-ingress-lb
+data:
+  nghttpx-conf: |
+    no-strip-incoming-x-forwarded-proto=yes
+```
+
 nghttpx ingress controller, by default, overrides the following default configuration:
 
 - [workers](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-n):
