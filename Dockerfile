@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
         diffutils ca-certificates psmisc \
         python \
         --no-install-recommends && \
-    git clone -b v1.21.1 --depth 1 https://github.com/nghttp2/nghttp2.git && \
+    git clone -b v1.22.0 --depth 1 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     git submodule update --init && autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
