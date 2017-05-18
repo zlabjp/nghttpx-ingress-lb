@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
     cd nghttp2 && \
     git submodule update --init && autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
-    make install-strip && \
+    make -j$(nproc) install-strip && \
     cd .. && \
     rm -rf nghttp2 && \
     apt-get -y purge git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
