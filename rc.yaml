@@ -73,6 +73,7 @@ spec:
     spec:
       serviceAccountName: ingress
       terminationGracePeriodSeconds: 60
+      hostNetwork: true
       containers:
       - image: zlabjp/nghttpx-ingress-controller:latest
         name: nghttpx-ingress-lb
@@ -80,7 +81,7 @@ spec:
           httpGet:
             path: /healthz
             # when changing this port, also specify it using --healthz-port in nghttpx-ingress-controller args.
-            port: 10249
+            port: 11249
             scheme: HTTP
           initialDelaySeconds: 30
           timeoutSeconds: 5
@@ -102,4 +103,5 @@ spec:
         args:
         - /nghttpx-ingress-controller
         - --default-backend-service=default/default-http-backend
+        - --healthz-port=11249
         - --logtostderr
