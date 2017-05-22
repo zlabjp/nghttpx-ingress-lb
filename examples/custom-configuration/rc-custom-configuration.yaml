@@ -8,14 +8,13 @@ metadata:
 spec:
   revisionHistoryLimit: 5
   replicas: 1
-  selector:
-    k8s-app: nghttpx-ingress-lb
   template:
     metadata:
       labels:
         k8s-app: nghttpx-ingress-lb
         name: nghttpx-ingress-lb
     spec:
+      serviceAccountName: ingress
       terminationGracePeriodSeconds: 60
       hostNetwork: true
       containers:
@@ -47,6 +46,7 @@ spec:
           hostPort: 443
         args:
         - /nghttpx-ingress-controller
-        - --default-backend-service=default/default-http-backend
+        - --default-backend-service=$(POD_NAMESPACE)/default-http-backend
         - --nghttpx-configmap=default/nghttpx-ingress-lb
         - --healthz-port=11249
+        - --logtostderr
