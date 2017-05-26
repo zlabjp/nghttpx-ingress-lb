@@ -64,6 +64,8 @@ type IngressConfig struct {
 	HTTPPort int
 	// HTTPSPort is the port to listen to for HTTPS (TLS) request.
 	HTTPSPort int
+	// FetchOCSPRespFromSecret is true if OCSP response is fetched from TLS secret.
+	FetchOCSPRespFromSecret bool
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.
@@ -109,10 +111,11 @@ type UpstreamServer struct {
 	Affinity Affinity
 }
 
-// TLS server private key and certificate file path
+// TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte string.
 type TLSCred struct {
-	Key  ChecksumFile
-	Cert ChecksumFile
+	Key      ChecksumFile
+	Cert     ChecksumFile
+	OCSPResp ChecksumFile
 }
 
 // NewDefaultServer return an UpstreamServer to be use as default server that returns 503.

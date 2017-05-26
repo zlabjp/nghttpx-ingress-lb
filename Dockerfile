@@ -43,6 +43,7 @@ COPY nghttpx-ingress-controller /
 COPY nghttpx.tmpl /
 COPY nghttpx-backend.tmpl /
 COPY default.tmpl /
+COPY cat-ocsp-resp.sh /
 
 WORKDIR /
 
