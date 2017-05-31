@@ -107,6 +107,11 @@ var (
 
 	nghttpxHTTPSPort = flags.Int("nghttpx-https-port", 443,
 		`Port to listen to for HTTPS (TLS) requests.`)
+
+	fetchOCSPRespFromSecret = flags.Bool("fetch-ocsp-resp-from-secret", false,
+		`Fetch OCSP response from TLS secret.`)
+
+	ocspRespKey = flags.String("ocsp-resp-key", "tls.ocsp-resp", `A key for OCSP response in TLS secret.`)
 )
 
 func main() {
@@ -181,19 +186,21 @@ func main() {
 	}
 
 	controllerConfig := controller.Config{
-		ResyncPeriod:          *resyncPeriod,
-		DefaultBackendService: *defaultSvc,
-		WatchNamespace:        *watchNamespace,
-		NghttpxConfigMap:      *ngxConfigMap,
-		NghttpxHealthPort:     *nghttpxHealthPort,
-		NghttpxAPIPort:        *nghttpxAPIPort,
-		NghttpxConfDir:        *nghttpxConfDir,
-		NghttpxExecPath:       *nghttpxExecPath,
-		NghttpxHTTPPort:       *nghttpxHTTPPort,
-		NghttpxHTTPSPort:      *nghttpxHTTPSPort,
-		DefaultTLSSecret:      *defaultTLSSecret,
-		IngressClass:          *ingressClass,
-		AllowInternalIP:       *allowInternalIP,
+		ResyncPeriod:            *resyncPeriod,
+		DefaultBackendService:   *defaultSvc,
+		WatchNamespace:          *watchNamespace,
+		NghttpxConfigMap:        *ngxConfigMap,
+		NghttpxHealthPort:       *nghttpxHealthPort,
+		NghttpxAPIPort:          *nghttpxAPIPort,
+		NghttpxConfDir:          *nghttpxConfDir,
+		NghttpxExecPath:         *nghttpxExecPath,
+		NghttpxHTTPPort:         *nghttpxHTTPPort,
+		NghttpxHTTPSPort:        *nghttpxHTTPSPort,
+		DefaultTLSSecret:        *defaultTLSSecret,
+		IngressClass:            *ingressClass,
+		AllowInternalIP:         *allowInternalIP,
+		OCSPRespKey:             *ocspRespKey,
+		FetchOCSPRespFromSecret: *fetchOCSPRespFromSecret,
 	}
 
 	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {

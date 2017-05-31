@@ -71,35 +71,37 @@ const (
 // LoadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
 type LoadBalancerController struct {
-	clientset         clientset.Interface
-	ingController     cache.Controller
-	epController      cache.Controller
-	svcController     cache.Controller
-	secretController  cache.Controller
-	cmController      cache.Controller
-	podController     cache.Controller
-	nodeController    cache.Controller
-	ingLister         *ingressLister
-	svcLister         *serviceLister
-	epLister          *endpointsLister
-	secretLister      *secretLister
-	cmLister          *configMapLister
-	podLister         *podLister
-	nodeLister        *nodeLister
-	nghttpx           nghttpx.Interface
-	podInfo           *PodInfo
-	defaultSvc        string
-	ngxConfigMap      string
-	nghttpxHealthPort int
-	nghttpxAPIPort    int
-	nghttpxConfDir    string
-	nghttpxExecPath   string
-	nghttpxHTTPPort   int
-	nghttpxHTTPSPort  int
-	defaultTLSSecret  string
-	watchNamespace    string
-	ingressClass      string
-	allowInternalIP   bool
+	clientset               clientset.Interface
+	ingController           cache.Controller
+	epController            cache.Controller
+	svcController           cache.Controller
+	secretController        cache.Controller
+	cmController            cache.Controller
+	podController           cache.Controller
+	nodeController          cache.Controller
+	ingLister               *ingressLister
+	svcLister               *serviceLister
+	epLister                *endpointsLister
+	secretLister            *secretLister
+	cmLister                *configMapLister
+	podLister               *podLister
+	nodeLister              *nodeLister
+	nghttpx                 nghttpx.Interface
+	podInfo                 *PodInfo
+	defaultSvc              string
+	ngxConfigMap            string
+	nghttpxHealthPort       int
+	nghttpxAPIPort          int
+	nghttpxConfDir          string
+	nghttpxExecPath         string
+	nghttpxHTTPPort         int
+	nghttpxHTTPSPort        int
+	defaultTLSSecret        string
+	watchNamespace          string
+	ingressClass            string
+	allowInternalIP         bool
+	ocspRespKey             string
+	fetchOCSPRespFromSecret bool
 
 	recorder record.EventRecorder
 
@@ -142,8 +144,10 @@ type Config struct {
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret string
 	// IngressClass is the Ingress class this controller is responsible for.
-	IngressClass    string
-	AllowInternalIP bool
+	IngressClass            string
+	AllowInternalIP         bool
+	OCSPRespKey             string
+	FetchOCSPRespFromSecret bool
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -153,25 +157,27 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(clientset.CoreV1().RESTClient()).Events(config.WatchNamespace)})
 
 	lbc := LoadBalancerController{
-		clientset:         clientset,
-		stopCh:            make(chan struct{}),
-		podInfo:           runtimeInfo,
-		nghttpx:           manager,
-		ngxConfigMap:      config.NghttpxConfigMap,
-		nghttpxHealthPort: config.NghttpxHealthPort,
-		nghttpxAPIPort:    config.NghttpxAPIPort,
-		nghttpxConfDir:    config.NghttpxConfDir,
-		nghttpxExecPath:   config.NghttpxExecPath,
-		nghttpxHTTPPort:   config.NghttpxHTTPPort,
-		nghttpxHTTPSPort:  config.NghttpxHTTPSPort,
-		defaultSvc:        config.DefaultBackendService,
-		defaultTLSSecret:  config.DefaultTLSSecret,
-		watchNamespace:    config.WatchNamespace,
-		ingressClass:      config.IngressClass,
-		allowInternalIP:   config.AllowInternalIP,
-		recorder:          eventBroadcaster.NewRecorder(api.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
-		syncQueue:         workqueue.New(),
-		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
+		clientset:               clientset,
+		stopCh:                  make(chan struct{}),
+		podInfo:                 runtimeInfo,
+		nghttpx:                 manager,
+		ngxConfigMap:            config.NghttpxConfigMap,
+		nghttpxHealthPort:       config.NghttpxHealthPort,
+		nghttpxAPIPort:          config.NghttpxAPIPort,
+		nghttpxConfDir:          config.NghttpxConfDir,
+		nghttpxExecPath:         config.NghttpxExecPath,
+		nghttpxHTTPPort:         config.NghttpxHTTPPort,
+		nghttpxHTTPSPort:        config.NghttpxHTTPSPort,
+		defaultSvc:              config.DefaultBackendService,
+		defaultTLSSecret:        config.DefaultTLSSecret,
+		watchNamespace:          config.WatchNamespace,
+		ingressClass:            config.IngressClass,
+		allowInternalIP:         config.AllowInternalIP,
+		ocspRespKey:             config.OCSPRespKey,
+		fetchOCSPRespFromSecret: config.FetchOCSPRespFromSecret,
+		recorder:                eventBroadcaster.NewRecorder(api.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
+		syncQueue:               workqueue.New(),
+		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
 	}
 
 	{
@@ -783,6 +789,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 	ingConfig.ConfDir = lbc.nghttpxConfDir
 	ingConfig.HTTPPort = lbc.nghttpxHTTPPort
 	ingConfig.HTTPSPort = lbc.nghttpxHTTPSPort
+	ingConfig.FetchOCSPRespFromSecret = lbc.fetchOCSPRespFromSecret
 
 	var (
 		upstreams []*nghttpx.Upstream
@@ -1036,7 +1043,10 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 		return nil, fmt.Errorf("No valid TLS private key found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
 
-	tlsCred, err := nghttpx.CreateTLSCred(lbc.nghttpxConfDir, nghttpx.TLSCredPrefix(secret), cert, key)
+	// OCSP response in TLS secret is optional feature.
+	ocspResp := secret.Data[lbc.ocspRespKey]
+
+	tlsCred, err := nghttpx.CreateTLSCred(lbc.nghttpxConfDir, nghttpx.TLSCredPrefix(secret), cert, key, ocspResp)
 	if err != nil {
 		return nil, fmt.Errorf("Could not create private key and certificate files for Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}

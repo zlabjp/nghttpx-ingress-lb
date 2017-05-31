@@ -54,8 +54,13 @@ func CreateTLSCertPath(dir, name string) string {
 	return filepath.Join(dir, tlsDir, fmt.Sprintf("%v.crt", name))
 }
 
-// CreateTLSCred creates TLSCred for given private key and certificate.
-func CreateTLSCred(dir, name string, cert, key []byte) (*TLSCred, error) {
+// CreateTLSOCSPRespPath returns TLS OCSP response file path.
+func CreateTLSOCSPRespPath(dir, name string) string {
+	return filepath.Join(dir, tlsDir, fmt.Sprintf("%v.ocsp-resp", name))
+}
+
+// CreateTLSCred creates TLSCred for given private key and certificate.  ocspResp is optional, and could be nil.
+func CreateTLSCred(dir, name string, cert, key, ocspResp []byte) (*TLSCred, error) {
 	return &TLSCred{
 		Key: ChecksumFile{
 			Path:     CreateTLSKeyPath(dir, name),
@@ -66,6 +71,11 @@ func CreateTLSCred(dir, name string, cert, key []byte) (*TLSCred, error) {
 			Path:     CreateTLSCertPath(dir, name),
 			Content:  cert,
 			Checksum: Checksum(cert),
+		},
+		OCSPResp: ChecksumFile{
+			Path:     CreateTLSOCSPRespPath(dir, name),
+			Content:  ocspResp,
+			Checksum: Checksum(ocspResp),
 		},
 	}, nil
 }
@@ -91,7 +101,7 @@ func (ngx *Manager) writeTLSKeyCert(ingConfig *IngressConfig) error {
 	return nil
 }
 
-// writeTLSKeyCert writes TLS private key and certificate to tlsCred in their files.
+// writeTLSKeyCert writes TLS private key, certificate, and optionally OCSP response to tlsCred in their files.
 func writeTLSKeyCert(tlsCred *TLSCred) error {
 	if err := WriteFile(tlsCred.Key.Path, tlsCred.Key.Content); err != nil {
 		return fmt.Errorf("failed to write TLS private key: %v", err)
@@ -99,6 +109,12 @@ func writeTLSKeyCert(tlsCred *TLSCred) error {
 
 	if err := WriteFile(tlsCred.Cert.Path, tlsCred.Cert.Content); err != nil {
 		return fmt.Errorf("failed to write TLS certificate: %v", err)
+	}
+
+	if len(tlsCred.OCSPResp.Content) > 0 {
+		if err := WriteFile(tlsCred.OCSPResp.Path, tlsCred.OCSPResp.Content); err != nil {
+			return fmt.Errorf("failed to write TLS OCSP response: %v", err)
+		}
 	}
 
 	return nil

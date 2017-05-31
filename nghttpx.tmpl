@@ -40,3 +40,7 @@ workers={{ .Workers }}
 # checksum: {{ .MrubyFile.Checksum }}
 mruby-file={{ .MrubyFile.Path }}
 {{ end }}
+
+{{ if .FetchOCSPRespFromSecret }}
+fetch-ocsp-response-file=/cat-ocsp-resp.sh
+{{ end}}
