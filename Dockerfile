@@ -19,6 +19,8 @@
 
 FROM ubuntu:16.04
 
+COPY extra-mrbgem.patch /
+
 RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison \
         zlib1g libssl1.0.0 libev4 libjemalloc1 libc-ares2 \
@@ -27,6 +29,7 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
         --no-install-recommends && \
     git clone -b v1.23.1 --depth 1 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
+    patch -p1 < /extra-mrbgem.patch && \
     git submodule update --init && autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
     make -j$(nproc) install-strip && \
@@ -35,7 +38,8 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
     apt-get -y purge git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison && \
     apt-get -y autoremove --purge && \
-    apt-get clean
+    apt-get clean && \
+    rm /extra-mrbgem.patch
 
 RUN mkdir -p /var/log/nghttpx
 

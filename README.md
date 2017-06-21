@@ -294,6 +294,14 @@ to the saved file is added to the configuration.
 Read [MRUBY SCRIPTING](https://nghttp2.org/documentation/nghttpx.1.html#mruby-scripting)
 section of nghttpx(1) manual page about mruby API.
 
+## MRUBY Scripting
+
+In addition to the basic mrbgems included by mruby, this Ingress
+controller adds the following mrbgems for convenience:
+
+- [mattn/mruby-onig-regexp](https://github.com/mattn/mruby-onig-regexp):
+  This adds the regular expression support.
+
 ## Troubleshooting
 
 TBD

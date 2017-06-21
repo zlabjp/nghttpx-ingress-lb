@@ -1,0 +1,10 @@
+diff --git a/third-party/build_config.rb b/third-party/build_config.rb
+index 7ddd2e9..712ebdf 100644
+--- a/third-party/build_config.rb
++++ b/third-party/build_config.rb
+@@ -11,4 +11,5 @@ MRuby::Build.new do |conf|
+   # include the default GEMs
+   conf.gembox 'default'
+   conf.gem :core => 'mruby-eval'
++  conf.gem :github => 'mattn/mruby-onig-regexp'
+ end
