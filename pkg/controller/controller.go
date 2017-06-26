@@ -1401,7 +1401,7 @@ func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
 			break
 		}
 
-		if externalIP == "" && ((lbc.allowInternalIP && address.Type == v1.NodeInternalIP) || address.Type == v1.NodeLegacyHostIP) {
+		if externalIP == "" && (lbc.allowInternalIP && address.Type == v1.NodeInternalIP) {
 			externalIP = address.Address
 			// Continue to the next iteration because we may encounter v1.NodeExternalIP later.
 		}
