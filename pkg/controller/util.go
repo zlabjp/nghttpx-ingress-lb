@@ -32,8 +32,9 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 // podInfo contains runtime information about the pod
@@ -119,4 +120,31 @@ func removeAddressFromLoadBalancerIngress(a []v1.LoadBalancerIngress, addr strin
 		p++
 	}
 	return a[:p]
+}
+
+// podFindPort is copied from
+// https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/api/v1/pod/util.go#L29 because original
+// FindPort requires k8s.io/kubernetes/pkg/api/v1 while we use k8s.io/client-go/pkg/api/v1.
+
+// podFindPort locates the container port for the given pod and portName.  If the
+// targetPort is a number, use that.  If the targetPort is a string, look that
+// string up in all named ports in all containers in the target pod.  If no
+// match is found, fail.
+func podFindPort(pod *v1.Pod, svcPort *v1.ServicePort) (int, error) {
+	portName := svcPort.TargetPort
+	switch portName.Type {
+	case intstr.String:
+		name := portName.StrVal
+		for _, container := range pod.Spec.Containers {
+			for _, port := range container.Ports {
+				if port.Name == name && port.Protocol == svcPort.Protocol {
+					return int(port.ContainerPort), nil
+				}
+			}
+		}
+	case intstr.Int:
+		return portName.IntValue(), nil
+	}
+
+	return 0, fmt.Errorf("no suitable port for manifest: %s", pod.UID)
 }

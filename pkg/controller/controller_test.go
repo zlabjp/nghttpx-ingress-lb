@@ -36,11 +36,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	core "k8s.io/client-go/testing"
-	"k8s.io/kubernetes/pkg/api/v1"
-	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
-	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -373,7 +373,7 @@ func newTLSSecret(namespace, name string, tlsCrt, tlsKey []byte) *v1.Secret {
 }
 
 func getKey(obj runtime.Object, t *testing.T) string {
-	if key, err := controller.KeyFunc(obj); err != nil {
+	if key, err := cache.MetaNamespaceKeyFunc(obj); err != nil {
 		t.Fatalf("Could not get key for %+v: %v", obj, err)
 		return ""
 	} else {
