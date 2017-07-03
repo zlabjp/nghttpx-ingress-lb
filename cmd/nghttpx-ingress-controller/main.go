@@ -45,7 +45,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	kubectl_util "k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
@@ -67,8 +67,9 @@ var (
 		`Name of the ConfigMap that containes the custom nghttpx configuration to use`)
 
 	inCluster = flags.Bool("running-in-cluster", true,
-		`Optional, if this controller is running in a kubernetes cluster, use the
-		 pod secrets for creating a Kubernetes client.`)
+		`Deprecated: Use --kubeconfig to run the controller outside a cluster`)
+
+	kubeconfig = flags.String("kubeconfig", "", `Path to kubeconfig file which overrides in-cluster configuration.`)
 
 	resyncPeriod = flags.Duration("sync-period", 30*time.Second,
 		`Relist and confirm cloud resources this often.`)
@@ -112,6 +113,8 @@ var (
 		`Fetch OCSP response from TLS secret.`)
 
 	ocspRespKey = flags.String("ocsp-resp-key", "tls.ocsp-resp", `A key for OCSP response in TLS secret.`)
+
+	configOverrides clientcmd.ConfigOverrides
 )
 
 func main() {
@@ -119,7 +122,8 @@ func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	flags.AddGoFlagSet(flag.CommandLine)
-	clientConfig := kubectl_util.DefaultClientConfig(flags)
+
+	clientcmd.BindOverrideFlags(&configOverrides, flags, clientcmd.RecommendedConfigOverrideFlags(""))
 
 	flags.Parse(os.Args)
 
@@ -139,16 +143,16 @@ func main() {
 
 	var err error
 	var config *rest.Config
-	if *inCluster {
+	if *kubeconfig == "" {
 		config, err = rest.InClusterConfig()
-		if err != nil {
-			glog.Exitf("Could not get clientConfig: %v", err)
-		}
 	} else {
-		config, err = clientConfig.ClientConfig()
-		if err != nil {
-			glog.Exitf("error connecting to the client: %v", err)
+		loadingRules := clientcmd.ClientConfigLoadingRules{
+			ExplicitPath: *kubeconfig,
 		}
+		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(&loadingRules, &configOverrides).ClientConfig()
+	}
+	if err != nil {
+		glog.Exitf("Could not get clientConfig: %v", err)
 	}
 
 	clientset, err := clientset.NewForConfig(config)
