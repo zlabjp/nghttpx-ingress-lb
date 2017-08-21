@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
         diffutils ca-certificates psmisc \
         python \
         --no-install-recommends && \
-    git clone -b v1.24.0 --depth 1 https://github.com/nghttp2/nghttp2.git && \
+    git clone -b v1.25.0 --depth 1 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     git submodule update --init && autoreconf -i && \
