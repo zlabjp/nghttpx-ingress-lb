@@ -101,6 +101,7 @@ type LoadBalancerController struct {
 	allowInternalIP         bool
 	ocspRespKey             string
 	fetchOCSPRespFromSecret bool
+	proxyProto              bool
 
 	recorder record.EventRecorder
 
@@ -147,6 +148,8 @@ type Config struct {
 	AllowInternalIP         bool
 	OCSPRespKey             string
 	FetchOCSPRespFromSecret bool
+	// ProxyProto toggles the use of PROXY protocol for all public-facing frontends.
+	ProxyProto bool
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -174,6 +177,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		allowInternalIP:         config.AllowInternalIP,
 		ocspRespKey:             config.OCSPRespKey,
 		fetchOCSPRespFromSecret: config.FetchOCSPRespFromSecret,
+		proxyProto:              config.ProxyProto,
 		recorder:                eventBroadcaster.NewRecorder(api.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:               workqueue.New(),
 		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
@@ -789,6 +793,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 	ingConfig.HTTPPort = lbc.nghttpxHTTPPort
 	ingConfig.HTTPSPort = lbc.nghttpxHTTPSPort
 	ingConfig.FetchOCSPRespFromSecret = lbc.fetchOCSPRespFromSecret
+	ingConfig.ProxyProto = lbc.proxyProto
 
 	var (
 		upstreams []*nghttpx.Upstream

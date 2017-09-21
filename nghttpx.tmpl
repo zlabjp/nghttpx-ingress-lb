@@ -2,13 +2,13 @@ accesslog-file=/dev/stdout
 
 include={{ .ConfDir }}/nghttpx-backend.conf
 
-frontend=*,{{ .HTTPPort }};no-tls
+frontend=*,{{ .HTTPPort }};no-tls{{ if .ProxyProto }};proxyproto{{ end }}
 
 # API endpoints
 frontend=127.0.0.1,{{ .APIPort }};api;no-tls
 
 {{ if .TLS }}
-frontend=*,{{ .HTTPSPort }}
+frontend=*,{{ .HTTPSPort }}{{ if .ProxyProto }};proxyproto{{ end }}
 
 {{ $defaultCred := .DefaultTLSCred }}
 # checksum is required to detect changes in the generated configuration and force a reload
@@ -23,7 +23,7 @@ subcert={{ $cred.Key.Path }}:{{ $cred.Cert.Path }}
 
 {{ else }}
 # just listen {{ .HTTPSPort }} to gain port {{ .HTTPSPort }}, so that we can always bind that address.
-frontend=*,{{ .HTTPSPort }};no-tls
+frontend=*,{{ .HTTPSPort }};no-tls{{ if .ProxyProto }};proxyproto{{ end }}
 {{ end }}
 
 # for health check

@@ -146,6 +146,65 @@ The key for OCSP response in TLS Secret is `tls.ocsp-resp` by default.
 It can be changed by `--ocsp-resp-key` flag.  The value of OCSP
 response in TLS Secret must be DER encoded.
 
+## PROXY protocol support - preserving ClientIP addresses
+
+In case you are running nghttpx-ingress-lb behind a LoadBalancer you might
+to preserve the ClientIP addresses accessing your Kubernetes cluster.
+
+As an example we are using a deployment on a Kubernetes on AWS.
+
+In order to use all nghttpx features, especially upstream HTTP/2 forwarding
+and TLS SNI, the only way to deploy nghttpx-ingress-lb, is to use an
+AWS ELB (Classic LoadBalancer) in TCP mode and let nghttpx do the
+TLS-termination, because:
+
+- AWS ELB does not handle HTTP/2 at all.
+- AWS ALB does not handle upstream HTTP/2.
+
+Therefore using an `X-Forward-For` header does not work, and you have to rely
+on the PROXY-protocol feature.
+
+### Enable PROXY-protcol on external LoadBalancer
+
+You can enable the PROXY protol manually on the external AWS ELB(http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-proxy-protocol.html), which forwards traffic
+to your nghttpx-ingress-lb, or you can let Kubernetes handle this for your like:
+
+```yaml
+# Kubernetes LoadBalancer ELB configuration, which forwards traffic
+# on ports 80 and 443 to an nghttpx-ingress-lb controller.
+# Kubernetes enabled the PROXY protocol on the AWS ELB.
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
+  name: nghttpx-ingress
+  namespace: kube-system
+spec:
+  selector:
+    k8s-app: nghttpx-ingress-lb
+  type: LoadBalancer
+  ports:
+  - name: http-ingress
+    port: 80
+  - name: tls-ingress
+    port: 443
+```
+
+### Enable PROXY-protocol on nghttpx-ingress-lb
+
+Once the external LoadBalancer has PROXY-protocol enabled, you have to enable
+the PROXY-protocol on nghttpx-ingress-lb as well by specifying an additional
+launch-parameter of the nghttpx-ingress-lb, using `--proxy-proto=true`
+
+See the [examples/proxyproto](examples/proxyproto) subdirectory for a working
+deployment or use:
+
+```sh
+# Deploy nghttpx-ingress-lb behind LoadBalancer with PROXY protocl and RBAC enabled.
+kubctl apply -f examples/proxyproto/
+```
+
 ## Default backend
 
 The default backend is used when the request does not match any given
