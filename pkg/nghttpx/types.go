@@ -66,6 +66,8 @@ type IngressConfig struct {
 	HTTPSPort int
 	// FetchOCSPRespFromSecret is true if OCSP response is fetched from TLS secret.
 	FetchOCSPRespFromSecret bool
+	// ProxyProto toggles the use of PROXY protocol for all public-facing frontends.
+	ProxyProto bool
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.

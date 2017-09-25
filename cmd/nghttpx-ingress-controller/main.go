@@ -112,6 +112,9 @@ var (
 	fetchOCSPRespFromSecret = flags.Bool("fetch-ocsp-resp-from-secret", false,
 		`Fetch OCSP response from TLS secret.`)
 
+	proxyProto = flags.Bool("proxy-proto", false,
+		`Enable proxyproto for all public-facing frontends (api and health frontends are ignored)`)
+
 	ocspRespKey = flags.String("ocsp-resp-key", "tls.ocsp-resp", `A key for OCSP response in TLS secret.`)
 
 	configOverrides clientcmd.ConfigOverrides
@@ -205,6 +208,7 @@ func main() {
 		AllowInternalIP:         *allowInternalIP,
 		OCSPRespKey:             *ocspRespKey,
 		FetchOCSPRespFromSecret: *fetchOCSPRespFromSecret,
+		ProxyProto:              *proxyProto,
 	}
 
 	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {

@@ -1,0 +1,19 @@
+# Kubernetes LoadBalancer ELB configuration, which forwards traffic
+# on ports 80 and 443 to an nghttpx-ingress-lb controller.
+# Kubernetes enabled the PROXY protocol on the AWS ELB.
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
+  name: nghttpx-ingress
+  namespace: kube-system
+spec:
+  selector:
+    k8s-app: nghttpx-ingress-lb
+  type: LoadBalancer
+  ports:
+  - name: http-ingress
+    port: 80
+  - name: tls-ingress
+    port: 443
