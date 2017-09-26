@@ -59,7 +59,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: Role
 metadata:
-  name: nhttpx-ingress-role
+  name: nghttpx-ingress-role
   namespace: kube-system
 rules:
   - apiGroups:
@@ -110,7 +110,7 @@ roleRef:
   name: nghttpx-ingress-role
 subjects:
   - kind: ServiceAccount
-    name: nhttpx-ingress-serviceaccount
+    name: nghttpx-ingress-serviceaccount
     namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
