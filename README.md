@@ -201,7 +201,7 @@ See the [examples/proxyproto](examples/proxyproto) subdirectory for a working
 deployment or use:
 
 ```sh
-# Deploy nghttpx-ingress-lb behind LoadBalancer with PROXY protocl and RBAC enabled.
+# Deploy nghttpx-ingress-lb behind LoadBalancer with PROXY protocol and RBAC enabled.
 kubctl apply -f examples/proxyproto/
 ```
 

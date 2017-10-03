@@ -46,7 +46,7 @@ BODY:
 -no body in request-
 ```
 
-If we try to get a non exising route like `/foobar` we should see
+If we try to get a non existing route like `/foobar` we should see
 ```
 $ curl -v 172.17.4.99/foobar -H 'Host: foo.bar.com'
 *   Trying 172.17.4.99...

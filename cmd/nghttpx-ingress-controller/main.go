@@ -64,7 +64,7 @@ var (
     the default backend.`)
 
 	ngxConfigMap = flags.String("nghttpx-configmap", "",
-		`Name of the ConfigMap that containes the custom nghttpx configuration to use`)
+		`Name of the ConfigMap that contains the custom nghttpx configuration to use`)
 
 	inCluster = flags.Bool("running-in-cluster", true,
 		`Deprecated: Use --kubeconfig to run the controller outside a cluster`)
