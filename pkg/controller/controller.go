@@ -37,6 +37,9 @@ import (
 
 	"github.com/golang/glog"
 
+	"k8s.io/api/core/v1"
+	clientv1 "k8s.io/api/core/v1"
+	extensions "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -44,16 +47,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/pkg/api"
-	"k8s.io/client-go/pkg/api/v1"
-	clientv1 "k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/kubernetes/pkg/client/retry"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -178,7 +178,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		ocspRespKey:             config.OCSPRespKey,
 		fetchOCSPRespFromSecret: config.FetchOCSPRespFromSecret,
 		proxyProto:              config.ProxyProto,
-		recorder:                eventBroadcaster.NewRecorder(api.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
+		recorder:                eventBroadcaster.NewRecorder(scheme.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:               workqueue.New(),
 		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
 	}
