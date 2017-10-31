@@ -123,37 +123,41 @@ func diff(b1, b2 []byte) (data []byte, err error) {
 	return
 }
 
-// FixupPortBackendConfig validates config, and fixes the invalid values inside it.  svc and port is service name and port that config is
-// associated to.
-func FixupPortBackendConfig(config PortBackendConfig, svc, port string) PortBackendConfig {
-	glog.Infof("use port backend configuration for service %v: %+v", svc, config)
-	switch config.Proto {
-	case ProtocolH2, ProtocolH1:
+// FixupPortBackendConfig validates config, and fixes the invalid values inside it.
+func FixupPortBackendConfig(config *PortBackendConfig) {
+	switch config.GetProto() {
+	case ProtocolH2, ProtocolH1, "":
 		// OK
-	case "":
-		config.Proto = ProtocolH1
 	default:
-		glog.Errorf("unrecognized backend protocol %v for service %v, port %v", config.Proto, svc, port)
-		config.Proto = ProtocolH1
+		glog.Errorf("unrecognized backend protocol %q", config.GetProto())
+		config.SetProto(ProtocolH1)
 	}
-	switch config.Affinity {
-	case AffinityNone, AffinityIP:
+	switch config.GetAffinity() {
+	case AffinityNone, AffinityIP, "":
 		// OK
-	case "":
-		config.Affinity = AffinityNone
 	default:
-		glog.Errorf("unsupported affinity method %v for service %v, port %v", config.Affinity, svc, port)
-		config.Affinity = AffinityNone
+		glog.Errorf("unsupported affinity method %v", config.GetAffinity())
+		config.SetAffinity(AffinityNone)
 	}
-	return config
 }
 
-// DefaultPortBackendConfig returns default PortBackendConfig
-func DefaultPortBackendConfig() PortBackendConfig {
-	// Update NewDefaultServer() too.
-	return PortBackendConfig{
-		Proto:    ProtocolH1,
-		Affinity: AffinityNone,
+// ApplyDefaultPortBackendConfig applies default field value specified in defaultConfig to config if a corresponding field is missing.
+func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *PortBackendConfig) {
+	glog.V(4).Info("Applying default-backend-config annotation")
+	if defaultConfig.Proto != nil && config.Proto == nil {
+		config.SetProto(*defaultConfig.Proto)
+	}
+	if defaultConfig.TLS != nil && config.TLS == nil {
+		config.SetTLS(*defaultConfig.TLS)
+	}
+	if defaultConfig.SNI != nil && config.SNI == nil {
+		config.SetSNI(*defaultConfig.SNI)
+	}
+	if defaultConfig.DNS != nil && config.DNS == nil {
+		config.SetDNS(*defaultConfig.DNS)
+	}
+	if defaultConfig.Affinity != nil && config.Affinity == nil {
+		config.SetAffinity(*defaultConfig.Affinity)
 	}
 }
 

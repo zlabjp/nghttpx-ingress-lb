@@ -771,9 +771,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 		return upstream
 	}
 
-	portBackendConfig := nghttpx.DefaultPortBackendConfig()
-
-	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], v1.ProtocolTCP, &portBackendConfig)
+	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], v1.ProtocolTCP, &nghttpx.PortBackendConfig{})
 	if len(eps) == 0 {
 		glog.Warningf("service %v does no have any active endpoints", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
@@ -825,12 +823,12 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 			requireTLS = len(ingPems) > 0
 		}
 
-		backendConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getBackendConfig()
+		defaultPortBackendConfig, backendConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getBackendConfig()
 
 		if ing.Spec.Backend != nil {
 			// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress resource
 			// specifies this.  But specification does not any rules how to deal with it.  Just use the one we meet last.
-			if ups, err := lbc.createUpstream(ing, "", "/", ing.Spec.Backend, false, backendConfig); err != nil {
+			if ups, err := lbc.createUpstream(ing, "", "/", ing.Spec.Backend, false, defaultPortBackendConfig, backendConfig); err != nil {
 				glog.Errorf("Could not create default backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 			} else {
 				defaultUpstream = ups
@@ -846,7 +844,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 			for i, _ := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
-				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, &path.Backend, requireTLS, backendConfig); err != nil {
+				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, &path.Backend, requireTLS, defaultPortBackendConfig, backendConfig); err != nil {
 					glog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 					continue
 				} else {
@@ -921,7 +919,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 // createUpstream creates new nghttpx.Upstream for ing, host, path and backend.
 func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host, path string, backend *extensions.IngressBackend,
-	requireTLS bool, backendConfig map[string]map[string]nghttpx.PortBackendConfig) (*nghttpx.Upstream, error) {
+	requireTLS bool, defaultPortBackendConfig *nghttpx.PortBackendConfig, backendConfig map[string]map[string]*nghttpx.PortBackendConfig) (*nghttpx.Upstream, error) {
 	var normalizedPath string
 	if path == "" {
 		normalizedPath = "/"
@@ -962,13 +960,14 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 		// servicePort.Port.  servicePort.TargetPort could be a string.  This is really messy.
 		if strconv.Itoa(int(servicePort.Port)) == bp || servicePort.TargetPort.String() == bp || servicePort.Name == bp {
 			portBackendConfig, ok := svcBackendConfig[bp]
-			if ok {
-				portBackendConfig = nghttpx.FixupPortBackendConfig(portBackendConfig, svcKey, bp)
-			} else {
-				portBackendConfig = nghttpx.DefaultPortBackendConfig()
+			if !ok {
+				portBackendConfig = &nghttpx.PortBackendConfig{}
+				if defaultPortBackendConfig != nil {
+					nghttpx.ApplyDefaultPortBackendConfig(portBackendConfig, defaultPortBackendConfig)
+				}
 			}
 
-			eps := lbc.getEndpoints(svc, servicePort, v1.ProtocolTCP, &portBackendConfig)
+			eps := lbc.getEndpoints(svc, servicePort, v1.ProtocolTCP, portBackendConfig)
 			if len(eps) == 0 {
 				glog.Warningf("service %v does no have any active endpoints", svcKey)
 				break
@@ -1146,11 +1145,18 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 				ups := nghttpx.UpstreamServer{
 					Address:  epAddress.IP,
 					Port:     strconv.Itoa(int(targetPort)),
-					Protocol: portBackendConfig.Proto,
-					TLS:      portBackendConfig.TLS,
-					SNI:      portBackendConfig.SNI,
-					DNS:      portBackendConfig.DNS,
-					Affinity: portBackendConfig.Affinity,
+					Protocol: portBackendConfig.GetProto(),
+					TLS:      portBackendConfig.GetTLS(),
+					SNI:      portBackendConfig.GetSNI(),
+					DNS:      portBackendConfig.GetDNS(),
+					Affinity: portBackendConfig.GetAffinity(),
+				}
+				// Set Protocol and Affinity here if they are empty.  Template expects them.
+				if ups.Protocol == "" {
+					ups.Protocol = nghttpx.ProtocolH1
+				}
+				if ups.Affinity == "" {
+					ups.Affinity = nghttpx.AffinityNone
 				}
 				upsServers = append(upsServers, ups)
 			}

@@ -89,17 +89,17 @@ type Upstream struct {
 type Affinity string
 
 const (
-	AffinityNone = "none"
-	AffinityIP   = "ip"
+	AffinityNone Affinity = "none"
+	AffinityIP   Affinity = "ip"
 )
 
 type Protocol string
 
 const (
 	// HTTP/2 protocol
-	ProtocolH2 = "h2"
+	ProtocolH2 Protocol = "h2"
 	// HTTP/1.1 protocol
-	ProtocolH1 = "http/1.1"
+	ProtocolH1 Protocol = "http/1.1"
 )
 
 // UpstreamServer describes a server in an nghttpx upstream
@@ -123,9 +123,8 @@ type TLSCred struct {
 // NewDefaultServer return an UpstreamServer to be use as default server that returns 503.
 func NewDefaultServer() UpstreamServer {
 	return UpstreamServer{
-		Address: "127.0.0.1",
-		Port:    "8181",
-		// Update DefaultPortBackendConfig() too.
+		Address:  "127.0.0.1",
+		Port:     "8181",
 		Protocol: ProtocolH1,
 		Affinity: AffinityNone,
 	}
@@ -134,15 +133,75 @@ func NewDefaultServer() UpstreamServer {
 // backend configuration obtained from ingress annotation, specified per service port
 type PortBackendConfig struct {
 	// backend application protocol.  At the moment, this should be either ProtocolH2 or ProtocolH1.
-	Proto Protocol `json:"proto,omitempty"`
+	Proto *Protocol `json:"proto,omitempty"`
 	// true if backend connection requires TLS
-	TLS bool `json:"tls,omitempty"`
+	TLS *bool `json:"tls,omitempty"`
 	// SNI hostname for backend TLS connection
-	SNI string `json:"sni,omitempty"`
+	SNI *string `json:"sni,omitempty"`
 	// DNS is true if backend hostname is resolved dynamically rather than start up or configuration reloading.
-	DNS bool `json:"dns,omitempty"`
+	DNS *bool `json:"dns,omitempty"`
 	// Affinity is session affinity method nghttpx supports.  See affinity parameter in backend option of nghttpx.
-	Affinity Affinity `json:"affinity,omitempty"`
+	Affinity *Affinity `json:"affinity,omitempty"`
+}
+
+func (pbc *PortBackendConfig) GetProto() Protocol {
+	if pbc.Proto == nil {
+		return ""
+	}
+	return *pbc.Proto
+}
+
+func (pbc *PortBackendConfig) SetProto(proto Protocol) {
+	pbc.Proto = new(Protocol)
+	*pbc.Proto = proto
+}
+
+func (pbc *PortBackendConfig) GetTLS() bool {
+	if pbc.TLS == nil {
+		return false
+	}
+	return *pbc.TLS
+}
+
+func (pbc *PortBackendConfig) SetTLS(tls bool) {
+	pbc.TLS = new(bool)
+	*pbc.TLS = tls
+}
+
+func (pbc *PortBackendConfig) GetSNI() string {
+	if pbc.SNI == nil {
+		return ""
+	}
+	return *pbc.SNI
+}
+
+func (pbc *PortBackendConfig) SetSNI(sni string) {
+	pbc.SNI = new(string)
+	*pbc.SNI = sni
+}
+
+func (pbc *PortBackendConfig) GetDNS() bool {
+	if pbc.DNS == nil {
+		return false
+	}
+	return *pbc.DNS
+}
+
+func (pbc *PortBackendConfig) SetDNS(dns bool) {
+	pbc.DNS = new(bool)
+	*pbc.DNS = dns
+}
+
+func (pbc *PortBackendConfig) GetAffinity() Affinity {
+	if pbc.Affinity == nil {
+		return AffinityNone
+	}
+	return *pbc.Affinity
+}
+
+func (pbc *PortBackendConfig) SetAffinity(affinity Affinity) {
+	pbc.Affinity = new(Affinity)
+	*pbc.Affinity = affinity
 }
 
 // ChecksumFile represents a file with path, its arbitrary content, and its checksum.
