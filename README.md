@@ -276,6 +276,35 @@ spec:
           servicePort: 50051
 ```
 
+The controller also understands
+`ingress.zlab.co.jp/default-backend-config` annotation.  It serves
+default values for missing values in backend-config per field basis in
+the same Ingress resource.  It can contain single dictionary which
+contains the same key/value pairs.  It is useful if same set of
+backend-config is required for lots of services.
+
+For example, if a pair of service, and port has the backend-config
+like so:
+
+```json
+{"affinity": "ip"}
+```
+
+And the default-backend-config looks like so:
+
+```json
+{"proto": "h2", "affinity": "none"}
+```
+
+The final backend-config becomes like so:
+
+```json
+{"proto": "h2", "affinity": "ip"}
+```
+
+A values which specified explicitly in an individual backend-config
+always takes precedence.
+
 Note that Ingress allows regular expression in
 `.spec.rules[*].http.paths[*].path`, but nghttpx does not support it.
 
