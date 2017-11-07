@@ -102,6 +102,7 @@ type LoadBalancerController struct {
 	ocspRespKey             string
 	fetchOCSPRespFromSecret bool
 	proxyProto              bool
+	publishSvc              string
 
 	recorder record.EventRecorder
 
@@ -150,6 +151,9 @@ type Config struct {
 	FetchOCSPRespFromSecret bool
 	// ProxyProto toggles the use of PROXY protocol for all public-facing frontends.
 	ProxyProto bool
+	// PublishSvc is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
+	// controller Pod.
+	PublishSvc string
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -178,6 +182,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		ocspRespKey:             config.OCSPRespKey,
 		fetchOCSPRespFromSecret: config.FetchOCSPRespFromSecret,
 		proxyProto:              config.ProxyProto,
+		publishSvc:              config.PublishSvc,
 		recorder:                eventBroadcaster.NewRecorder(scheme.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:               workqueue.New(),
 		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
@@ -1283,7 +1288,7 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *extensions.Ingress)
 // syncIngress udpates Ingress resource status.
 func (lbc *LoadBalancerController) syncIngress(stopCh <-chan struct{}) {
 	for {
-		if err := lbc.getNodeIPAndUpdateIngress(); err != nil {
+		if err := lbc.getLoadBalancerIngressAndUpdateIngress(); err != nil {
 			glog.Errorf("Could not update Ingress status: %v", err)
 		}
 
@@ -1298,17 +1303,29 @@ func (lbc *LoadBalancerController) syncIngress(stopCh <-chan struct{}) {
 	}
 }
 
-// getNodeIPAndUpdateIngress gets node IP where Ingress controller is running, and updates Ingress Status with them.
-func (lbc *LoadBalancerController) getNodeIPAndUpdateIngress() error {
-	thisPod, err := lbc.getThisPod()
-	if err != nil {
-		return err
-	}
+// getLoadBalancerIngressAndUpdateIngress gets addresses to set in Ingress resource, and updates Ingress Status with them.
+func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress() error {
+	var lbIngs []v1.LoadBalancerIngress
 
-	selector := labels.Set(thisPod.Labels).AsSelector()
-	lbIngs, err := lbc.getLoadBalancerIngress(selector)
-	if err != nil {
-		return fmt.Errorf("Could not get Node IP of Ingress controller: %v", err)
+	if lbc.publishSvc == "" {
+		thisPod, err := lbc.getThisPod()
+		if err != nil {
+			return err
+		}
+
+		selector := labels.Set(thisPod.Labels).AsSelector()
+		lbIngs, err = lbc.getLoadBalancerIngress(selector)
+		if err != nil {
+			return fmt.Errorf("Could not get Node IP of Ingress controller: %v", err)
+		}
+	} else {
+		ns, name, _ := cache.SplitMetaNamespaceKey(lbc.publishSvc)
+		svc, err := lbc.svcLister.Services(ns).Get(name)
+		if err != nil {
+			return err
+		}
+
+		lbIngs = lbc.getLoadBalancerIngressFromService(svc)
 	}
 
 	sortLoadBalancerIngress(lbIngs)
@@ -1390,6 +1407,20 @@ func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Select
 	}
 
 	return lbIngs, nil
+}
+
+// getLoadBalancerIngressFromService returns the set of addresses from svc.
+func (lbc *LoadBalancerController) getLoadBalancerIngressFromService(svc *v1.Service) []v1.LoadBalancerIngress {
+	lbIngs := make([]v1.LoadBalancerIngress, len(svc.Status.LoadBalancer.Ingress)+len(svc.Spec.ExternalIPs))
+	copy(lbIngs, svc.Status.LoadBalancer.Ingress)
+
+	i := len(svc.Status.LoadBalancer.Ingress)
+	for _, ip := range svc.Spec.ExternalIPs {
+		lbIngs[i].IP = ip
+		i++
+	}
+
+	return lbIngs
 }
 
 // getPodAddress returns pod's address.  It prefers external IP.  It may return internal IP if configuration allows it.

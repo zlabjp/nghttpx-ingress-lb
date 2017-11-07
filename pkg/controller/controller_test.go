@@ -928,3 +928,57 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		}
 	}
 }
+
+// TestGetLoadBalancerIngressFromService verifies getLoadBalancerIngressFromService.
+func TestGetLoadBalancerIngressFromService(t *testing.T) {
+	f := newFixture(t)
+
+	svc := &v1.Service{
+		Spec: v1.ServiceSpec{
+			ExternalIPs: []string{
+				"192.168.0.2",
+				"192.168.0.1",
+				"192.168.0.3",
+			},
+		},
+		Status: v1.ServiceStatus{
+			LoadBalancer: v1.LoadBalancerStatus{
+				Ingress: []v1.LoadBalancerIngress{
+					{
+						Hostname: "charlie.example.com",
+					},
+					{
+						IP: "10.0.0.1",
+					},
+				},
+			},
+		},
+	}
+
+	want := []v1.LoadBalancerIngress{
+		{
+			Hostname: "charlie.example.com",
+		},
+		{
+			IP: "10.0.0.1",
+		},
+		{
+			IP: "192.168.0.2",
+		},
+		{
+			IP: "192.168.0.1",
+		},
+		{
+			IP: "192.168.0.3",
+		},
+	}
+
+	f.prepare()
+	f.lbc.publishSvc = "alpha/bravo"
+
+	got := f.lbc.getLoadBalancerIngressFromService(svc)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("f.lbc.getLoadBalancerIngressFromService(...) = %q, want %q", got, want)
+	}
+}
