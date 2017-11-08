@@ -222,6 +222,18 @@ respectively.  They can be configured using accesslog-file and
 errorlog-file options respectively.  No log file rotation is
 configured by default.
 
+## Ingress status
+
+By default, nghttpx Ingress controller periodically writes the
+addresses of their Pods in all Ingress resource status.  If multiple
+nghttpx Ingress controllers are running, the controller first gets all
+Pods with the same labels of its own, and writes all addresses in
+Ingress status.
+
+If a Service is specified in `--publish-service` flag, external IPs,
+and load balancer addresses in the specified Service are written into
+Ingress resource instead.
+
 ## Additional backend connection configuration
 
 nghttpx supports additional backend connection configuration via

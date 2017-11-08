@@ -117,6 +117,8 @@ var (
 
 	ocspRespKey = flags.String("ocsp-resp-key", "tls.ocsp-resp", `A key for OCSP response in TLS secret.`)
 
+	publishSvc = flags.String("publish-service", "", `Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
+
 	configOverrides clientcmd.ConfigOverrides
 )
 
@@ -142,6 +144,12 @@ func main() {
 	}
 	if _, _, err := cache.SplitMetaNamespaceKey(*defaultSvc); err != nil {
 		glog.Exitf("could not parse default-backend-service %v: %v", *defaultSvc, err)
+	}
+
+	if *publishSvc != "" {
+		if _, _, err := cache.SplitMetaNamespaceKey(*publishSvc); err != nil {
+			glog.Exitf("could not parse publish-service %v: %v", *publishSvc, err)
+		}
 	}
 
 	var err error
@@ -209,6 +217,7 @@ func main() {
 		OCSPRespKey:             *ocspRespKey,
 		FetchOCSPRespFromSecret: *fetchOCSPRespFromSecret,
 		ProxyProto:              *proxyProto,
+		PublishSvc:              *publishSvc,
 	}
 
 	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {
