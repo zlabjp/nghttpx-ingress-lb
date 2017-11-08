@@ -164,10 +164,12 @@ TLS-termination, because:
 Therefore using an `X-Forward-For` header does not work, and you have to rely
 on the PROXY-protocol feature.
 
-### Enable PROXY-protcol on external LoadBalancer
+### Enable PROXY-protocol on external LoadBalancer
 
-You can enable the PROXY protol manually on the external AWS ELB(http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-proxy-protocol.html), which forwards traffic
-to your nghttpx-ingress-lb, or you can let Kubernetes handle this for your like:
+You can enable the PROXY protocol manually on the external AWS
+ELB(http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-proxy-protocol.html),
+which forwards traffic to your nghttpx-ingress-lb, or you can let
+Kubernetes handle this for your like:
 
 ```yaml
 # Kubernetes LoadBalancer ELB configuration, which forwards traffic
@@ -246,7 +248,7 @@ The configuration is done per service port
 (`.spec.rules[*].http.paths[*].backend.servicePort`).  The first key
 under the root dictionary is the name of service name
 (`.spec.rules[*].http.paths[*].backend.serviceName`).  Its value is
-the JSON dictionary, and its keys are servie port
+the JSON dictionary, and its keys are service port
 (`.spec.rules[*].http.paths[*].backend.servicePort`).  The final value
 is the JSON dictionary, and can contain the following key value pairs:
 
