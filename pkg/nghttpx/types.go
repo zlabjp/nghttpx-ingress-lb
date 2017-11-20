@@ -89,8 +89,17 @@ type Upstream struct {
 type Affinity string
 
 const (
-	AffinityNone Affinity = "none"
-	AffinityIP   Affinity = "ip"
+	AffinityNone   Affinity = "none"
+	AffinityIP     Affinity = "ip"
+	AffinityCookie Affinity = "cookie"
+)
+
+type AffinityCookieSecure string
+
+const (
+	AffinityCookieSecureAuto AffinityCookieSecure = "auto"
+	AffinityCookieSecureYes  AffinityCookieSecure = "yes"
+	AffinityCookieSecureNo   AffinityCookieSecure = "no"
 )
 
 type Protocol string
@@ -104,13 +113,16 @@ const (
 
 // UpstreamServer describes a server in an nghttpx upstream
 type UpstreamServer struct {
-	Address  string
-	Port     string
-	Protocol Protocol
-	TLS      bool
-	SNI      string
-	DNS      bool
-	Affinity Affinity
+	Address              string
+	Port                 string
+	Protocol             Protocol
+	TLS                  bool
+	SNI                  string
+	DNS                  bool
+	Affinity             Affinity
+	AffinityCookieName   string
+	AffinityCookiePath   string
+	AffinityCookieSecure AffinityCookieSecure
 }
 
 // TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte string.
@@ -142,6 +154,12 @@ type PortBackendConfig struct {
 	DNS *bool `json:"dns,omitempty"`
 	// Affinity is session affinity method nghttpx supports.  See affinity parameter in backend option of nghttpx.
 	Affinity *Affinity `json:"affinity,omitempty"`
+	// AffinityCookieName is a name of cookie to use for cookie-based session affinity.
+	AffinityCookieName *string `json:"affinityCookieName,omitempty"`
+	// AffinityCookiePath is a path of cookie for cookie-based session affinity.
+	AffinityCookiePath *string `json:"affinityCookiePath,omitempty"`
+	// AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.
+	AffinityCookieSecure *AffinityCookieSecure `json:"affinityCookieSecure,omitempty"`
 }
 
 func (pbc *PortBackendConfig) GetProto() Protocol {
@@ -202,6 +220,42 @@ func (pbc *PortBackendConfig) GetAffinity() Affinity {
 func (pbc *PortBackendConfig) SetAffinity(affinity Affinity) {
 	pbc.Affinity = new(Affinity)
 	*pbc.Affinity = affinity
+}
+
+func (pbc *PortBackendConfig) GetAffinityCookieName() string {
+	if pbc.AffinityCookieName == nil {
+		return ""
+	}
+	return *pbc.AffinityCookieName
+}
+
+func (pbc *PortBackendConfig) SetAffinityCookieName(affinityCookieName string) {
+	pbc.AffinityCookieName = new(string)
+	*pbc.AffinityCookieName = affinityCookieName
+}
+
+func (pbc *PortBackendConfig) GetAffinityCookiePath() string {
+	if pbc.AffinityCookiePath == nil {
+		return ""
+	}
+	return *pbc.AffinityCookiePath
+}
+
+func (pbc *PortBackendConfig) SetAffinityCookiePath(affinityCookiePath string) {
+	pbc.AffinityCookiePath = new(string)
+	*pbc.AffinityCookiePath = affinityCookiePath
+}
+
+func (pbc *PortBackendConfig) GetAffinityCookieSecure() AffinityCookieSecure {
+	if pbc.AffinityCookieSecure == nil {
+		return ""
+	}
+	return *pbc.AffinityCookieSecure
+}
+
+func (pbc *PortBackendConfig) SetAffinityCookieSecure(affinityCookieSecure AffinityCookieSecure) {
+	pbc.AffinityCookieSecure = new(AffinityCookieSecure)
+	*pbc.AffinityCookieSecure = affinityCookieSecure
 }
 
 // ChecksumFile represents a file with path, its arbitrary content, and its checksum.

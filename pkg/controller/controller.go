@@ -1148,13 +1148,16 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 			for i, _ := range ss.Addresses {
 				epAddress := &ss.Addresses[i]
 				ups := nghttpx.UpstreamServer{
-					Address:  epAddress.IP,
-					Port:     strconv.Itoa(int(targetPort)),
-					Protocol: portBackendConfig.GetProto(),
-					TLS:      portBackendConfig.GetTLS(),
-					SNI:      portBackendConfig.GetSNI(),
-					DNS:      portBackendConfig.GetDNS(),
-					Affinity: portBackendConfig.GetAffinity(),
+					Address:              epAddress.IP,
+					Port:                 strconv.Itoa(int(targetPort)),
+					Protocol:             portBackendConfig.GetProto(),
+					TLS:                  portBackendConfig.GetTLS(),
+					SNI:                  portBackendConfig.GetSNI(),
+					DNS:                  portBackendConfig.GetDNS(),
+					Affinity:             portBackendConfig.GetAffinity(),
+					AffinityCookieName:   portBackendConfig.GetAffinityCookieName(),
+					AffinityCookiePath:   portBackendConfig.GetAffinityCookiePath(),
+					AffinityCookieSecure: portBackendConfig.GetAffinityCookieSecure(),
 				}
 				// Set Protocol and Affinity here if they are empty.  Template expects them.
 				if ups.Protocol == "" {
@@ -1162,6 +1165,8 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 				}
 				if ups.Affinity == "" {
 					ups.Affinity = nghttpx.AffinityNone
+				} else if ups.Affinity == nghttpx.AffinityCookie && ups.AffinityCookieSecure == "" {
+					ups.AffinityCookieSecure = nghttpx.AffinityCookieSecureAuto
 				}
 				upsServers = append(upsServers, ups)
 			}
