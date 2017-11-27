@@ -15,17 +15,21 @@ import (
 // TestFixupPortBackendConfig validates fixupPortBackendConfig corrects invalid input to the correct default value.
 func TestFixupPortBackendConfig(t *testing.T) {
 	tests := []struct {
-		inProto     Protocol
-		inAffinity  Affinity
-		outProto    Protocol
-		outAffinity Affinity
+		inProto                 Protocol
+		inAffinity              Affinity
+		inAffinityCookieSecure  AffinityCookieSecure
+		outProto                Protocol
+		outAffinity             Affinity
+		outAffinityCookieSecure AffinityCookieSecure
 	}{
 		// 0
 		{
-			inProto:     "foo",
-			inAffinity:  "bar",
-			outProto:    ProtocolH1,
-			outAffinity: AffinityNone,
+			inProto:                 "foo",
+			inAffinity:              "bar",
+			inAffinityCookieSecure:  "buzz",
+			outProto:                ProtocolH1,
+			outAffinity:             AffinityNone,
+			outAffinityCookieSecure: AffinityCookieSecureAuto,
 		},
 		// 1
 		{
@@ -34,10 +38,12 @@ func TestFixupPortBackendConfig(t *testing.T) {
 		// 2
 		{
 			// Correct input must be left unchanged.
-			inProto:     ProtocolH2,
-			inAffinity:  AffinityIP,
-			outProto:    ProtocolH2,
-			outAffinity: AffinityIP,
+			inProto:                 ProtocolH2,
+			inAffinity:              AffinityIP,
+			inAffinityCookieSecure:  AffinityCookieSecureYes,
+			outProto:                ProtocolH2,
+			outAffinity:             AffinityIP,
+			outAffinityCookieSecure: AffinityCookieSecureYes,
 		},
 	}
 
@@ -45,12 +51,16 @@ func TestFixupPortBackendConfig(t *testing.T) {
 		c := &PortBackendConfig{}
 		c.SetProto(tt.inProto)
 		c.SetAffinity(tt.inAffinity)
+		c.SetAffinityCookieSecure(tt.inAffinityCookieSecure)
 		FixupPortBackendConfig(c)
 		if got, want := c.GetProto(), tt.outProto; got != want {
 			t.Errorf("#%v: c.GetProto() = %q, want %q", i, got, want)
 		}
 		if got, want := c.GetAffinity(), tt.outAffinity; got != want {
 			t.Errorf("#%v: c.GetAffinity() = %q, want %q", i, got, want)
+		}
+		if got, want := c.GetAffinityCookieSecure(), tt.outAffinityCookieSecure; got != want {
+			t.Errorf("#%v: c.GetAffinityCookieSecure() = %q, want %q", i, got, want)
 		}
 	}
 }
@@ -95,6 +105,27 @@ func TestApplyDefaultPortBackendConfig(t *testing.T) {
 				return a
 			}(),
 		},
+		{
+			defaultConf: func() *PortBackendConfig {
+				a := &PortBackendConfig{}
+				a.SetAffinityCookieName("lb-cookie")
+				return a
+			}(),
+		},
+		{
+			defaultConf: func() *PortBackendConfig {
+				a := &PortBackendConfig{}
+				a.SetAffinityCookiePath("/path")
+				return a
+			}(),
+		},
+		{
+			defaultConf: func() *PortBackendConfig {
+				a := &PortBackendConfig{}
+				a.SetAffinityCookieSecure(AffinityCookieSecureNo)
+				return a
+			}(),
+		},
 	}
 
 	for i, tt := range tests {
@@ -115,6 +146,15 @@ func TestApplyDefaultPortBackendConfig(t *testing.T) {
 		}
 		if got, want := a.GetAffinity(), tt.defaultConf.GetAffinity(); got != want {
 			t.Errorf("#%v: a.GetAffinity() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetAffinityCookieName(), tt.defaultConf.GetAffinityCookieName(); got != want {
+			t.Errorf("#%v: a.GetAffinityCookieName() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetAffinityCookiePath(), tt.defaultConf.GetAffinityCookiePath(); got != want {
+			t.Errorf("#%v: a.GetAffinityCookiePath() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetAffinityCookieSecure(), tt.defaultConf.GetAffinityCookieSecure(); got != want {
+			t.Errorf("#%v: a.GetAffinityCookieSecure() = %v, want %v", i, got, want)
 		}
 	}
 }

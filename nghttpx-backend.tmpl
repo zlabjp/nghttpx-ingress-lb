@@ -1,6 +1,6 @@
 {{ range $upstream := .Upstreams -}}
 # {{ $upstream.Name }}
 {{ range $backend := $upstream.Backends -}}
-backend={{ $backend.Address }},{{ $backend.Port }};{{ $upstream.Host }}{{ $upstream.Path }};proto={{ $backend.Protocol }}{{ if $backend.TLS }};tls{{ end }}{{ if $backend.SNI }};sni={{ $backend.SNI }}{{ end }}{{ if $backend.DNS }};dns{{ end }};affinity={{ $backend.Affinity }}{{ if $upstream.RedirectIfNotTLS }};redirect-if-not-tls{{ end}}
+backend={{ $backend.Address }},{{ $backend.Port }};{{ $upstream.Host }}{{ $upstream.Path }};proto={{ $backend.Protocol }}{{ if $backend.TLS }};tls{{ end }}{{ if $backend.SNI }};sni={{ $backend.SNI }}{{ end }}{{ if $backend.DNS }};dns{{ end }};affinity={{ $backend.Affinity }}{{ if eq $backend.Affinity "cookie" }}{{ if $backend.AffinityCookieName }};affinity-cookie-name={{ $backend.AffinityCookieName }}{{ end }}{{ if $backend.AffinityCookiePath }};affinity-cookie-path={{ $backend.AffinityCookiePath }}{{ end }};affinity-cookie-secure={{ $backend.AffinityCookieSecure }}{{ end }}{{ if $upstream.RedirectIfNotTLS }};redirect-if-not-tls{{ end}}
 {{ end -}}
 {{ end }}

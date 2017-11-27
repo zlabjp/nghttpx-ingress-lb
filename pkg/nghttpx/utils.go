@@ -133,11 +133,18 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 		config.SetProto(ProtocolH1)
 	}
 	switch config.GetAffinity() {
-	case AffinityNone, AffinityIP, "":
+	case AffinityNone, AffinityIP, AffinityCookie, "":
 		// OK
 	default:
 		glog.Errorf("unsupported affinity method %v", config.GetAffinity())
 		config.SetAffinity(AffinityNone)
+	}
+	switch config.GetAffinityCookieSecure() {
+	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo, "":
+		// OK
+	default:
+		glog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
+		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
 	}
 }
 
@@ -158,6 +165,15 @@ func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *Por
 	}
 	if defaultConfig.Affinity != nil && config.Affinity == nil {
 		config.SetAffinity(*defaultConfig.Affinity)
+	}
+	if defaultConfig.AffinityCookieName != nil && config.AffinityCookieName == nil {
+		config.SetAffinityCookieName(*defaultConfig.AffinityCookieName)
+	}
+	if defaultConfig.AffinityCookiePath != nil && config.AffinityCookiePath == nil {
+		config.SetAffinityCookiePath(*defaultConfig.AffinityCookiePath)
+	}
+	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
+		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
 	}
 }
 

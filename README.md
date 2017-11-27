@@ -267,8 +267,25 @@ is the JSON dictionary, and can contain the following key value pairs:
   dynamically.
 
 * `affinity`: Specify session affinity method.  Specifying `ip`
-  enables client IP based session affinity.  Specifying `none` or
+  enables client IP based session affinity.  Specifying `cookie`
+  enables cookie-based session affinity.  Specifying `none` or
   omitting this key disables session affinity.
+
+  If `cookie` is specified, additional configuration is required.  See
+  `affinityCookieName`, `affinityCookiePath`, and
+  `affinityCookieSecure` fields.
+
+* `affinityCookieName`: Specify a name of cookie to use.  This is
+  required field if `cookie` is set in `affinity` field.
+
+* `affinityCookiePath`: Specify a path of cookie path.  This is
+  optional, and if not set, cookie path is not set.
+
+* `affinityCookieSecure`: Specify whether Secure attribute of cookie
+  is added, or not.  Omitting this field, specifying empty string, or
+  specifying "auto" sets Secure attribute if client connection is TLS
+  encrypted.  If "yes" is specified, Secure attribute is always added.
+  If "no" is specified, Secure attribute is always omitted.
 
 The following example specifies HTTP/2 as backend connection for
 service "greeter", and service port "50051":
