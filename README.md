@@ -451,6 +451,13 @@ I1226 09:31:32.305093       1 command.go:78] change in configuration detected. R
   all proxied services are accessible via TLS.
 - Ingress allows regular expression in
   `.spec.rules[*].http.paths[*].path`, but nghttpx does not support it.
+- nghttpx Ingress controller may fail to apply new backend
+  configuration if the number of backend servers is high.  This is
+  because nghttpx limits the size of configuration file under 16KiB by
+  default.  To increase this limit, use `api-max-request-body` option
+  in [ConfigMap](#custom-nghttpx-configuration).  The future version
+  of nghttpx will have larger limit by default so that users don't be
+  bothered by this limitation.
 
 ## Building from source
 
