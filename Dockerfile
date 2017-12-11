@@ -17,16 +17,15 @@
 # For the full copyright and license information, please view the LICENSE
 # file that was distributed with this source code.
 
-FROM ubuntu:16.04
+FROM gcr.io/google-containers/debian-base-amd64:0.3
 
 COPY extra-mrbgem.patch /
 
-RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
-        zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison \
-        zlib1g libssl1.0.0 libev4 libjemalloc1 libc-ares2 \
+RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
+        zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch \
+        zlib1g libssl1.1 libev4 libjemalloc1 libc-ares2 \
         diffutils ca-certificates psmisc \
-        python \
-        --no-install-recommends && \
+        python && \
     git clone -b v1.28.0 --depth 1 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
@@ -36,9 +35,9 @@ RUN apt-get update && apt-get install -y git g++ make binutils autoconf automake
     cd .. && \
     rm -rf nghttp2 && \
     apt-get -y purge git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
-        zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison && \
+        zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch && \
     apt-get -y autoremove --purge && \
-    apt-get clean && \
+    rm -rf /var/log/* && \
     rm /extra-mrbgem.patch
 
 RUN mkdir -p /var/log/nghttpx
