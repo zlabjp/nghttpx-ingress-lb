@@ -30,10 +30,10 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/golang/glog"
+	"github.com/pmezard/go-difflib/difflib"
 
 	"k8s.io/api/core/v1"
 )
@@ -88,39 +88,21 @@ func needsReload(filename string, newCfg []byte) (bool, error) {
 			glog.Errorf("error computing diff: %s", err)
 			return true, nil
 		}
-		glog.Infof("nghttpx configuration diff a/%s b/%s\n%v", filename, filename, string(dData))
+		glog.Infof("nghttpx configuration diff a/%s b/%s\n%v", filename, filename, dData)
 	}
 
 	return true, nil
 }
 
-func diff(b1, b2 []byte) (data []byte, err error) {
-	f1, err := ioutil.TempFile("", "")
-	if err != nil {
-		return
+func diff(b1, b2 []byte) (string, error) {
+	d := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(string(b1)),
+		B:        difflib.SplitLines(string(b2)),
+		FromFile: "currnet",
+		ToFile:   "new",
+		Context:  3,
 	}
-	defer func() {
-		f1.Close()
-		os.Remove(f1.Name())
-	}()
-
-	f2, err := ioutil.TempFile("", "")
-	if err != nil {
-		return
-	}
-	defer func() {
-		f2.Close()
-		os.Remove(f2.Name())
-	}()
-
-	f1.Write(b1)
-	f2.Write(b2)
-
-	data, err = exec.Command("diff", "-u", f1.Name(), f2.Name()).CombinedOutput()
-	if len(data) > 0 {
-		err = nil
-	}
-	return
+	return difflib.GetUnifiedDiffString(d)
 }
 
 // FixupPortBackendConfig validates config, and fixes the invalid values inside it.
