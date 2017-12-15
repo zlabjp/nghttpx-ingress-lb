@@ -4,7 +4,7 @@ metadata:
   name: nghttpx-ingress-serviceaccount
   namespace: kube-system
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: nghttpx-ingress-clusterrole
@@ -56,7 +56,7 @@ rules:
     verbs:
       - update
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: nghttpx-ingress-role
@@ -99,7 +99,7 @@ rules:
       - create
       - update
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: nghttpx-ingress-role-nisa-binding
@@ -113,7 +113,7 @@ subjects:
     name: nghttpx-ingress-serviceaccount
     namespace: kube-system
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: nghttpx-ingress-clusterrole-nisa-binding

@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1beta2
 kind: DaemonSet
 metadata:
   name: nghttpx-ingress-controller
@@ -6,6 +6,9 @@ metadata:
   labels:
     k8s-app: nghttpx-ingress-lb
 spec:
+  selector:
+    matchLabels:
+      k8s-app: nghttpx-ingress-lb
   template:
     metadata:
       labels:

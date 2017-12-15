@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
   name: nghttpx-ingress-controller
@@ -6,7 +6,9 @@ metadata:
   labels:
     k8s-app: nghttpx-ingress-lb
 spec:
-  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      k8s-app: nghttpx-ingress-lb
   replicas: 1
   template:
     metadata:

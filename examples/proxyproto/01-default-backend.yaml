@@ -14,13 +14,15 @@ spec:
     targetPort: 8080
     protocol: TCP
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
   name: default-http-backend
   namespace: kube-system
 spec:
-  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      k8s-app: default-http-backend
   replicas: 1
   template:
     metadata:
