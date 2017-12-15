@@ -25,7 +25,6 @@ spec:
   selector:
     matchLabels:
       k8s-app: default-http-backend
-  replicas: 1
   template:
     metadata:
       labels:
