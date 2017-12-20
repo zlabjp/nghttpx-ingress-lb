@@ -24,7 +24,7 @@ COPY extra-mrbgem.patch /
 RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libssl-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch \
         zlib1g libssl1.1 libev4 libjemalloc1 libc-ares2 \
-        diffutils ca-certificates psmisc \
+        ca-certificates psmisc \
         python && \
     git clone -b v1.29.0 --depth 1 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
