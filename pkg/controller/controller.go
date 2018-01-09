@@ -1374,10 +1374,10 @@ func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []v1.LoadBalancerI
 
 		glog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %q", ing.Namespace, ing.Name, lbIngs)
 
-		newIng := *ing
+		newIng := ing.DeepCopy()
 		newIng.Status.LoadBalancer.Ingress = lbIngs
 
-		if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).UpdateStatus(&newIng); err != nil {
+		if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).UpdateStatus(newIng); err != nil {
 			glog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
 		}
 	}
