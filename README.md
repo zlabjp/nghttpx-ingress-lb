@@ -218,8 +218,7 @@ used.  The default backend always does not require TLS.
 
 ## Logs
 
-The access and error log of nghttpx are written to
-/var/log/nghttpx/access.log and /var/log/nghttpx/error.log
+The access, and error log of nghttpx are written to stdout, and stderr
 respectively.  They can be configured using accesslog-file and
 errorlog-file options respectively.  No log file rotation is
 configured by default.
