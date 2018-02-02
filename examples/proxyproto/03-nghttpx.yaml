@@ -8,7 +8,7 @@ data:
     add-x-forwarded-for=yes
     strip-incoming-x-forwarded-for=yes
 ---
-apiVersion: apps/v1beta2
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: nghttpx-ingress-controller

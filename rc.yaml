@@ -14,7 +14,7 @@ spec:
   selector:
     k8s-app: default-http-backend
 ---
-apiVersion: apps/v1beta2
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: default-http-backend
@@ -60,7 +60,7 @@ metadata:
   name: ingress
   namespace: kube-system
 ---
-apiVersion: apps/v1beta2
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nghttpx-ingress-controller
