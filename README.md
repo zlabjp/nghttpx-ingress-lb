@@ -47,7 +47,7 @@ simple we will use the [echoheaders app](https://github.com/kubernetes/contrib/b
 that just returns information about the http request as output
 
 ```
-kubectl run echoheaders --image=gcr.io/google_containers/echoserver:1.4 --replicas=1 --port=8080
+kubectl run echoheaders --image=k8s.gcr.io/echoserver:1.4 --replicas=1 --port=8080
 ```
 
 Now we expose the same application in two different services (so we can create different Ingress rules)
