@@ -535,7 +535,7 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 		t.Errorf("len(ingConfig.SubTLSCred) = %v, want %v", got, want)
 	}
 
-	for i, _ := range ingConfig.Upstreams {
+	for i := range ingConfig.Upstreams {
 		if got, want := ingConfig.Upstreams[i].RedirectIfNotTLS, true; got != want {
 			t.Errorf("ingConfig.Upstreams[%v].RedirectIfNotTLS = %v, want %v", i, got, want)
 		}

@@ -72,7 +72,7 @@ func loadBalancerIngressesIPEqual(a, b []v1.LoadBalancerIngress) bool {
 		return false
 	}
 
-	for i, _ := range a {
+	for i := range a {
 		if a[i].IP != b[i].IP {
 			return false
 		}
@@ -110,7 +110,7 @@ func uniqLoadBalancerIngress(a []v1.LoadBalancerIngress) []v1.LoadBalancerIngres
 // removeAddressFromLoadBalancerIngress removes addr from a.  addr may match IP or Hostname.
 func removeAddressFromLoadBalancerIngress(a []v1.LoadBalancerIngress, addr string) []v1.LoadBalancerIngress {
 	p := 0
-	for i, _ := range a {
+	for i := range a {
 		if a[i].IP == addr || a[i].Hostname == addr {
 			continue
 		}

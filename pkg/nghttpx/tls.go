@@ -192,7 +192,7 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 	}
 	left := pems[1:]
 	j := 0
-	for i, _ := range left {
+	for i := range left {
 		if pems[j].Key.Path == left[i].Key.Path {
 			continue
 		}

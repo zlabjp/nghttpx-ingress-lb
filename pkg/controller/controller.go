@@ -465,12 +465,12 @@ func (lbc *LoadBalancerController) endpointsReferenced(ep *v1.Endpoints) bool {
 			glog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
 			return true
 		}
-		for i, _ := range ing.Spec.Rules {
+		for i := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
 			if rule.HTTP == nil {
 				continue
 			}
-			for i, _ := range rule.HTTP.Paths {
+			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
 				if ep.Name == path.Backend.ServiceName {
 					glog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
@@ -647,12 +647,12 @@ func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
 				}
 			}
 		}
-		for i, _ := range ing.Spec.Rules {
+		for i := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
 			if rule.HTTP == nil {
 				continue
 			}
-			for i, _ := range rule.HTTP.Paths {
+			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
 				svc, err := lbc.svcLister.Services(pod.Namespace).Get(path.Backend.ServiceName)
 				if err != nil {
@@ -840,14 +840,14 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 			}
 		}
 
-		for i, _ := range ing.Spec.Rules {
+		for i := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
 
 			if rule.HTTP == nil {
 				continue
 			}
 
-			for i, _ := range rule.HTTP.Paths {
+			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
 				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, &path.Backend, requireTLS, defaultPortBackendConfig, backendConfig); err != nil {
 					glog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
@@ -864,7 +864,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 	if ingConfig.DefaultTLSCred != nil {
 		// Remove default TLS key pair from pems.
-		for i, _ := range pems {
+		for i := range pems {
 			if ingConfig.DefaultTLSCred.Key.Path == pems[i].Key.Path {
 				pems = append(pems[:i], pems[i+1:]...)
 				break
@@ -959,7 +959,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 
 	svcBackendConfig := backendConfig[backend.ServiceName]
 
-	for i, _ := range svc.Spec.Ports {
+	for i := range svc.Spec.Ports {
 		servicePort := &svc.Spec.Ports[i]
 		// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use
 		// servicePort.Port.  servicePort.TargetPort could be a string.  This is really messy.
@@ -1011,7 +1011,7 @@ func (lbc *LoadBalancerController) getTLSCredFromSecret(secretKey string) (*nght
 func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *extensions.Ingress) ([]*nghttpx.TLSCred, error) {
 	var pems []*nghttpx.TLSCred
 
-	for i, _ := range ing.Spec.TLS {
+	for i := range ing.Spec.TLS {
 		tls := &ing.Spec.TLS[i]
 		secretKey := fmt.Sprintf("%s/%s", ing.Namespace, tls.SecretName)
 		secret, err := lbc.secretLister.Secrets(ing.Namespace).Get(tls.SecretName)
@@ -1076,7 +1076,7 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 		if !lbc.validateIngressClass(ing) {
 			continue
 		}
-		for i, _ := range ing.Spec.TLS {
+		for i := range ing.Spec.TLS {
 			tls := &ing.Spec.TLS[i]
 			if tls.SecretName == name {
 				return true
@@ -1099,9 +1099,9 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 
 	upsServers := []nghttpx.UpstreamServer{}
 
-	for i, _ := range ep.Subsets {
+	for i := range ep.Subsets {
 		ss := &ep.Subsets[i]
-		for i, _ := range ss.Ports {
+		for i := range ss.Ports {
 			epPort := &ss.Ports[i]
 			if epPort.Protocol != proto {
 				continue
@@ -1145,7 +1145,7 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 				continue
 			}
 
-			for i, _ := range ss.Addresses {
+			for i := range ss.Addresses {
 				epAddress := &ss.Addresses[i]
 				ups := nghttpx.UpstreamServer{
 					Address:              epAddress.IP,
@@ -1438,7 +1438,7 @@ func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
 		return "", fmt.Errorf("Could not get Node %v for Pod %v/%v from lister: %v", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
 	}
 	var externalIP string
-	for i, _ := range node.Status.Addresses {
+	for i := range node.Status.Addresses {
 		address := &node.Status.Addresses[i]
 		if address.Type == v1.NodeExternalIP {
 			if address.Address == "" {
