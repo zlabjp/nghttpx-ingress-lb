@@ -11,6 +11,7 @@ package controller
 import (
 	"encoding/json"
 
+	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
@@ -35,7 +36,7 @@ func (ia ingressAnnotation) getBackendConfig() (*nghttpx.PortBackendConfig, map[
 	// the first key specifies service name, and secondary key specifies port name.
 	var config map[string]map[string]*nghttpx.PortBackendConfig
 	if data != "" {
-		if err := json.Unmarshal([]byte(data), &config); err != nil {
+		if err := unmarshal([]byte(data), &config); err != nil {
 			glog.Errorf("unexpected error reading %v annotation: %v", backendConfigKey, err)
 			return nil, nil
 		}
@@ -54,7 +55,7 @@ func (ia ingressAnnotation) getBackendConfig() (*nghttpx.PortBackendConfig, map[
 	}
 
 	var defaultConfig nghttpx.PortBackendConfig
-	if err := json.Unmarshal([]byte(data), &defaultConfig); err != nil {
+	if err := unmarshal([]byte(data), &defaultConfig); err != nil {
 		glog.Errorf("unexpected error reading %v annotation: %v", defaultBackendConfigKey, err)
 		return nil, nil
 	}
@@ -67,6 +68,16 @@ func (ia ingressAnnotation) getBackendConfig() (*nghttpx.PortBackendConfig, map[
 	}
 
 	return &defaultConfig, config
+}
+
+// unmarshal deserializes data into dest.  This function first tries yaml and then JSON.
+func unmarshal(data []byte, dest interface{}) error {
+	if err := yaml.Unmarshal(data, dest); err != nil {
+		if err := json.Unmarshal(data, dest); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // getIngressClass returns Ingress class from annotation.
