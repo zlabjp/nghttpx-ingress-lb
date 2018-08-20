@@ -33,7 +33,7 @@ func TestFixupPortBackendConfig(t *testing.T) {
 		},
 		// 1
 		{
-		// Empty input leaves as is.
+			// Empty input leaves as is.
 		},
 		// 2
 		{
