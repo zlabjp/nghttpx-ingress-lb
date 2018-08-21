@@ -242,8 +242,8 @@ Ingress Annotation.
 
 nghttpx-ingress-controller understands
 `ingress.zlab.co.jp/backend-config` key in Ingress
-`.metadata.annotations`.  Its value is a serialized JSON dictionary.
-The configuration is done per service port
+`.metadata.annotations`.  Its value is a serialized YAML or JSON
+dictionary.  The configuration is done per service port
 (`.spec.rules[*].http.paths[*].backend.servicePort`).  The first key
 under the root dictionary is the name of service name
 (`.spec.rules[*].http.paths[*].backend.serviceName`).  Its value is
@@ -296,6 +296,28 @@ metadata:
   name: greeter
   annotations:
     ingress.zlab.co.jp/backend-config: '{"greeter": {"50051": {"proto": "h2"}}}'
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /helloworld.Greeter/
+        backend:
+          serviceName: greeter
+          servicePort: 50051
+```
+
+Or in YAML:
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: greeter
+  annotations:
+    ingress.zlab.co.jp/backend-config: |
+      greeter:
+        50051:
+          proto: h2
 spec:
   rules:
   - http:

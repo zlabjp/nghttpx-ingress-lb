@@ -57,6 +57,23 @@ func TestGetBackendConfig(t *testing.T) {
 				},
 			},
 		},
+		// 3
+		{
+			annotationConfig: `
+svc:
+  80:
+    proto: h2
+`,
+			wantConfig: map[string]map[string]*nghttpx.PortBackendConfig{
+				"svc": {
+					"80": func() *nghttpx.PortBackendConfig {
+						a := &nghttpx.PortBackendConfig{}
+						a.SetProto(nghttpx.ProtocolH2)
+						return a
+					}(),
+				},
+			},
+		},
 	}
 
 	for i, tt := range tests {
