@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -126,6 +127,10 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		}
 
 		glog.Info("nghttpx has finished reloading new configuration")
+
+		if err := deleteStaleAssets(ingressCfg); err != nil {
+			glog.Errorf("Could not delete stale assets: %v", err)
+		}
 	case backendConfigChanged:
 		if err := ngx.issueBackendReplaceRequest(ingressCfg); err != nil {
 			return false, fmt.Errorf("failed to issue backend replace request: %v", err)
@@ -133,6 +138,53 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// deleteStaleAssets deletes asset files which are no longer used.
+func deleteStaleAssets(ingConfig *IngressConfig) error {
+	return deleteStaleTLSAssets(ingConfig)
+}
+
+// deleteStaleTLSAssets deletes TLS asset files which are no longer used.
+func deleteStaleTLSAssets(ingConfig *IngressConfig) error {
+	keep := make(map[string]bool)
+	if ingConfig.DefaultTLSCred != nil {
+		gatherTLSAssets(keep, ingConfig.DefaultTLSCred)
+	}
+	for _, tlsCred := range ingConfig.SubTLSCred {
+		gatherTLSAssets(keep, tlsCred)
+	}
+
+	dir := filepath.Join(ingConfig.ConfDir, tlsDir)
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		path := filepath.Join(dir, f.Name())
+		if keep[path] {
+			continue
+		}
+		glog.V(4).Infof("Removing stale asset file %v", path)
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// gatherTLSAssets collects file path from tlsCred, and set its associated value to true in dst.
+func gatherTLSAssets(dst map[string]bool, tlsCred *TLSCred) {
+	dst[tlsCred.Key.Path] = true
+	dst[tlsCred.Cert.Path] = true
+	if len(tlsCred.OCSPResp.Content) > 0 {
+		dst[tlsCred.OCSPResp.Path] = true
+	}
 }
 
 func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
