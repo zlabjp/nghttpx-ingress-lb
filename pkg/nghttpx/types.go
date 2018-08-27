@@ -123,6 +123,7 @@ type UpstreamServer struct {
 	AffinityCookieName   string
 	AffinityCookiePath   string
 	AffinityCookieSecure AffinityCookieSecure
+	Mruby                *ChecksumFile
 }
 
 // TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte string.
@@ -160,6 +161,8 @@ type PortBackendConfig struct {
 	AffinityCookiePath *string `json:"affinityCookiePath,omitempty"`
 	// AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.
 	AffinityCookieSecure *AffinityCookieSecure `json:"affinityCookieSecure,omitempty"`
+	// Mruby is mruby script
+	Mruby *string `json:"mruby,omitempty"`
 }
 
 func (pbc *PortBackendConfig) GetProto() Protocol {
@@ -256,6 +259,18 @@ func (pbc *PortBackendConfig) GetAffinityCookieSecure() AffinityCookieSecure {
 func (pbc *PortBackendConfig) SetAffinityCookieSecure(affinityCookieSecure AffinityCookieSecure) {
 	pbc.AffinityCookieSecure = new(AffinityCookieSecure)
 	*pbc.AffinityCookieSecure = affinityCookieSecure
+}
+
+func (pbc *PortBackendConfig) SetMruby(mruby string) {
+	pbc.Mruby = new(string)
+	*pbc.Mruby = mruby
+}
+
+func (pbc *PortBackendConfig) GetMruby() string {
+	if pbc.Mruby == nil {
+		return ""
+	}
+	return *pbc.Mruby
 }
 
 // ChecksumFile represents a file with path, its arbitrary content, and its checksum.

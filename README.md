@@ -286,6 +286,10 @@ is the JSON dictionary, and can contain the following key value pairs:
   encrypted.  If "yes" is specified, Secure attribute is always added.
   If "no" is specified, Secure attribute is always omitted.
 
+* `mruby`: Specify mruby script which is invoked when the given
+  backend is selected.  For mruby script, see [nghttpx manual
+  page](https://nghttp2.org/documentation/nghttpx.1.html#mruby-scripting)
+
 The following example specifies HTTP/2 as backend connection for
 service "greeter", and service port "50051":
 
@@ -326,6 +330,34 @@ spec:
         backend:
           serviceName: greeter
           servicePort: 50051
+```
+
+Here is an example to rewrite request path to "/foo" from "/pub/foo" using mruby:
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: greeter
+  annotations:
+    ingress.zlab.co.jp/backend-config: |
+      bar:
+        80:
+          mruby: |
+            class App
+              def on_req(env)
+                env.req.path = "/foo"
+              end
+            end
+            App.new
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /pub/foo
+        backend:
+          serviceName: bar
+          servicePort: 80
 ```
 
 The controller also understands

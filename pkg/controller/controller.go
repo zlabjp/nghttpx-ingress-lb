@@ -1168,6 +1168,10 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 				} else if ups.Affinity == nghttpx.AffinityCookie && ups.AffinityCookieSecure == "" {
 					ups.AffinityCookieSecure = nghttpx.AffinityCookieSecureAuto
 				}
+				mruby := portBackendConfig.GetMruby()
+				if mruby != "" {
+					ups.Mruby = nghttpx.CreatePerBackendMrubyChecksumFile(lbc.nghttpxConfDir, []byte(mruby))
+				}
 				upsServers = append(upsServers, ups)
 			}
 		}
