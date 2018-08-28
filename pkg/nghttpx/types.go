@@ -84,6 +84,7 @@ type Upstream struct {
 	Path             string
 	Backends         []UpstreamServer
 	RedirectIfNotTLS bool
+	Mruby            *ChecksumFile
 }
 
 type Affinity string
@@ -123,7 +124,6 @@ type UpstreamServer struct {
 	AffinityCookieName   string
 	AffinityCookiePath   string
 	AffinityCookieSecure AffinityCookieSecure
-	Mruby                *ChecksumFile
 }
 
 // TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte string.
@@ -161,8 +161,6 @@ type PortBackendConfig struct {
 	AffinityCookiePath *string `json:"affinityCookiePath,omitempty"`
 	// AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.
 	AffinityCookieSecure *AffinityCookieSecure `json:"affinityCookieSecure,omitempty"`
-	// Mruby is mruby script
-	Mruby *string `json:"mruby,omitempty"`
 }
 
 func (pbc *PortBackendConfig) GetProto() Protocol {
@@ -261,16 +259,22 @@ func (pbc *PortBackendConfig) SetAffinityCookieSecure(affinityCookieSecure Affin
 	*pbc.AffinityCookieSecure = affinityCookieSecure
 }
 
-func (pbc *PortBackendConfig) SetMruby(mruby string) {
-	pbc.Mruby = new(string)
-	*pbc.Mruby = mruby
+// PathConfig is per-pattern configuration obtained from Ingress annotation, specified per host and path pattern.
+type PathConfig struct {
+	// Mruby is mruby script
+	Mruby *string `json:"mruby,omitempty"`
 }
 
-func (pbc *PortBackendConfig) GetMruby() string {
-	if pbc.Mruby == nil {
+func (pc *PathConfig) GetMruby() string {
+	if pc == nil || pc.Mruby == nil {
 		return ""
 	}
-	return *pbc.Mruby
+	return *pc.Mruby
+}
+
+func (pc *PathConfig) SetMruby(mruby string) {
+	pc.Mruby = new(string)
+	*pc.Mruby = mruby
 }
 
 // ChecksumFile represents a file with path, its arbitrary content, and its checksum.

@@ -6,12 +6,12 @@ import (
 )
 
 const (
-	// mrubyDir is the directory where per-backend mruby script is stored.
+	// mrubyDir is the directory where per-pattern mruby script is stored.
 	mrubyDir = "mruby"
 )
 
-// CreatePerBackendMrubyChecksumFile creates ChecksumFile for given mruby content.
-func CreatePerBackendMrubyChecksumFile(dir string, mruby []byte) *ChecksumFile {
+// CreatePerPatternMrubyChecksumFile creates ChecksumFile for given mruby content.
+func CreatePerPatternMrubyChecksumFile(dir string, mruby []byte) *ChecksumFile {
 	checksum := Checksum(mruby)
 	return &ChecksumFile{
 		Path:     filepath.Join(dir, mrubyDir, checksum+".rb"),
@@ -34,20 +34,17 @@ func writeMrubyFile(ingConfig *IngressConfig) error {
 	return nil
 }
 
-// writePerBackendMrubyFile writes per-backend mruby script file.
-func writePerBackendMrubyFile(ingConfig *IngressConfig) error {
+// writePerPatternMrubyFile writes per-pattern mruby script file.
+func writePerPatternMrubyFile(ingConfig *IngressConfig) error {
 	if err := MkdirAll(filepath.Join(ingConfig.ConfDir, mrubyDir)); err != nil {
 		return err
 	}
 	for _, upstream := range ingConfig.Upstreams {
-		for i := range upstream.Backends {
-			backend := &upstream.Backends[i]
-			if backend.Mruby == nil {
-				continue
-			}
-			if err := WriteFile(backend.Mruby.Path, backend.Mruby.Content); err != nil {
-				return fmt.Errorf("failed to write per-backend mruby file: %v", err)
-			}
+		if upstream.Mruby == nil {
+			continue
+		}
+		if err := WriteFile(upstream.Mruby.Path, upstream.Mruby.Content); err != nil {
+			return fmt.Errorf("failed to write per-pattern mruby file: %v", err)
 		}
 	}
 
