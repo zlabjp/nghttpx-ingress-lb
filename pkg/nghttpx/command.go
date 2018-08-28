@@ -179,7 +179,7 @@ func deleteStaleTLSAssets(ingConfig *IngressConfig) error {
 func gatherTLSAssets(dst map[string]bool, tlsCred *TLSCred) {
 	dst[tlsCred.Key.Path] = true
 	dst[tlsCred.Cert.Path] = true
-	if len(tlsCred.OCSPResp.Content) > 0 {
+	if tlsCred.OCSPResp != nil {
 		dst[tlsCred.OCSPResp.Path] = true
 	}
 }

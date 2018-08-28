@@ -72,7 +72,7 @@ func CreateTLSCred(dir, name string, cert, key, ocspResp []byte) (*TLSCred, erro
 			Content:  cert,
 			Checksum: Checksum(cert),
 		},
-		OCSPResp: ChecksumFile{
+		OCSPResp: &ChecksumFile{
 			Path:     CreateTLSOCSPRespPath(dir, name),
 			Content:  ocspResp,
 			Checksum: Checksum(ocspResp),
@@ -111,7 +111,7 @@ func writeTLSCred(tlsCred *TLSCred) error {
 		return fmt.Errorf("failed to write TLS certificate: %v", err)
 	}
 
-	if len(tlsCred.OCSPResp.Content) > 0 {
+	if tlsCred.OCSPResp != nil {
 		if err := WriteFile(tlsCred.OCSPResp.Path, tlsCred.OCSPResp.Content); err != nil {
 			return fmt.Errorf("failed to write TLS OCSP response: %v", err)
 		}

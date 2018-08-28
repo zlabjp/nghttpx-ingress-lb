@@ -130,7 +130,7 @@ type UpstreamServer struct {
 type TLSCred struct {
 	Key      ChecksumFile
 	Cert     ChecksumFile
-	OCSPResp ChecksumFile
+	OCSPResp *ChecksumFile
 }
 
 // NewDefaultServer return an UpstreamServer to be use as default server that returns 503.
