@@ -157,9 +157,22 @@ func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *Por
 	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
 		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
 	}
+}
+
+func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
+	glog.V(4).Info("Applying default-path-config annotation")
 	if defaultConfig.Mruby != nil && config.Mruby == nil {
 		config.SetMruby(*defaultConfig.Mruby)
 	}
+}
+
+// ResolvePathConfig returns a PathConfig which should be used for the pattern denoted by host and path.
+func ResolvePathConfig(host, path string, defaultPathConfig *PathConfig, pathConfig map[string]*PathConfig) *PathConfig {
+	key := host + path
+	if c, ok := pathConfig[key]; ok {
+		return c
+	}
+	return defaultPathConfig
 }
 
 func WriteFile(path string, content []byte) error {

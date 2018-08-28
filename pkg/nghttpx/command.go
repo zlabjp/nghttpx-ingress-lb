@@ -113,7 +113,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		if err := writeMrubyFile(ingressCfg); err != nil {
 			return false, err
 		}
-		if err := writePerBackendMrubyFile(ingressCfg); err != nil {
+		if err := writePerPatternMrubyFile(ingressCfg); err != nil {
 			return false, err
 		}
 
@@ -135,7 +135,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 			glog.Errorf("Could not delete stale assets: %v", err)
 		}
 	case backendConfigChanged:
-		if err := writePerBackendMrubyFile(ingressCfg); err != nil {
+		if err := writePerPatternMrubyFile(ingressCfg); err != nil {
 			return false, err
 		}
 
@@ -188,13 +188,10 @@ func gatherTLSAssets(dst map[string]bool, tlsCred *TLSCred) {
 func deleteStaleMrubyAssets(ingConfig *IngressConfig) error {
 	keep := make(map[string]bool)
 	for _, upstream := range ingConfig.Upstreams {
-		for i := range upstream.Backends {
-			backend := &upstream.Backends[i]
-			if backend.Mruby == nil {
-				continue
-			}
-			keep[backend.Mruby.Path] = true
+		if upstream.Mruby == nil {
+			continue
 		}
+		keep[upstream.Mruby.Path] = true
 	}
 
 	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, mrubyDir), keep)

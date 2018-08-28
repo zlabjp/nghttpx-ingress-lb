@@ -158,3 +158,27 @@ func TestApplyDefaultPortBackendConfig(t *testing.T) {
 		}
 	}
 }
+
+// TestApplyDefaultPortBackendConfig verifies ApplyDefaultPathConfig.
+func TestApplyDefaultPathConfig(t *testing.T) {
+	tests := []struct {
+		defaultConf *PathConfig
+	}{
+		{
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
+				a.SetMruby("hello mruby")
+				return a
+			}(),
+		},
+	}
+
+	for i, tt := range tests {
+		a := &PathConfig{}
+		ApplyDefaultPathConfig(a, tt.defaultConf)
+
+		if got, want := a.GetMruby(), tt.defaultConf.GetMruby(); got != want {
+			t.Errorf("#%v: a.GetMruby() = %v, want %v", i, got, want)
+		}
+	}
+}

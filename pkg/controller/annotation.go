@@ -25,6 +25,10 @@ const (
 	defaultBackendConfigKey = "ingress.zlab.co.jp/default-backend-config"
 	// ingressClassKey is a key to annotation in order to run multiple Ingress controllers.
 	ingressClassKey = "kubernetes.io/ingress.class"
+	// pathConfigKey is a key to annotation for extra path configuration.
+	pathConfigKey = "ingress.zlab.co.jp/path-config"
+	// defaultPathConfigKey is a key to annotation for default path configuration which applies to all entries in a Ingress resource.
+	defaultPathConfigKey = "ingress.zlab.co.jp/default-path-config"
 )
 
 type ingressAnnotation map[string]string
@@ -65,6 +69,37 @@ func (ia ingressAnnotation) getBackendConfig() (*nghttpx.PortBackendConfig, map[
 		for _, vv := range v {
 			nghttpx.ApplyDefaultPortBackendConfig(vv, &defaultConfig)
 		}
+	}
+
+	return &defaultConfig, config
+}
+
+// getPathConfig returns default-path-config and path-config.  This function applies default-path-config to path-config if a value is
+// missing.
+func (ia ingressAnnotation) getPathConfig() (*nghttpx.PathConfig, map[string]*nghttpx.PathConfig) {
+	data := ia[pathConfigKey]
+	var config map[string]*nghttpx.PathConfig
+	if data != "" {
+		if err := unmarshal([]byte(data), &config); err != nil {
+			glog.Errorf("unexpected error reading %v annotation: %v", pathConfigKey, err)
+			return nil, nil
+		}
+	}
+
+	data = ia[defaultPathConfigKey]
+	if data == "" {
+		glog.V(4).Infof("%v annotation not found", defaultPathConfigKey)
+		return nil, config
+	}
+
+	var defaultConfig nghttpx.PathConfig
+	if err := unmarshal([]byte(data), &defaultConfig); err != nil {
+		glog.Errorf("unexpected error reading %v annotation: %v", defaultPathConfigKey, err)
+		return nil, nil
+	}
+
+	for _, v := range config {
+		nghttpx.ApplyDefaultPathConfig(v, &defaultConfig)
 	}
 
 	return &defaultConfig, config

@@ -235,15 +235,17 @@ If a Service is specified in `--publish-service` flag, external IPs,
 and load balancer addresses in the specified Service are written into
 Ingress resource instead.
 
-## Additional backend connection configuration
+## Additional configurations
 
-nghttpx supports additional backend connection configuration via
-Ingress Annotation.
+nghttpx supports additional configurations via Ingress Annotations.
+
+### `ingress.zlab.co.jp/backend-config` annotation
 
 nghttpx-ingress-controller understands
 `ingress.zlab.co.jp/backend-config` key in Ingress
-`.metadata.annotations`.  Its value is a serialized YAML or JSON
-dictionary.  The configuration is done per service port
+`.metadata.annotations` to configure the particular backend.  Its
+value is a serialized YAML or JSON dictionary.  The configuration is
+done per service port
 (`.spec.rules[*].http.paths[*].backend.servicePort`).  The first key
 under the root dictionary is the name of service name
 (`.spec.rules[*].http.paths[*].backend.serviceName`).  Its value is
@@ -285,10 +287,6 @@ is the JSON dictionary, and can contain the following key value pairs:
   specifying "auto" sets Secure attribute if client connection is TLS
   encrypted.  If "yes" is specified, Secure attribute is always added.
   If "no" is specified, Secure attribute is always omitted.
-
-* `mruby`: Specify mruby script which is invoked when the given
-  backend is selected.  For mruby script, see [nghttpx manual
-  page](https://nghttp2.org/documentation/nghttpx.1.html#mruby-scripting)
 
 The following example specifies HTTP/2 as backend connection for
 service "greeter", and service port "50051":
@@ -332,34 +330,6 @@ spec:
           servicePort: 50051
 ```
 
-Here is an example to rewrite request path to "/foo" from "/pub/foo" using mruby:
-
-```yaml
-apiVersion: extensions/v1beta1
-kind: Ingress
-metadata:
-  name: greeter
-  annotations:
-    ingress.zlab.co.jp/backend-config: |
-      bar:
-        80:
-          mruby: |
-            class App
-              def on_req(env)
-                env.req.path = "/foo"
-              end
-            end
-            App.new
-spec:
-  rules:
-  - http:
-      paths:
-      - path: /pub/foo
-        backend:
-          serviceName: bar
-          servicePort: 80
-```
-
 The controller also understands
 `ingress.zlab.co.jp/default-backend-config` annotation.  It serves
 default values for missing values in backend-config per field basis in
@@ -391,6 +361,60 @@ always takes precedence.
 
 Note that Ingress allows regular expression in
 `.spec.rules[*].http.paths[*].path`, but nghttpx does not support it.
+
+### `ingress.zlab.co.jp/path-config` annotation
+
+nghttpx-ingress-controller understands
+`ingress.zlab.co.jp/path-config` key in Ingress
+`.metadata.annotations` to allow additional configuration per host and
+path pattern.  Its value is a serialized YAML or JSON dictionary.  The
+configuration is done per host and port pattern.  The key under the
+root dictionary is the concatenation of host and port.  For example,
+if host is "www.example.com" and path is "/foo", its key is
+"www.example.com/foo".  Its value is the dictionary and can contain
+the following key value pairs:
+
+* `mruby`: Specify mruby script which is invoked when the given
+  pattern is selected.  For mruby script, see [nghttpx manual
+  page](https://nghttp2.org/documentation/nghttpx.1.html#mruby-scripting)
+
+Here is an example to rewrite request path to "/foo" from "/pub/foo" using mruby:
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: greeter
+  annotations:
+    ingress.zlab.co.jp/path-config: |
+      www.example.com/pub/foo:
+        mruby: |
+          class App
+            def on_req(env)
+              env.req.path = "/foo"
+            end
+          end
+          App.new
+spec:
+  rules:
+  - host: www.example.com
+    http:
+      paths:
+      - path: /pub/foo
+        backend:
+          serviceName: bar
+          servicePort: 80
+```
+
+The controller also understands
+`ingress.zlab.co.jp/default-path-config` annotation.  It serves
+default values for missing values in path-config per field basis in
+the same Ingress resource.  It can contain single dictionary which
+contains the same key/value pairs.  It is useful if same configuration
+is shared by lots of patterns.
+
+A values which specified explicitly in an individual path-config
+always takes precedence.
 
 ## Custom nghttpx configuration
 

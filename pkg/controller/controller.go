@@ -829,11 +829,12 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 		}
 
 		defaultPortBackendConfig, backendConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getBackendConfig()
+		defaultPathConfig, pathConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getPathConfig()
 
 		if ing.Spec.Backend != nil {
 			// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress resource
 			// specifies this.  But specification does not any rules how to deal with it.  Just use the one we meet last.
-			if ups, err := lbc.createUpstream(ing, "", "/", ing.Spec.Backend, false, defaultPortBackendConfig, backendConfig); err != nil {
+			if ups, err := lbc.createUpstream(ing, "", "/", ing.Spec.Backend, false, defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
 				glog.Errorf("Could not create default backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 			} else {
 				defaultUpstream = ups
@@ -849,7 +850,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
-				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, &path.Backend, requireTLS, defaultPortBackendConfig, backendConfig); err != nil {
+				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, &path.Backend, requireTLS, defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
 					glog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 					continue
 				} else {
@@ -924,7 +925,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 // createUpstream creates new nghttpx.Upstream for ing, host, path and backend.
 func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host, path string, backend *extensions.IngressBackend,
-	requireTLS bool, defaultPortBackendConfig *nghttpx.PortBackendConfig, backendConfig map[string]map[string]*nghttpx.PortBackendConfig) (*nghttpx.Upstream, error) {
+	requireTLS bool, defaultPathConfig *nghttpx.PathConfig, pathConfig map[string]*nghttpx.PathConfig, defaultPortBackendConfig *nghttpx.PortBackendConfig, backendConfig map[string]map[string]*nghttpx.PortBackendConfig) (*nghttpx.Upstream, error) {
 	var normalizedPath string
 	if path == "" {
 		normalizedPath = "/"
@@ -940,6 +941,12 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 		Host:             host,
 		Path:             normalizedPath,
 		RedirectIfNotTLS: requireTLS || lbc.defaultTLSSecret != "",
+	}
+
+	pc := nghttpx.ResolvePathConfig(host, normalizedPath, defaultPathConfig, pathConfig)
+	mruby := pc.GetMruby()
+	if mruby != "" {
+		ups.Mruby = nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, []byte(mruby))
 	}
 
 	glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
@@ -1167,10 +1174,6 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 					ups.Affinity = nghttpx.AffinityNone
 				} else if ups.Affinity == nghttpx.AffinityCookie && ups.AffinityCookieSecure == "" {
 					ups.AffinityCookieSecure = nghttpx.AffinityCookieSecureAuto
-				}
-				mruby := portBackendConfig.GetMruby()
-				if mruby != "" {
-					ups.Mruby = nghttpx.CreatePerBackendMrubyChecksumFile(lbc.nghttpxConfDir, []byte(mruby))
 				}
 				upsServers = append(upsServers, ups)
 			}
