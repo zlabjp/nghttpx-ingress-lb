@@ -81,19 +81,19 @@ func CreateTLSCred(dir, name string, cert, key, ocspResp []byte) (*TLSCred, erro
 }
 
 // writeTLSKeyCert writes TLS private keys and certificates to their files.
-func (ngx *Manager) writeTLSKeyCert(ingConfig *IngressConfig) error {
+func writeTLSKeyCert(ingConfig *IngressConfig) error {
 	if err := MkdirAll(filepath.Join(ingConfig.ConfDir, tlsDir)); err != nil {
 		return fmt.Errorf("Couldn't create tls directory: %v", err)
 	}
 
 	if ingConfig.DefaultTLSCred != nil {
-		if err := writeTLSKeyCert(ingConfig.DefaultTLSCred); err != nil {
+		if err := writeTLSCred(ingConfig.DefaultTLSCred); err != nil {
 			return err
 		}
 	}
 
 	for _, tlsCred := range ingConfig.SubTLSCred {
-		if err := writeTLSKeyCert(tlsCred); err != nil {
+		if err := writeTLSCred(tlsCred); err != nil {
 			return err
 		}
 	}
@@ -101,8 +101,8 @@ func (ngx *Manager) writeTLSKeyCert(ingConfig *IngressConfig) error {
 	return nil
 }
 
-// writeTLSKeyCert writes TLS private key, certificate, and optionally OCSP response to tlsCred in their files.
-func writeTLSKeyCert(tlsCred *TLSCred) error {
+// writeTLSCred writes TLS private key, certificate, and optionally OCSP response to tlsCred in their files.
+func writeTLSCred(tlsCred *TLSCred) error {
 	if err := WriteFile(tlsCred.Key.Path, tlsCred.Key.Content); err != nil {
 		return fmt.Errorf("failed to write TLS private key: %v", err)
 	}

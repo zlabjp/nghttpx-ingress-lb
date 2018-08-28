@@ -107,7 +107,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if err := ngx.writeTLSKeyCert(ingressCfg); err != nil {
+		if err := writeTLSKeyCert(ingressCfg); err != nil {
 			return false, err
 		}
 		if err := writeMrubyFile(ingressCfg); err != nil {
