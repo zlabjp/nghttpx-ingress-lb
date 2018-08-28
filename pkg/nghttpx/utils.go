@@ -43,8 +43,6 @@ const (
 	NghttpxExtraConfigKey = "nghttpx-conf"
 	// NghttpxMrubyFileContentKey is a field name of mruby script in ConfigMap.
 	NghttpxMrubyFileContentKey = "nghttpx-mruby-file-content"
-	// mrubyDir is the directory where per-backend mruby script is stored.
-	mrubyDir = "mruby"
 )
 
 // ReadConfig obtains the configuration defined by the user merged with the defaults.
@@ -57,16 +55,6 @@ func ReadConfig(ingConfig *IngressConfig, config *v1.ConfigMap) {
 			Content:  b,
 			Checksum: Checksum(b),
 		}
-	}
-}
-
-// CreatePerBackendMrubyChecksumFile creates ChecksumFile for given mruby content.
-func CreatePerBackendMrubyChecksumFile(dir string, mruby []byte) *ChecksumFile {
-	checksum := Checksum(mruby)
-	return &ChecksumFile{
-		Path:     filepath.Join(dir, mrubyDir, checksum+".rb"),
-		Content:  mruby,
-		Checksum: Checksum(mruby),
 	}
 }
 
