@@ -113,6 +113,9 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		if err := ngx.writeMrubyFile(ingressCfg); err != nil {
 			return false, err
 		}
+		if err := writePerBackendMrubyFile(ingressCfg); err != nil {
+			return false, err
+		}
 
 		cmd := "killall"
 		args := []string{"-HUP", "nghttpx"}
@@ -132,8 +135,16 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 			glog.Errorf("Could not delete stale assets: %v", err)
 		}
 	case backendConfigChanged:
+		if err := writePerBackendMrubyFile(ingressCfg); err != nil {
+			return false, err
+		}
+
 		if err := ngx.issueBackendReplaceRequest(ingressCfg); err != nil {
 			return false, fmt.Errorf("failed to issue backend replace request: %v", err)
+		}
+
+		if err := deleteStaleMrubyAssets(ingressCfg); err != nil {
+			glog.Errorf("Could not delete stale assets: %v", err)
 		}
 	}
 
@@ -142,7 +153,13 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 
 // deleteStaleAssets deletes asset files which are no longer used.
 func deleteStaleAssets(ingConfig *IngressConfig) error {
-	return deleteStaleTLSAssets(ingConfig)
+	if err := deleteStaleTLSAssets(ingConfig); err != nil {
+		return fmt.Errorf("Could not delete stale TLS assets: %v", err)
+	}
+	if err := deleteStaleMrubyAssets(ingConfig); err != nil {
+		return fmt.Errorf("Could not delete stale mruby assets: %v", err)
+	}
+	return nil
 }
 
 // deleteStaleTLSAssets deletes TLS asset files which are no longer used.
@@ -155,7 +172,36 @@ func deleteStaleTLSAssets(ingConfig *IngressConfig) error {
 		gatherTLSAssets(keep, tlsCred)
 	}
 
-	dir := filepath.Join(ingConfig.ConfDir, tlsDir)
+	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, tlsDir), keep)
+}
+
+// gatherTLSAssets collects file path from tlsCred, and set its associated value to true in dst.
+func gatherTLSAssets(dst map[string]bool, tlsCred *TLSCred) {
+	dst[tlsCred.Key.Path] = true
+	dst[tlsCred.Cert.Path] = true
+	if len(tlsCred.OCSPResp.Content) > 0 {
+		dst[tlsCred.OCSPResp.Path] = true
+	}
+}
+
+// deleteStaleMrubyAssets deletes mruby asset files which are no longer used.
+func deleteStaleMrubyAssets(ingConfig *IngressConfig) error {
+	keep := make(map[string]bool)
+	for _, upstream := range ingConfig.Upstreams {
+		for i := range upstream.Backends {
+			backend := &upstream.Backends[i]
+			if backend.Mruby == nil {
+				continue
+			}
+			keep[backend.Mruby.Path] = true
+		}
+	}
+
+	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, mrubyDir), keep)
+}
+
+// deleteAssetFiles deletes files under dir but keeps files if they are included in keep.
+func deleteAssetFiles(dir string, keep map[string]bool) error {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return err
@@ -176,15 +222,6 @@ func deleteStaleTLSAssets(ingConfig *IngressConfig) error {
 	}
 
 	return nil
-}
-
-// gatherTLSAssets collects file path from tlsCred, and set its associated value to true in dst.
-func gatherTLSAssets(dst map[string]bool, tlsCred *TLSCred) {
-	dst[tlsCred.Key.Path] = true
-	dst[tlsCred.Cert.Path] = true
-	if len(tlsCred.OCSPResp.Content) > 0 {
-		dst[tlsCred.OCSPResp.Path] = true
-	}
 }
 
 func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
@@ -306,6 +343,26 @@ func (ngx *Manager) writeMrubyFile(ingConfig *IngressConfig) error {
 	f := ingConfig.MrubyFile
 	if err := WriteFile(f.Path, f.Content); err != nil {
 		return fmt.Errorf("failed to write mruby file: %v", err)
+	}
+
+	return nil
+}
+
+// writePerBackendMrubyFile writes per-backend mruby script file.
+func writePerBackendMrubyFile(ingConfig *IngressConfig) error {
+	if err := MkdirAll(filepath.Join(ingConfig.ConfDir, mrubyDir)); err != nil {
+		return err
+	}
+	for _, upstream := range ingConfig.Upstreams {
+		for i := range upstream.Backends {
+			backend := &upstream.Backends[i]
+			if backend.Mruby == nil {
+				continue
+			}
+			if err := WriteFile(backend.Mruby.Path, backend.Mruby.Content); err != nil {
+				return fmt.Errorf("failed to write per-backend mruby file: %v", err)
+			}
+		}
 	}
 
 	return nil
