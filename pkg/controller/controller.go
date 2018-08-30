@@ -760,6 +760,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 	upstream := &nghttpx.Upstream{
 		Name:             lbc.defaultSvc,
 		RedirectIfNotTLS: lbc.defaultTLSSecret != "",
+		Affinity:         nghttpx.AffinityNone,
 	}
 	svcKey := lbc.defaultSvc
 	defaultSvcNS, defaultSvcName, _ := cache.SplitMetaNamespaceKey(svcKey)
@@ -934,16 +935,20 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 	} else {
 		normalizedPath = path
 	}
+	pc := nghttpx.ResolvePathConfig(host, normalizedPath, defaultPathConfig, pathConfig)
 	// The format of upsName is similar to backend option syntax of nghttpx.
 	upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, backend.ServiceName, backend.ServicePort.String(), host, normalizedPath)
 	ups := &nghttpx.Upstream{
-		Name:             upsName,
-		Host:             host,
-		Path:             normalizedPath,
-		RedirectIfNotTLS: requireTLS || lbc.defaultTLSSecret != "",
+		Name:                 upsName,
+		Host:                 host,
+		Path:                 normalizedPath,
+		RedirectIfNotTLS:     requireTLS || lbc.defaultTLSSecret != "",
+		Affinity:             pc.GetAffinity(),
+		AffinityCookieName:   pc.GetAffinityCookieName(),
+		AffinityCookiePath:   pc.GetAffinityCookiePath(),
+		AffinityCookieSecure: pc.GetAffinityCookieSecure(),
 	}
 
-	pc := nghttpx.ResolvePathConfig(host, normalizedPath, defaultPathConfig, pathConfig)
 	mruby := pc.GetMruby()
 	if mruby != "" {
 		ups.Mruby = nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, []byte(mruby))

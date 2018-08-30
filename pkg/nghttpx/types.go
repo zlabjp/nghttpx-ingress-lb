@@ -79,12 +79,16 @@ func NewIngressConfig() *IngressConfig {
 
 // Upstream describes an nghttpx upstream
 type Upstream struct {
-	Name             string
-	Host             string
-	Path             string
-	Backends         []UpstreamServer
-	RedirectIfNotTLS bool
-	Mruby            *ChecksumFile
+	Name                 string
+	Host                 string
+	Path                 string
+	Backends             []UpstreamServer
+	RedirectIfNotTLS     bool
+	Mruby                *ChecksumFile
+	Affinity             Affinity
+	AffinityCookieName   string
+	AffinityCookiePath   string
+	AffinityCookieSecure AffinityCookieSecure
 }
 
 type Affinity string
@@ -114,15 +118,19 @@ const (
 
 // UpstreamServer describes a server in an nghttpx upstream
 type UpstreamServer struct {
-	Address              string
-	Port                 string
-	Protocol             Protocol
-	TLS                  bool
-	SNI                  string
-	DNS                  bool
-	Affinity             Affinity
-	AffinityCookieName   string
-	AffinityCookiePath   string
+	Address  string
+	Port     string
+	Protocol Protocol
+	TLS      bool
+	SNI      string
+	DNS      bool
+	// Deprecated.  Use Upstream instead.
+	Affinity Affinity
+	// Deprecated.  Use Upstream instead.
+	AffinityCookieName string
+	// Deprecated.  Use Upstream instead.
+	AffinityCookiePath string
+	// Deprecated.  Use Upstream instead.
 	AffinityCookieSecure AffinityCookieSecure
 }
 
@@ -153,13 +161,17 @@ type PortBackendConfig struct {
 	SNI *string `json:"sni,omitempty"`
 	// DNS is true if backend hostname is resolved dynamically rather than start up or configuration reloading.
 	DNS *bool `json:"dns,omitempty"`
-	// Affinity is session affinity method nghttpx supports.  See affinity parameter in backend option of nghttpx.
+	// (Deprecated) Affinity is session affinity method nghttpx supports.  See affinity parameter in backend option of nghttpx.  This
+	// field is deprecated.  Use PathConfig instead.
 	Affinity *Affinity `json:"affinity,omitempty"`
-	// AffinityCookieName is a name of cookie to use for cookie-based session affinity.
+	// (Deprecated) AffinityCookieName is a name of cookie to use for cookie-based session affinity.  This field is deprecated.  Use
+	// PathConfig instead.
 	AffinityCookieName *string `json:"affinityCookieName,omitempty"`
-	// AffinityCookiePath is a path of cookie for cookie-based session affinity.
+	// (Deprecated) AffinityCookiePath is a path of cookie for cookie-based session affinity.  This field is deprecated.  Use PathConfig
+	// instead.
 	AffinityCookiePath *string `json:"affinityCookiePath,omitempty"`
-	// AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.
+	// (Deprecated) AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.  This field is deleted.
+	// Use PathConfig instead.
 	AffinityCookieSecure *AffinityCookieSecure `json:"affinityCookieSecure,omitempty"`
 }
 
@@ -263,6 +275,14 @@ func (pbc *PortBackendConfig) SetAffinityCookieSecure(affinityCookieSecure Affin
 type PathConfig struct {
 	// Mruby is mruby script
 	Mruby *string `json:"mruby,omitempty"`
+	// Affinity is session affinity method nghttpx supports.  See affinity parameter in backend option of nghttpx.
+	Affinity *Affinity `json:"affinity,omitempty"`
+	// AffinityCookieName is a name of cookie to use for cookie-based session affinity.
+	AffinityCookieName *string `json:"affinityCookieName,omitempty"`
+	// AffinityCookiePath is a path of cookie for cookie-based session affinity.
+	AffinityCookiePath *string `json:"affinityCookiePath,omitempty"`
+	// AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.
+	AffinityCookieSecure *AffinityCookieSecure `json:"affinityCookieSecure,omitempty"`
 }
 
 func (pc *PathConfig) GetMruby() string {
@@ -275,6 +295,54 @@ func (pc *PathConfig) GetMruby() string {
 func (pc *PathConfig) SetMruby(mruby string) {
 	pc.Mruby = new(string)
 	*pc.Mruby = mruby
+}
+
+func (pc *PathConfig) GetAffinity() Affinity {
+	if pc == nil || pc.Affinity == nil {
+		return AffinityNone
+	}
+	return *pc.Affinity
+}
+
+func (pc *PathConfig) SetAffinity(affinity Affinity) {
+	pc.Affinity = new(Affinity)
+	*pc.Affinity = affinity
+}
+
+func (pc *PathConfig) GetAffinityCookieName() string {
+	if pc == nil || pc.AffinityCookieName == nil {
+		return ""
+	}
+	return *pc.AffinityCookieName
+}
+
+func (pc *PathConfig) SetAffinityCookieName(affinityCookieName string) {
+	pc.AffinityCookieName = new(string)
+	*pc.AffinityCookieName = affinityCookieName
+}
+
+func (pc *PathConfig) GetAffinityCookiePath() string {
+	if pc == nil || pc.AffinityCookiePath == nil {
+		return ""
+	}
+	return *pc.AffinityCookiePath
+}
+
+func (pc *PathConfig) SetAffinityCookiePath(affinityCookiePath string) {
+	pc.AffinityCookiePath = new(string)
+	*pc.AffinityCookiePath = affinityCookiePath
+}
+
+func (pc *PathConfig) GetAffinityCookieSecure() AffinityCookieSecure {
+	if pc == nil || pc.AffinityCookieSecure == nil {
+		return ""
+	}
+	return *pc.AffinityCookieSecure
+}
+
+func (pc *PathConfig) SetAffinityCookieSecure(affinityCookieSecure AffinityCookieSecure) {
+	pc.AffinityCookieSecure = new(AffinityCookieSecure)
+	*pc.AffinityCookieSecure = affinityCookieSecure
 }
 
 // ChecksumFile represents a file with path, its arbitrary content, and its checksum.

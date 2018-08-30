@@ -267,26 +267,9 @@ is the JSON dictionary, and can contain the following key value pairs:
 * `dns`: Specify whether backend host name should be resolved
   dynamically.
 
-* `affinity`: Specify session affinity method.  Specifying `ip`
-  enables client IP based session affinity.  Specifying `cookie`
-  enables cookie-based session affinity.  Specifying `none` or
-  omitting this key disables session affinity.
-
-  If `cookie` is specified, additional configuration is required.  See
-  `affinityCookieName`, `affinityCookiePath`, and
-  `affinityCookieSecure` fields.
-
-* `affinityCookieName`: Specify a name of cookie to use.  This is
-  required field if `cookie` is set in `affinity` field.
-
-* `affinityCookiePath`: Specify a path of cookie path.  This is
-  optional, and if not set, cookie path is not set.
-
-* `affinityCookieSecure`: Specify whether Secure attribute of cookie
-  is added, or not.  Omitting this field, specifying empty string, or
-  specifying "auto" sets Secure attribute if client connection is TLS
-  encrypted.  If "yes" is specified, Secure attribute is always added.
-  If "no" is specified, Secure attribute is always omitted.
+The affinity settings in backend-config have been deprecated.  In
+order to configure affinity, use
+[path-config](#ingresszlabcojppath-config-annotation) annotation.
 
 The following example specifies HTTP/2 as backend connection for
 service "greeter", and service port "50051":
@@ -341,19 +324,19 @@ For example, if a pair of service, and port has the backend-config
 like so:
 
 ```json
-{"affinity": "ip"}
+{"sni": "www.example.com"}
 ```
 
 And the default-backend-config looks like so:
 
 ```json
-{"proto": "h2", "affinity": "none"}
+{"proto": "h2", "sni": "example.com"}
 ```
 
 The final backend-config becomes like so:
 
 ```json
-{"proto": "h2", "affinity": "ip"}
+{"proto": "h2", "sni": "www.example.com"}
 ```
 
 A values which specified explicitly in an individual backend-config
@@ -377,6 +360,27 @@ the following key value pairs:
 * `mruby`: Specify mruby script which is invoked when the given
   pattern is selected.  For mruby script, see [nghttpx manual
   page](https://nghttp2.org/documentation/nghttpx.1.html#mruby-scripting)
+
+* `affinity`: Specify session affinity method.  Specifying `ip`
+  enables client IP based session affinity.  Specifying `cookie`
+  enables cookie-based session affinity.  Specifying `none` or
+  omitting this key disables session affinity.
+
+  If `cookie` is specified, additional configuration is required.  See
+  `affinityCookieName`, `affinityCookiePath`, and
+  `affinityCookieSecure` fields.
+
+* `affinityCookieName`: Specify a name of cookie to use.  This is
+  required field if `cookie` is set in `affinity` field.
+
+* `affinityCookiePath`: Specify a path of cookie path.  This is
+  optional, and if not set, cookie path is not set.
+
+* `affinityCookieSecure`: Specify whether Secure attribute of cookie
+  is added, or not.  Omitting this field, specifying empty string, or
+  specifying "auto" sets Secure attribute if client connection is TLS
+  encrypted.  If "yes" is specified, Secure attribute is always added.
+  If "no" is specified, Secure attribute is always omitted.
 
 Here is an example to rewrite request path to "/foo" from "/pub/foo" using mruby:
 
