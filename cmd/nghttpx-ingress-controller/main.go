@@ -152,6 +152,18 @@ func main() {
 		}
 	}
 
+	if *ngxConfigMap != "" {
+		if _, _, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
+			glog.Exitf("could not parse configmap name %v: %v", *ngxConfigMap, err)
+		}
+	}
+
+	if *defaultTLSSecret != "" {
+		if _, _, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
+			glog.Exitf("could not parse Secret %v: %v", *defaultTLSSecret, err)
+		}
+	}
+
 	var err error
 	var config *rest.Config
 	if *kubeconfig == "" {
@@ -169,23 +181,6 @@ func main() {
 	clientset, err := clientset.NewForConfig(config)
 	if err != nil {
 		glog.Exitf("Failed to create clientset: %v", err)
-	}
-
-	if err := controller.IsValidService(clientset, *defaultSvc); err != nil {
-		glog.Exitf("no service with name %v found: %v", *defaultSvc, err)
-	}
-	glog.Infof("Validated %v as the default backend", *defaultSvc)
-
-	if *ngxConfigMap != "" {
-		if _, _, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
-			glog.Exitf("could not parse configmap name %v: %v", *ngxConfigMap, err)
-		}
-	}
-
-	if *defaultTLSSecret != "" {
-		if _, _, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
-			glog.Exitf("could not parse Secret %v: %v", *defaultTLSSecret, err)
-		}
 	}
 
 	runtimePodInfo := &controller.PodInfo{

@@ -28,33 +28,16 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
-	"strings"
 	"time"
 
 	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	clientset "k8s.io/client-go/kubernetes"
 )
 
 // podInfo contains runtime information about the pod
 type PodInfo struct {
 	PodName      string
 	PodNamespace string
-}
-
-func IsValidService(clientset clientset.Interface, name string) error {
-	if name == "" {
-		return fmt.Errorf("empty string is not a valid service name")
-	}
-
-	parts := strings.Split(name, "/")
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid name format (namespace/name) in service '%v'", name)
-	}
-
-	_, err := clientset.CoreV1().Services(parts[0]).Get(parts[1], metav1.GetOptions{})
-	return err
 }
 
 // depResyncPeriod returns duration between resync for resources other than Ingress.
