@@ -1499,7 +1499,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 
 		// Time may be short because we should do all the work during Pod graceful shut down period.
 		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-			ing, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).Get(ing.Name, metav1.GetOptions{})
+			ing, err := lbc.ingLister.Ingresses(ing.Namespace).Get(ing.Name)
 			if err != nil {
 				return err
 			}
