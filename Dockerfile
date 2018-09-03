@@ -26,7 +26,7 @@ RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotoo
         zlib1g libssl1.1 libev4 libjemalloc1 libc-ares2 \
         ca-certificates psmisc \
         python && \
-    git clone --depth 1 https://github.com/nghttp2/nghttp2.git && \
+    git clone -b v1.33.0 --depth 1 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     git submodule update --init && autoreconf -i && \
