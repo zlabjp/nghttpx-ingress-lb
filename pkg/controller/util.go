@@ -92,17 +92,31 @@ func uniqLoadBalancerIngress(a []v1.LoadBalancerIngress) []v1.LoadBalancerIngres
 
 // removeAddressFromLoadBalancerIngress removes addr from a.  addr may match IP or Hostname.
 func removeAddressFromLoadBalancerIngress(a []v1.LoadBalancerIngress, addr string) []v1.LoadBalancerIngress {
+	var cnt int
+	for i := range a {
+		if a[i].IP == addr || a[i].Hostname == addr {
+			cnt++
+		}
+	}
+
+	if cnt == 0 {
+		return a
+	}
+	if cnt == len(a) {
+		return nil
+	}
+
+	dst := make([]v1.LoadBalancerIngress, len(a)-cnt)
+
 	p := 0
 	for i := range a {
 		if a[i].IP == addr || a[i].Hostname == addr {
 			continue
 		}
-		if p != i {
-			a[p] = a[i]
-		}
+		dst[p] = a[i]
 		p++
 	}
-	return a[:p]
+	return dst
 }
 
 // podFindPort is copied from

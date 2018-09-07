@@ -113,7 +113,7 @@ func TestUtilRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 			input: []v1.LoadBalancerIngress{
 				{IP: "alpha"},
 			},
-			ans: []v1.LoadBalancerIngress{},
+			ans: nil,
 		},
 	}
 
