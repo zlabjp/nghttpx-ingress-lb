@@ -1504,18 +1504,19 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 				return err
 			}
 
-			numOld := len(ing.Status.LoadBalancer.Ingress)
-			if numOld == 0 {
+			if len(ing.Status.LoadBalancer.Ingress) == 0 {
 				return nil
 			}
 
-			ing.Status.LoadBalancer.Ingress = removeAddressFromLoadBalancerIngress(ing.Status.LoadBalancer.Ingress, addr)
-
-			if numOld == len(ing.Status.LoadBalancer.Ingress) {
+			lbIngs := removeAddressFromLoadBalancerIngress(ing.Status.LoadBalancer.Ingress, addr)
+			if len(ing.Status.LoadBalancer.Ingress) == len(lbIngs) {
 				return nil
 			}
 
-			if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).UpdateStatus(ing); err != nil {
+			newIng := ing.DeepCopy()
+			newIng.Status.LoadBalancer.Ingress = lbIngs
+
+			if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(newIng.Namespace).UpdateStatus(newIng); err != nil {
 				return err
 			}
 			return nil
