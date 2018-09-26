@@ -66,9 +66,6 @@ var (
 	ngxConfigMap = flags.String("nghttpx-configmap", "",
 		`Namespace/name of the ConfigMap that contains the custom nghttpx configuration to use.  Takes the form namespace/name.`)
 
-	inCluster = flags.Bool("running-in-cluster", true,
-		`Deprecated: Use --kubeconfig to run the controller outside a cluster`)
-
 	kubeconfig = flags.String("kubeconfig", "", `Path to kubeconfig file which overrides in-cluster configuration.`)
 
 	resyncPeriod = flags.Duration("sync-period", 30*time.Second,
@@ -82,8 +79,6 @@ var (
 	nghttpxHealthPort = flags.Int("nghttpx-health-port", 10901, "port for nghttpx health monitor endpoint.")
 
 	nghttpxAPIPort = flags.Int("nghttpx-api-port", 10902, "port for nghttpx API endpoint.")
-
-	buildCfg = flags.Bool("dump-nghttpx-configuration", false, `Deprecated`)
 
 	profiling = flags.Bool("profiling", true, `Enable profiling via web interface host:port/debug/pprof/`)
 
@@ -133,11 +128,6 @@ func main() {
 	flags.Parse(os.Args)
 
 	glog.Infof("Using build: %v - %v", gitRepo, version)
-
-	if *buildCfg {
-		fmt.Println("dump-nghttpx-configuration was deprecated.")
-		os.Exit(0)
-	}
 
 	if *defaultSvc == "" {
 		glog.Exitf("Please specify --default-backend-service")
