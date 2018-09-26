@@ -977,7 +977,8 @@ func TestGetLoadBalancerIngressFromService(t *testing.T) {
 	}
 
 	f.prepare()
-	f.lbc.publishSvc = "alpha/bravo"
+	f.lbc.publishSvc.Namespace = "alpha"
+	f.lbc.publishSvc.Name = "bravo"
 
 	got := f.lbc.getLoadBalancerIngressFromService(svc)
 

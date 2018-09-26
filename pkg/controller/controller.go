@@ -111,7 +111,7 @@ type LoadBalancerController struct {
 	ocspRespKey             string
 	fetchOCSPRespFromSecret bool
 	proxyProto              bool
-	publishSvc              string
+	publishSvc              MetaNamespaceKey
 
 	recorder record.EventRecorder
 
@@ -162,7 +162,7 @@ type Config struct {
 	ProxyProto bool
 	// PublishSvc is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
 	// controller Pod.
-	PublishSvc string
+	PublishSvc MetaNamespaceKey
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -1324,7 +1324,7 @@ func (lbc *LoadBalancerController) syncIngress(stopCh <-chan struct{}) {
 func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress() error {
 	var lbIngs []v1.LoadBalancerIngress
 
-	if lbc.publishSvc == "" {
+	if lbc.publishSvc.Empty() {
 		thisPod, err := lbc.getThisPod()
 		if err != nil {
 			return err
@@ -1336,8 +1336,7 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress() erro
 			return fmt.Errorf("Could not get Node IP of Ingress controller: %v", err)
 		}
 	} else {
-		ns, name, _ := cache.SplitMetaNamespaceKey(lbc.publishSvc)
-		svc, err := lbc.svcLister.Services(ns).Get(name)
+		svc, err := lbc.svcLister.Services(lbc.publishSvc.Namespace).Get(lbc.publishSvc.Name)
 		if err != nil {
 			return err
 		}

@@ -133,6 +133,7 @@ func main() {
 		defaultSvcKey       controller.MetaNamespaceKey
 		defaultTLSSecretKey controller.MetaNamespaceKey
 		nghttpxConfigMapKey controller.MetaNamespaceKey
+		publishSvcKey       controller.MetaNamespaceKey
 	)
 
 	if *defaultSvc == "" {
@@ -145,8 +146,10 @@ func main() {
 	}
 
 	if *publishSvc != "" {
-		if _, _, err := cache.SplitMetaNamespaceKey(*publishSvc); err != nil {
+		if ns, name, err := cache.SplitMetaNamespaceKey(*publishSvc); err != nil {
 			glog.Exitf("publish-service: invalid Service identifier %v: %v", *publishSvc, err)
+		} else {
+			publishSvcKey.Namespace, publishSvcKey.Name = ns, name
 		}
 	}
 
@@ -217,7 +220,7 @@ func main() {
 		OCSPRespKey:             *ocspRespKey,
 		FetchOCSPRespFromSecret: *fetchOCSPRespFromSecret,
 		ProxyProto:              *proxyProto,
-		PublishSvc:              *publishSvc,
+		PublishSvc:              publishSvcKey,
 	}
 
 	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {
