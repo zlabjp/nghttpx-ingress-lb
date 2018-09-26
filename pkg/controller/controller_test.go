@@ -103,7 +103,7 @@ func (f *fixture) prepare() {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
 	config := Config{
 		ResyncPeriod:          defaultResyncPeriod,
-		DefaultBackendService: fmt.Sprintf("%v/%v", defaultBackendNamespace, defaultBackendName),
+		DefaultBackendService: MetaNamespaceKey{Namespace: defaultBackendNamespace, Name: defaultBackendName},
 		WatchNamespace:        defaultIngNamespace,
 		NghttpxConfigMap:      fmt.Sprintf("%v/%v", defaultConfigMapNamespace, defaultConfigMapName),
 		NghttpxConfDir:        defaultConfDir,
@@ -448,7 +448,8 @@ func TestSyncDefaultTLSSecretNotFound(t *testing.T) {
 	f.objects = append(f.objects, svc, eps)
 
 	f.prepare()
-	f.lbc.defaultTLSSecret = "kube-system/default-tls"
+	f.lbc.defaultTLSSecret.Namespace = "kube-system"
+	f.lbc.defaultTLSSecret.Name = "default-tls"
 	f.runShouldFail(getKey(svc, t))
 }
 
@@ -468,7 +469,8 @@ func TestSyncDefaultSecret(t *testing.T) {
 	f.objects = append(f.objects, tlsSecret, svc, eps)
 
 	f.prepare()
-	f.lbc.defaultTLSSecret = fmt.Sprintf("%v/%v", tlsSecret.Namespace, tlsSecret.Name)
+	f.lbc.defaultTLSSecret.Namespace = tlsSecret.Namespace
+	f.lbc.defaultTLSSecret.Name = tlsSecret.Name
 	f.run(getKey(svc, t))
 
 	fm := f.lbc.nghttpx.(*fakeManager)
@@ -517,7 +519,8 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	f.objects = append(f.objects, tlsSecret, svc, eps, bs1, be1, ing1)
 
 	f.prepare()
-	f.lbc.defaultTLSSecret = fmt.Sprintf("%v/%v", tlsSecret.Namespace, tlsSecret.Name)
+	f.lbc.defaultTLSSecret.Namespace = tlsSecret.Namespace
+	f.lbc.defaultTLSSecret.Name = tlsSecret.Name
 	f.run(getKey(svc, t))
 
 	fm := f.lbc.nghttpx.(*fakeManager)

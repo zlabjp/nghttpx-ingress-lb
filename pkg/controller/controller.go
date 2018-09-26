@@ -67,6 +67,15 @@ const (
 	syncKey = "ingress"
 )
 
+type MetaNamespaceKey struct {
+	Namespace string
+	Name      string
+}
+
+func (m *MetaNamespaceKey) Empty() bool {
+	return m.Namespace == "" && m.Name == ""
+}
+
 // LoadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
 type LoadBalancerController struct {
@@ -87,7 +96,7 @@ type LoadBalancerController struct {
 	nodeLister              *nodeLister
 	nghttpx                 nghttpx.Interface
 	podInfo                 *PodInfo
-	defaultSvc              string
+	defaultSvc              MetaNamespaceKey
 	ngxConfigMap            string
 	nghttpxHealthPort       int
 	nghttpxAPIPort          int
@@ -95,7 +104,7 @@ type LoadBalancerController struct {
 	nghttpxExecPath         string
 	nghttpxHTTPPort         int
 	nghttpxHTTPSPort        int
-	defaultTLSSecret        string
+	defaultTLSSecret        MetaNamespaceKey
 	watchNamespace          string
 	ingressClass            string
 	allowInternalIP         bool
@@ -125,7 +134,7 @@ type Config struct {
 	// ResyncPeriod is the duration that Ingress resources are forcibly processed.
 	ResyncPeriod time.Duration
 	// DefaultBackendService is the default backend service name.
-	DefaultBackendService string
+	DefaultBackendService MetaNamespaceKey
 	// WatchNamespace is the namespace to watch for Ingress resource updates.
 	WatchNamespace string
 	// NghttpxConfigMap is the name of ConfigMap resource which contains additional configuration for nghttpx.
@@ -143,7 +152,7 @@ type Config struct {
 	// NghttpxHTTPSPort is a port to listen to for HTTPS (TLS) requests.
 	NghttpxHTTPSPort int
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
-	DefaultTLSSecret string
+	DefaultTLSSecret MetaNamespaceKey
 	// IngressClass is the Ingress class this controller is responsible for.
 	IngressClass            string
 	AllowInternalIP         bool
@@ -448,7 +457,7 @@ func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) 
 
 // endpointsReferenced returns true if we are interested in ep.
 func (lbc *LoadBalancerController) endpointsReferenced(ep *v1.Endpoints) bool {
-	if fmt.Sprintf("%v/%v", ep.Namespace, ep.Name) == lbc.defaultSvc {
+	if ep.Namespace == lbc.defaultSvc.Namespace && ep.Name == lbc.defaultSvc.Name {
 		return true
 	}
 
@@ -484,7 +493,7 @@ func (lbc *LoadBalancerController) endpointsReferenced(ep *v1.Endpoints) bool {
 
 func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
 	s := obj.(*v1.Secret)
-	if !lbc.secretReferenced(s.Namespace, s.Name) {
+	if !lbc.secretReferenced(s) {
 		return
 	}
 
@@ -499,7 +508,7 @@ func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}
 
 	oldS := old.(*v1.Secret)
 	curS := cur.(*v1.Secret)
-	if !lbc.secretReferenced(oldS.Namespace, oldS.Name) && !lbc.secretReferenced(curS.Namespace, curS.Name) {
+	if !lbc.secretReferenced(oldS) && !lbc.secretReferenced(curS) {
 		return
 	}
 
@@ -521,7 +530,7 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 			return
 		}
 	}
-	if !lbc.secretReferenced(s.Namespace, s.Name) {
+	if !lbc.secretReferenced(s) {
 		return
 	}
 	glog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
@@ -633,10 +642,9 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 
 // podReferenced returns true if we are interested in pod.
 func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
-	defaultSvcNS, defaultSvcName, _ := cache.SplitMetaNamespaceKey(lbc.defaultSvc)
-	if svc, err := lbc.svcLister.Services(defaultSvcNS).Get(defaultSvcName); err == nil {
+	if svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name); err == nil {
 		if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
-			glog.V(4).Infof("Pod %v/%v is referenced by default Service %v", pod.Namespace, pod.Name, lbc.defaultSvc)
+			glog.V(4).Infof("Pod %v/%v is referenced by default Service %v/%v", pod.Namespace, pod.Name, lbc.defaultSvc.Namespace, lbc.defaultSvc.Name)
 			return true
 		}
 	}
@@ -769,14 +777,13 @@ func (lbc *LoadBalancerController) sync(key string) error {
 }
 
 func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
+	svcKey := fmt.Sprintf("%v/%v", lbc.defaultSvc.Namespace, lbc.defaultSvc.Name)
 	upstream := &nghttpx.Upstream{
-		Name:             lbc.defaultSvc,
-		RedirectIfNotTLS: lbc.defaultTLSSecret != "",
+		Name:             svcKey,
+		RedirectIfNotTLS: !lbc.defaultTLSSecret.Empty(),
 		Affinity:         nghttpx.AffinityNone,
 	}
-	svcKey := lbc.defaultSvc
-	defaultSvcNS, defaultSvcName, _ := cache.SplitMetaNamespaceKey(svcKey)
-	svc, err := lbc.svcLister.Services(defaultSvcNS).Get(defaultSvcName)
+	svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name)
 	if errors.IsNotFound(err) {
 		glog.Warningf("service %v does no exists", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
@@ -784,7 +791,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 	}
 
 	if err != nil {
-		glog.Warningf("unexpected error searching the default backend %v: %v", lbc.defaultSvc, err)
+		glog.Warningf("unexpected error searching the default backend %v: %v", svcKey, err)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
 		return upstream
 	}
@@ -816,7 +823,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 		pems      []*nghttpx.TLSCred
 	)
 
-	if lbc.defaultTLSSecret != "" {
+	if !lbc.defaultTLSSecret.Empty() {
 		tlsCred, err := lbc.getTLSCredFromSecret(lbc.defaultTLSSecret)
 		if err != nil {
 			return nil, err
@@ -954,7 +961,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 		Name:                 upsName,
 		Host:                 host,
 		Path:                 normalizedPath,
-		RedirectIfNotTLS:     requireTLS || lbc.defaultTLSSecret != "",
+		RedirectIfNotTLS:     requireTLS || !lbc.defaultTLSSecret.Empty(),
 		Affinity:             pc.GetAffinity(),
 		AffinityCookieName:   pc.GetAffinityCookieName(),
 		AffinityCookiePath:   pc.GetAffinityCookiePath(),
@@ -1015,14 +1022,13 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 }
 
 // getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.
-func (lbc *LoadBalancerController) getTLSCredFromSecret(secretKey string) (*nghttpx.TLSCred, error) {
-	ns, name, _ := cache.SplitMetaNamespaceKey(secretKey)
-	secret, err := lbc.secretLister.Secrets(ns).Get(name)
+func (lbc *LoadBalancerController) getTLSCredFromSecret(key MetaNamespaceKey) (*nghttpx.TLSCred, error) {
+	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
 	if errors.IsNotFound(err) {
-		return nil, fmt.Errorf("Secret %v has been deleted", secretKey)
+		return nil, fmt.Errorf("Secret %v has been deleted", key)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Could not get TLS secret %v: %v", secretKey, err)
+		return nil, fmt.Errorf("Could not get TLS secret %v: %v", key, err)
 	}
 	tlsCred, err := lbc.createTLSCredFromSecret(secret)
 	if err != nil {
@@ -1085,14 +1091,14 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 	return tlsCred, nil
 }
 
-func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool {
-	if lbc.defaultTLSSecret == fmt.Sprintf("%v/%v", namespace, name) {
+func (lbc *LoadBalancerController) secretReferenced(s *v1.Secret) bool {
+	if s.Namespace == lbc.defaultTLSSecret.Namespace && s.Name == lbc.defaultTLSSecret.Name {
 		return true
 	}
 
-	ings, err := lbc.ingLister.Ingresses(namespace).List(labels.Everything())
+	ings, err := lbc.ingLister.Ingresses(s.Namespace).List(labels.Everything())
 	if err != nil {
-		glog.Errorf("Could not list Ingress namespace=%v: %v", namespace, err)
+		glog.Errorf("Could not list Ingress namespace=%v: %v", s.Namespace, err)
 		return false
 	}
 	for _, ing := range ings {
@@ -1101,7 +1107,7 @@ func (lbc *LoadBalancerController) secretReferenced(namespace, name string) bool
 		}
 		for i := range ing.Spec.TLS {
 			tls := &ing.Spec.TLS[i]
-			if tls.SecretName == name {
+			if tls.SecretName == s.Name {
 				return true
 			}
 		}

@@ -129,11 +129,18 @@ func main() {
 
 	glog.Infof("Using build: %v - %v", gitRepo, version)
 
+	var (
+		defaultSvcKey       controller.MetaNamespaceKey
+		defaultTLSSecretKey controller.MetaNamespaceKey
+	)
+
 	if *defaultSvc == "" {
 		glog.Exitf("default-backend-service cannot be empty")
 	}
-	if _, _, err := cache.SplitMetaNamespaceKey(*defaultSvc); err != nil {
+	if ns, name, err := cache.SplitMetaNamespaceKey(*defaultSvc); err != nil {
 		glog.Exitf("default-backend-service: invalid Service identifier %v: %v", *defaultSvc, err)
+	} else {
+		defaultSvcKey.Namespace, defaultSvcKey.Name = ns, name
 	}
 
 	if *publishSvc != "" {
@@ -149,8 +156,10 @@ func main() {
 	}
 
 	if *defaultTLSSecret != "" {
-		if _, _, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
+		if ns, name, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
 			glog.Exitf("default-tls-secret: invalid Secret identifier %v: %v", *defaultTLSSecret, err)
+		} else {
+			defaultTLSSecretKey.Namespace, defaultTLSSecretKey.Name = ns, name
 		}
 	}
 
@@ -190,7 +199,7 @@ func main() {
 
 	controllerConfig := controller.Config{
 		ResyncPeriod:            *resyncPeriod,
-		DefaultBackendService:   *defaultSvc,
+		DefaultBackendService:   defaultSvcKey,
 		WatchNamespace:          *watchNamespace,
 		NghttpxConfigMap:        *ngxConfigMap,
 		NghttpxHealthPort:       *nghttpxHealthPort,
@@ -199,7 +208,7 @@ func main() {
 		NghttpxExecPath:         *nghttpxExecPath,
 		NghttpxHTTPPort:         *nghttpxHTTPPort,
 		NghttpxHTTPSPort:        *nghttpxHTTPSPort,
-		DefaultTLSSecret:        *defaultTLSSecret,
+		DefaultTLSSecret:        defaultTLSSecretKey,
 		IngressClass:            *ingressClass,
 		AllowInternalIP:         *allowInternalIP,
 		OCSPRespKey:             *ocspRespKey,
