@@ -530,7 +530,11 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 
 func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 	c := obj.(*v1.ConfigMap)
-	cKey := fmt.Sprintf("%v/%v", c.Namespace, c.Name)
+	cKey, err := cache.MetaNamespaceKeyFunc(c)
+	if err != nil {
+		glog.Errorf("cache.MetaNamespaceKeyFunc: %v", err)
+		return
+	}
 	if cKey != lbc.ngxConfigMap {
 		return
 	}
@@ -544,7 +548,11 @@ func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interfac
 	}
 
 	curC := cur.(*v1.ConfigMap)
-	cKey := fmt.Sprintf("%v/%v", curC.Namespace, curC.Name)
+	cKey, err := cache.MetaNamespaceKeyFunc(curC)
+	if err != nil {
+		glog.Errorf("cache.MetaNamespaceKeyFunc: %v", err)
+		return
+	}
 	// updates to configuration configmaps can trigger an update
 	if cKey != lbc.ngxConfigMap {
 		return
@@ -567,7 +575,11 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 			return
 		}
 	}
-	cKey := fmt.Sprintf("%v/%v", c.Namespace, c.Name)
+	cKey, err := cache.MetaNamespaceKeyFunc(c)
+	if err != nil {
+		glog.Errorf("cache.MetaNamespaceKeyFunc: %v", err)
+		return
+	}
 	if cKey != lbc.ngxConfigMap {
 		return
 	}
