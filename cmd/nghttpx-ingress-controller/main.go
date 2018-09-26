@@ -130,27 +130,27 @@ func main() {
 	glog.Infof("Using build: %v - %v", gitRepo, version)
 
 	if *defaultSvc == "" {
-		glog.Exitf("Please specify --default-backend-service")
+		glog.Exitf("default-backend-service cannot be empty")
 	}
 	if _, _, err := cache.SplitMetaNamespaceKey(*defaultSvc); err != nil {
-		glog.Exitf("could not parse default-backend-service %v: %v", *defaultSvc, err)
+		glog.Exitf("default-backend-service: invalid Service identifier %v: %v", *defaultSvc, err)
 	}
 
 	if *publishSvc != "" {
 		if _, _, err := cache.SplitMetaNamespaceKey(*publishSvc); err != nil {
-			glog.Exitf("could not parse publish-service %v: %v", *publishSvc, err)
+			glog.Exitf("publish-service: invalid Service identifier %v: %v", *publishSvc, err)
 		}
 	}
 
 	if *ngxConfigMap != "" {
 		if _, _, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
-			glog.Exitf("could not parse configmap name %v: %v", *ngxConfigMap, err)
+			glog.Exitf("nghttpx-configmap: invalid ConfigMap identifier %v: %v", *ngxConfigMap, err)
 		}
 	}
 
 	if *defaultTLSSecret != "" {
 		if _, _, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
-			glog.Exitf("could not parse Secret %v: %v", *defaultTLSSecret, err)
+			glog.Exitf("default-tls-secret: invalid Secret identifier %v: %v", *defaultTLSSecret, err)
 		}
 	}
 
