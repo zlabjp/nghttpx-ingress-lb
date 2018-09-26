@@ -154,8 +154,11 @@ func main() {
 		}
 	}
 
-	var err error
-	var config *rest.Config
+	var (
+		err    error
+		config *rest.Config
+	)
+
 	if *kubeconfig == "" {
 		config, err = rest.InClusterConfig()
 	} else {
