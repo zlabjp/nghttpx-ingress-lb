@@ -53,8 +53,8 @@ import (
 
 var (
 	// value overwritten during build. This can be used to resolve issues.
-	version = "0.5"
-	gitRepo = "https://github.com/kubernetes/contrib"
+	version = ""
+	gitRepo = ""
 
 	flags = pflag.NewFlagSet("", pflag.ExitOnError)
 
