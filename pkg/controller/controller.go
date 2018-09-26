@@ -1037,13 +1037,12 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *extensions.Ingress
 
 	for i := range ing.Spec.TLS {
 		tls := &ing.Spec.TLS[i]
-		secretKey := fmt.Sprintf("%s/%s", ing.Namespace, tls.SecretName)
 		secret, err := lbc.secretLister.Secrets(ing.Namespace).Get(tls.SecretName)
-		if errors.IsNotFound(err) {
-			return nil, fmt.Errorf("Secret %v has been deleted", secretKey)
-		}
 		if err != nil {
-			return nil, fmt.Errorf("Error retrieving Secret %v for Ingress %v/%v: %v", secretKey, ing.Namespace, ing.Name, err)
+			if errors.IsNotFound(err) {
+				return nil, fmt.Errorf("Secret %v/%v has been deleted", ing.Namespace, tls.SecretName)
+			}
+			return nil, fmt.Errorf("Error retrieving Secret %v/%v for Ingress %v/%v: %v", ing.Namespace, tls.SecretName, ing.Namespace, ing.Name, err)
 		}
 		tlsCred, err := lbc.createTLSCredFromSecret(secret)
 		if err != nil {
