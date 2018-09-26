@@ -105,7 +105,7 @@ func (f *fixture) prepare() {
 		ResyncPeriod:          defaultResyncPeriod,
 		DefaultBackendService: MetaNamespaceKey{Namespace: defaultBackendNamespace, Name: defaultBackendName},
 		WatchNamespace:        defaultIngNamespace,
-		NghttpxConfigMap:      fmt.Sprintf("%v/%v", defaultConfigMapNamespace, defaultConfigMapName),
+		NghttpxConfigMap:      MetaNamespaceKey{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
 		NghttpxConfDir:        defaultConfDir,
 		IngressClass:          defaultIngressClass,
 	}

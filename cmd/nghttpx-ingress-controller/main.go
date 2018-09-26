@@ -132,6 +132,7 @@ func main() {
 	var (
 		defaultSvcKey       controller.MetaNamespaceKey
 		defaultTLSSecretKey controller.MetaNamespaceKey
+		nghttpxConfigMapKey controller.MetaNamespaceKey
 	)
 
 	if *defaultSvc == "" {
@@ -150,8 +151,10 @@ func main() {
 	}
 
 	if *ngxConfigMap != "" {
-		if _, _, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
+		if ns, name, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
 			glog.Exitf("nghttpx-configmap: invalid ConfigMap identifier %v: %v", *ngxConfigMap, err)
+		} else {
+			nghttpxConfigMapKey.Namespace, nghttpxConfigMapKey.Name = ns, name
 		}
 	}
 
@@ -201,7 +204,7 @@ func main() {
 		ResyncPeriod:            *resyncPeriod,
 		DefaultBackendService:   defaultSvcKey,
 		WatchNamespace:          *watchNamespace,
-		NghttpxConfigMap:        *ngxConfigMap,
+		NghttpxConfigMap:        nghttpxConfigMapKey,
 		NghttpxHealthPort:       *nghttpxHealthPort,
 		NghttpxAPIPort:          *nghttpxAPIPort,
 		NghttpxConfDir:          *nghttpxConfDir,

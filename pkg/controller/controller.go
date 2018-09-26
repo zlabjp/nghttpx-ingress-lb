@@ -97,7 +97,7 @@ type LoadBalancerController struct {
 	nghttpx                 nghttpx.Interface
 	podInfo                 *PodInfo
 	defaultSvc              MetaNamespaceKey
-	ngxConfigMap            string
+	ngxConfigMap            MetaNamespaceKey
 	nghttpxHealthPort       int
 	nghttpxAPIPort          int
 	nghttpxConfDir          string
@@ -138,7 +138,7 @@ type Config struct {
 	// WatchNamespace is the namespace to watch for Ingress resource updates.
 	WatchNamespace string
 	// NghttpxConfigMap is the name of ConfigMap resource which contains additional configuration for nghttpx.
-	NghttpxConfigMap string
+	NghttpxConfigMap MetaNamespaceKey
 	// NghttpxHealthPort is the port for nghttpx health monitor endpoint.
 	NghttpxHealthPort int
 	// NghttpxAPIPort is the port for nghttpx API endpoint.
@@ -334,9 +334,8 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	}
 
 	var cmNamespace string
-	if lbc.ngxConfigMap != "" {
-		ns, _, _ := cache.SplitMetaNamespaceKey(lbc.ngxConfigMap)
-		cmNamespace = ns
+	if !lbc.ngxConfigMap.Empty() {
+		cmNamespace = lbc.ngxConfigMap.Namespace
 	} else {
 		// Just watch runtimeInfo.PodNamespace to make codebase simple
 		cmNamespace = runtimeInfo.PodNamespace
@@ -539,15 +538,10 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 
 func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 	c := obj.(*v1.ConfigMap)
-	cKey, err := cache.MetaNamespaceKeyFunc(c)
-	if err != nil {
-		glog.Errorf("cache.MetaNamespaceKeyFunc: %v", err)
+	if c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
 		return
 	}
-	if cKey != lbc.ngxConfigMap {
-		return
-	}
-	glog.V(4).Infof("ConfigMap %v added", cKey)
+	glog.V(4).Infof("ConfigMap %v/%v added", c.Namespace, c.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -557,16 +551,11 @@ func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interfac
 	}
 
 	curC := cur.(*v1.ConfigMap)
-	cKey, err := cache.MetaNamespaceKeyFunc(curC)
-	if err != nil {
-		glog.Errorf("cache.MetaNamespaceKeyFunc: %v", err)
+	if curC.Namespace != lbc.ngxConfigMap.Namespace || curC.Name != lbc.ngxConfigMap.Name {
 		return
 	}
 	// updates to configuration configmaps can trigger an update
-	if cKey != lbc.ngxConfigMap {
-		return
-	}
-	glog.V(4).Infof("ConfigMap %v updated", cKey)
+	glog.V(4).Infof("ConfigMap %v/%v updated", curC.Namespace, curC.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -584,15 +573,10 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 			return
 		}
 	}
-	cKey, err := cache.MetaNamespaceKeyFunc(c)
-	if err != nil {
-		glog.Errorf("cache.MetaNamespaceKeyFunc: %v", err)
+	if c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
 		return
 	}
-	if cKey != lbc.ngxConfigMap {
-		return
-	}
-	glog.V(4).Infof("ConfigMap %v deleted", cKey)
+	glog.V(4).Infof("ConfigMap %v/%v deleted", c.Namespace, c.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -727,15 +711,14 @@ func (lbc *LoadBalancerController) controllersInSync() bool {
 }
 
 // getConfigMap returns ConfigMap denoted by cmKey.
-func (lbc *LoadBalancerController) getConfigMap(cmKey string) (*v1.ConfigMap, error) {
-	if cmKey == "" {
+func (lbc *LoadBalancerController) getConfigMap(cmKey MetaNamespaceKey) (*v1.ConfigMap, error) {
+	if cmKey.Empty() {
 		return &v1.ConfigMap{}, nil
 	}
 
-	ns, name, _ := cache.SplitMetaNamespaceKey(cmKey)
-	cm, err := lbc.cmLister.ConfigMaps(ns).Get(name)
+	cm, err := lbc.cmLister.ConfigMaps(cmKey.Namespace).Get(cmKey.Name)
 	if errors.IsNotFound(err) {
-		glog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
+		glog.V(3).Infof("ConfigMap %v/%v has been deleted", cmKey.Namespace, cmKey.Name)
 		return &v1.ConfigMap{}, nil
 	}
 	if err != nil {
