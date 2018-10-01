@@ -145,6 +145,29 @@ func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *Por
 	if defaultConfig.DNS != nil && config.DNS == nil {
 		config.SetDNS(*defaultConfig.DNS)
 	}
+	// deprecated
+	if defaultConfig.Affinity != nil && config.Affinity == nil {
+		config.SetAffinity(*defaultConfig.Affinity)
+	}
+	// deprecated
+	if defaultConfig.AffinityCookieName != nil && config.AffinityCookieName == nil {
+		config.SetAffinityCookieName(*defaultConfig.AffinityCookieName)
+	}
+	// deprecated
+	if defaultConfig.AffinityCookiePath != nil && config.AffinityCookiePath == nil {
+		config.SetAffinityCookiePath(*defaultConfig.AffinityCookiePath)
+	}
+	// deprecated
+	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
+		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
+	}
+}
+
+func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
+	glog.V(4).Info("Applying default-path-config annotation")
+	if defaultConfig.Mruby != nil && config.Mruby == nil {
+		config.SetMruby(*defaultConfig.Mruby)
+	}
 	if defaultConfig.Affinity != nil && config.Affinity == nil {
 		config.SetAffinity(*defaultConfig.Affinity)
 	}
@@ -156,13 +179,6 @@ func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *Por
 	}
 	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
 		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
-	}
-}
-
-func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
-	glog.V(4).Info("Applying default-path-config annotation")
-	if defaultConfig.Mruby != nil && config.Mruby == nil {
-		config.SetMruby(*defaultConfig.Mruby)
 	}
 	if defaultConfig.ReadTimeout != nil && config.ReadTimeout == nil {
 		config.SetReadTimeout(*defaultConfig.ReadTimeout)

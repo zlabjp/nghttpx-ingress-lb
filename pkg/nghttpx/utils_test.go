@@ -177,6 +177,34 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 		{
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
+				a.SetAffinity(AffinityIP)
+				return a
+			}(),
+		},
+		{
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
+				a.SetAffinityCookieName("lb-cookie")
+				return a
+			}(),
+		},
+		{
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
+				a.SetAffinityCookiePath("/path")
+				return a
+			}(),
+		},
+		{
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
+				a.SetAffinityCookieSecure(AffinityCookieSecureNo)
+				return a
+			}(),
+		},
+		{
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
 				a.SetReadTimeout(metav1.Duration{Duration: 5 * time.Minute})
 				return a
 			}(),
@@ -197,7 +225,18 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 		if got, want := a.GetMruby(), tt.defaultConf.GetMruby(); got != want {
 			t.Errorf("#%v: a.GetMruby() = %v, want %v", i, got, want)
 		}
-
+		if got, want := a.GetAffinity(), tt.defaultConf.GetAffinity(); got != want {
+			t.Errorf("#%v: a.GetAffinity() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetAffinityCookieName(), tt.defaultConf.GetAffinityCookieName(); got != want {
+			t.Errorf("#%v: a.GetAffinityCookieName() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetAffinityCookiePath(), tt.defaultConf.GetAffinityCookiePath(); got != want {
+			t.Errorf("#%v: a.GetAffinityCookiePath() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetAffinityCookieSecure(), tt.defaultConf.GetAffinityCookieSecure(); got != want {
+			t.Errorf("#%v: a.GetAffinityCookieSecure() = %v, want %v", i, got, want)
+		}
 		if got, want := a.GetReadTimeout(), tt.defaultConf.GetReadTimeout(); !((got != nil && want != nil && *got == *want) || (got == nil && want == nil)) {
 			t.Errorf("#%v: a.GetReadTimeout() = %v, want %v", i, got, want)
 		}
