@@ -114,6 +114,7 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 		glog.Errorf("unrecognized backend protocol %q", config.GetProto())
 		config.SetProto(ProtocolH1)
 	}
+	// deprecated
 	switch config.GetAffinity() {
 	case AffinityNone, AffinityIP, AffinityCookie, "":
 		// OK
@@ -121,6 +122,7 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 		glog.Errorf("unsupported affinity method %v", config.GetAffinity())
 		config.SetAffinity(AffinityNone)
 	}
+	// deprecated
 	switch config.GetAffinityCookieSecure() {
 	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo, "":
 		// OK
@@ -145,6 +147,47 @@ func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *Por
 	if defaultConfig.DNS != nil && config.DNS == nil {
 		config.SetDNS(*defaultConfig.DNS)
 	}
+	// deprecated
+	if defaultConfig.Affinity != nil && config.Affinity == nil {
+		config.SetAffinity(*defaultConfig.Affinity)
+	}
+	// deprecated
+	if defaultConfig.AffinityCookieName != nil && config.AffinityCookieName == nil {
+		config.SetAffinityCookieName(*defaultConfig.AffinityCookieName)
+	}
+	// deprecated
+	if defaultConfig.AffinityCookiePath != nil && config.AffinityCookiePath == nil {
+		config.SetAffinityCookiePath(*defaultConfig.AffinityCookiePath)
+	}
+	// deprecated
+	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
+		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
+	}
+}
+
+// FixupPathConfig validates config and fixes the invalid values inside it.
+func FixupPathConfig(config *PathConfig) {
+	switch config.GetAffinity() {
+	case AffinityNone, AffinityIP, AffinityCookie, "":
+		// OK
+	default:
+		glog.Errorf("unsupported affinity method %v", config.GetAffinity())
+		config.SetAffinity(AffinityNone)
+	}
+	switch config.GetAffinityCookieSecure() {
+	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo, "":
+		// OK
+	default:
+		glog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
+		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
+	}
+}
+
+func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
+	glog.V(4).Info("Applying default-path-config annotation")
+	if defaultConfig.Mruby != nil && config.Mruby == nil {
+		config.SetMruby(*defaultConfig.Mruby)
+	}
 	if defaultConfig.Affinity != nil && config.Affinity == nil {
 		config.SetAffinity(*defaultConfig.Affinity)
 	}
@@ -156,13 +199,6 @@ func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *Por
 	}
 	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
 		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
-	}
-}
-
-func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
-	glog.V(4).Info("Applying default-path-config annotation")
-	if defaultConfig.Mruby != nil && config.Mruby == nil {
-		config.SetMruby(*defaultConfig.Mruby)
 	}
 	if defaultConfig.ReadTimeout != nil && config.ReadTimeout == nil {
 		config.SetReadTimeout(*defaultConfig.ReadTimeout)

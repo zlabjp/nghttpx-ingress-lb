@@ -87,6 +87,10 @@ func (ia ingressAnnotation) getPathConfig() (*nghttpx.PathConfig, map[string]*ng
 		}
 	}
 
+	for _, v := range config {
+		nghttpx.FixupPathConfig(v)
+	}
+
 	data = ia[defaultPathConfigKey]
 	if data == "" {
 		glog.V(4).Infof("%v annotation not found", defaultPathConfigKey)
@@ -98,6 +102,7 @@ func (ia ingressAnnotation) getPathConfig() (*nghttpx.PathConfig, map[string]*ng
 		glog.Errorf("unexpected error reading %v annotation: %v", defaultPathConfigKey, err)
 		return nil, nil
 	}
+	nghttpx.FixupPathConfig(&defaultConfig)
 
 	for _, v := range config {
 		nghttpx.ApplyDefaultPathConfig(v, &defaultConfig)
