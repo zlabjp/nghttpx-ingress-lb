@@ -162,6 +162,49 @@ func TestApplyDefaultPortBackendConfig(t *testing.T) {
 	}
 }
 
+// TestFixupPathConfig validates that FixupPathConfig corrects invalid input to the correct default value.
+func TestFixupPathConfig(t *testing.T) {
+	tests := []struct {
+		inAffinity              Affinity
+		inAffinityCookieSecure  AffinityCookieSecure
+		outAffinity             Affinity
+		outAffinityCookieSecure AffinityCookieSecure
+	}{
+		// 0
+		{
+			inAffinity:              "bar",
+			inAffinityCookieSecure:  "buzz",
+			outAffinity:             AffinityNone,
+			outAffinityCookieSecure: AffinityCookieSecureAuto,
+		},
+		// 1
+		{
+			// Empty input leaves as is.
+		},
+		// 2
+		{
+			// Correct input must be left unchanged.
+			inAffinity:              AffinityIP,
+			inAffinityCookieSecure:  AffinityCookieSecureYes,
+			outAffinity:             AffinityIP,
+			outAffinityCookieSecure: AffinityCookieSecureYes,
+		},
+	}
+
+	for i, tt := range tests {
+		c := &PathConfig{}
+		c.SetAffinity(tt.inAffinity)
+		c.SetAffinityCookieSecure(tt.inAffinityCookieSecure)
+		FixupPathConfig(c)
+		if got, want := c.GetAffinity(), tt.outAffinity; got != want {
+			t.Errorf("#%v: c.GetAffinity() = %q, want %q", i, got, want)
+		}
+		if got, want := c.GetAffinityCookieSecure(), tt.outAffinityCookieSecure; got != want {
+			t.Errorf("#%v: c.GetAffinityCookieSecure() = %q, want %q", i, got, want)
+		}
+	}
+}
+
 // TestApplyDefaultPortBackendConfig verifies ApplyDefaultPathConfig.
 func TestApplyDefaultPathConfig(t *testing.T) {
 	tests := []struct {
