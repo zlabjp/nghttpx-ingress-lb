@@ -27,6 +27,8 @@ package nghttpx
 import (
 	"runtime"
 	"strconv"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Interface is the API to update underlying load balancer.
@@ -89,6 +91,8 @@ type Upstream struct {
 	AffinityCookieName   string
 	AffinityCookiePath   string
 	AffinityCookieSecure AffinityCookieSecure
+	ReadTimeout          *metav1.Duration
+	WriteTimeout         *metav1.Duration
 }
 
 type Affinity string
@@ -283,6 +287,10 @@ type PathConfig struct {
 	AffinityCookiePath *string `json:"affinityCookiePath,omitempty"`
 	// AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.
 	AffinityCookieSecure *AffinityCookieSecure `json:"affinityCookieSecure,omitempty"`
+	// ReadTimeout is a read timeout when this path is selected.
+	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty"`
+	// WriteTimeout is a write timeout when this path is selected.
+	WriteTimeout *metav1.Duration `json:"writeTimeout,omitempty"`
 }
 
 func (pc *PathConfig) GetMruby() string {
@@ -343,6 +351,30 @@ func (pc *PathConfig) GetAffinityCookieSecure() AffinityCookieSecure {
 func (pc *PathConfig) SetAffinityCookieSecure(affinityCookieSecure AffinityCookieSecure) {
 	pc.AffinityCookieSecure = new(AffinityCookieSecure)
 	*pc.AffinityCookieSecure = affinityCookieSecure
+}
+
+func (pc *PathConfig) GetReadTimeout() *metav1.Duration {
+	if pc == nil {
+		return nil
+	}
+	return pc.ReadTimeout
+}
+
+func (pc *PathConfig) SetReadTimeout(readTimeout metav1.Duration) {
+	pc.ReadTimeout = new(metav1.Duration)
+	*pc.ReadTimeout = readTimeout
+}
+
+func (pc *PathConfig) GetWriteTimeout() *metav1.Duration {
+	if pc == nil {
+		return nil
+	}
+	return pc.WriteTimeout
+}
+
+func (pc *PathConfig) SetWriteTimeout(writeTimeout metav1.Duration) {
+	pc.WriteTimeout = new(metav1.Duration)
+	*pc.WriteTimeout = writeTimeout
 }
 
 // ChecksumFile represents a file with path, its arbitrary content, and its checksum.

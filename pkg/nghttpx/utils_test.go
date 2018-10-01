@@ -10,6 +10,9 @@ package nghttpx
 
 import (
 	"testing"
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TestFixupPortBackendConfig validates fixupPortBackendConfig corrects invalid input to the correct default value.
@@ -171,6 +174,20 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 				return a
 			}(),
 		},
+		{
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
+				a.SetReadTimeout(metav1.Duration{Duration: 5 * time.Minute})
+				return a
+			}(),
+		},
+		{
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
+				a.SetWriteTimeout(metav1.Duration{Duration: 10 * time.Second})
+				return a
+			}(),
+		},
 	}
 
 	for i, tt := range tests {
@@ -179,6 +196,13 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 
 		if got, want := a.GetMruby(), tt.defaultConf.GetMruby(); got != want {
 			t.Errorf("#%v: a.GetMruby() = %v, want %v", i, got, want)
+		}
+
+		if got, want := a.GetReadTimeout(), tt.defaultConf.GetReadTimeout(); !((got != nil && want != nil && *got == *want) || (got == nil && want == nil)) {
+			t.Errorf("#%v: a.GetReadTimeout() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetWriteTimeout(), tt.defaultConf.GetWriteTimeout(); !((got != nil && want != nil && *got == *want) || (got == nil && want == nil)) {
+			t.Errorf("#%v: a.GetWriteTimeout() = %v, want %v", i, got, want)
 		}
 	}
 }
