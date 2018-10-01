@@ -288,3 +288,38 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 		}
 	}
 }
+
+// TestNghttpxDuration verifies nghttpxDuration.
+func TestNghttpxDuration(t *testing.T) {
+	tests := []struct {
+		d    time.Duration
+		want string
+	}{
+		// 0
+		{
+			d:    0,
+			want: "0",
+		},
+		// 1
+		{
+			d:    999 * time.Millisecond,
+			want: "999ms",
+		},
+		// 2
+		{
+			d:    time.Second,
+			want: "1",
+		},
+		// 3
+		{
+			d:    1001 * time.Millisecond,
+			want: "1001ms",
+		},
+	}
+
+	for i, tt := range tests {
+		if got, want := nghttpxDuration(tt.d), tt.want; got != want {
+			t.Errorf("#%v: nghttpxDuration(%v) = %v, want %v", i, tt.d, got, want)
+		}
+	}
+}

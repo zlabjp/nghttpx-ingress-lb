@@ -28,9 +28,12 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/pmezard/go-difflib/difflib"
@@ -264,4 +267,15 @@ func MkdirAll(path string) error {
 		return err
 	}
 	return nil
+}
+
+// nghttpxDuration serializes d in nghttpx DURATION format.  Currently, it formats d in milliseconds if it has fraction of a second.
+// Otherwise, it formats d in seconds.
+func nghttpxDuration(d time.Duration) string {
+	d = d.Round(time.Millisecond)
+	msec := int64(d.Nanoseconds() / 1000000)
+	if msec%1000 == 0 {
+		return strconv.FormatInt(msec/1000, 10)
+	}
+	return fmt.Sprintf("%vms", msec)
 }

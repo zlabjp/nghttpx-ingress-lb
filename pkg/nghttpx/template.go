@@ -28,7 +28,6 @@ import (
 	"bytes"
 	"regexp"
 	"text/template"
-	"time"
 
 	"github.com/golang/glog"
 
@@ -47,8 +46,8 @@ var (
 
 			return true
 		},
-		"seconds": func(d *metav1.Duration) int64 {
-			return d.Duration.Nanoseconds() / int64(time.Second)
+		"duration": func(d *metav1.Duration) string {
+			return nghttpxDuration(d.Duration)
 		},
 	}
 )
