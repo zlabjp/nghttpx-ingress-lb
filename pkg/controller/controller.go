@@ -957,8 +957,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 		WriteTimeout:         pc.GetWriteTimeout(),
 	}
 
-	mruby := pc.GetMruby()
-	if mruby != "" {
+	if mruby := pc.GetMruby(); mruby != "" {
 		ups.Mruby = nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, []byte(mruby))
 	}
 
