@@ -10,6 +10,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
@@ -108,8 +109,9 @@ func (ia ingressAnnotation) getPathConfig() (*nghttpx.PathConfig, map[string]*ng
 // unmarshal deserializes data into dest.  This function first tries yaml and then JSON.
 func unmarshal(data []byte, dest interface{}) error {
 	if err := yaml.Unmarshal(data, dest); err != nil {
+		glog.Infof("Could not unmarshal YAML string; fall back to JSON: %v", err)
 		if err := json.Unmarshal(data, dest); err != nil {
-			return err
+			return fmt.Errorf("Could not unmarshal JSON string: %v", err)
 		}
 	}
 	return nil

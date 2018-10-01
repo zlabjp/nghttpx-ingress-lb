@@ -820,8 +820,12 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 	for _, ing := range ings {
 		if !lbc.validateIngressClass(ing) {
+			glog.V(4).Infof("Skip Ingress %v/%v which has Ingress class %v", ing.Namespace, ing.Name, ingressAnnotation(ing.Annotations).getIngressClass())
 			continue
 		}
+
+		glog.Infof("Processing Ingress %v/%v", ing.Namespace, ing.Name)
+
 		var requireTLS bool
 		if ingPems, err := lbc.getTLSCredFromIngress(ing); err != nil {
 			glog.Warningf("Ingress %v/%v is disabled because its TLS Secret cannot be processed: %v", ing.Namespace, ing.Name, err)
