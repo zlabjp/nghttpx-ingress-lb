@@ -164,6 +164,12 @@ func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
 	if defaultConfig.Mruby != nil && config.Mruby == nil {
 		config.SetMruby(*defaultConfig.Mruby)
 	}
+	if defaultConfig.ReadTimeout != nil && config.ReadTimeout == nil {
+		config.SetReadTimeout(*defaultConfig.ReadTimeout)
+	}
+	if defaultConfig.WriteTimeout != nil && config.WriteTimeout == nil {
+		config.SetWriteTimeout(*defaultConfig.WriteTimeout)
+	}
 }
 
 // ResolvePathConfig returns a PathConfig which should be used for the pattern denoted by host and path.

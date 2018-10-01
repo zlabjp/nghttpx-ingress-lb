@@ -953,6 +953,8 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 		AffinityCookieName:   pc.GetAffinityCookieName(),
 		AffinityCookiePath:   pc.GetAffinityCookiePath(),
 		AffinityCookieSecure: pc.GetAffinityCookieSecure(),
+		ReadTimeout:          pc.GetReadTimeout(),
+		WriteTimeout:         pc.GetWriteTimeout(),
 	}
 
 	mruby := pc.GetMruby()

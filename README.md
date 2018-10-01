@@ -382,6 +382,18 @@ the following key value pairs:
   encrypted.  If "yes" is specified, Secure attribute is always added.
   If "no" is specified, Secure attribute is always omitted.
 
+* `readTimeout`: Specify read timeout.  If specified, it overrides
+  global backend read timeout set by
+  [--backend-read-timeout](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-backend-read-timeout).
+  You can use string representation of time used in Golang (e.g., 5s,
+  5m)
+
+* `writeTimeout`: Specify write timeout.  If specified, it overrides
+  global backend write timeout set by
+  [--backend-write-timeout](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-backend-write-timeout).
+  You can use string representation of time used in Golang (e.g., 5s,
+  5m)
+
 Here is an example to rewrite request path to "/foo" from "/pub/foo" using mruby:
 
 ```yaml
@@ -392,6 +404,7 @@ metadata:
   annotations:
     ingress.zlab.co.jp/path-config: |
       www.example.com/pub/foo:
+        readTimeout: 5m
         mruby: |
           class App
             def on_req(env)

@@ -10,6 +10,9 @@ package nghttpx
 
 import (
 	"testing"
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TestFixupPortBackendConfig validates fixupPortBackendConfig corrects invalid input to the correct default value.
@@ -168,6 +171,8 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetMruby("hello mruby")
+				a.SetReadTimeout(metav1.Duration{Duration: 5 * time.Minute})
+				a.SetWriteTimeout(metav1.Duration{Duration: 10 * time.Second})
 				return a
 			}(),
 		},
@@ -179,6 +184,12 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 
 		if got, want := a.GetMruby(), tt.defaultConf.GetMruby(); got != want {
 			t.Errorf("#%v: a.GetMruby() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetReadTimeout(), tt.defaultConf.GetReadTimeout(); got == nil || *got != *want {
+			t.Errorf("#%v: a.GetReadTimeout() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetWriteTimeout(), tt.defaultConf.GetWriteTimeout(); got == nil || *got != *want {
+			t.Errorf("#%v: a.GetWriteTimeout() = %v, want %v", i, got, want)
 		}
 	}
 }

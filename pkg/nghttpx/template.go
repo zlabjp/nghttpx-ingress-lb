@@ -28,8 +28,11 @@ import (
 	"bytes"
 	"regexp"
 	"text/template"
+	"time"
 
 	"github.com/golang/glog"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -43,6 +46,9 @@ var (
 			}
 
 			return true
+		},
+		"seconds": func(d *metav1.Duration) int64 {
+			return d.Duration.Nanoseconds() / int64(time.Second)
 		},
 	}
 )
