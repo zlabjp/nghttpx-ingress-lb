@@ -835,8 +835,8 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 			requireTLS = len(ingPems) > 0
 		}
 
-		defaultPortBackendConfig, backendConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getBackendConfig()
-		defaultPathConfig, pathConfig := ingressAnnotation(ing.ObjectMeta.Annotations).getPathConfig()
+		defaultPortBackendConfig, backendConfig := ingressAnnotation(ing.Annotations).getBackendConfig()
+		defaultPathConfig, pathConfig := ingressAnnotation(ing.Annotations).getPathConfig()
 
 		if ing.Spec.Backend != nil {
 			// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress resource
@@ -1299,7 +1299,7 @@ func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) 
 // validateIngressClass checks whether this controller should process ing or not.  If ing has "kubernetes.io/ingress.class" annotation, its
 // value should be empty or "nghttpx".
 func (lbc *LoadBalancerController) validateIngressClass(ing *extensions.Ingress) bool {
-	switch ingressAnnotation(ing.ObjectMeta.Annotations).getIngressClass() {
+	switch ingressAnnotation(ing.Annotations).getIngressClass() {
 	case "", lbc.ingressClass:
 		return true
 	default:
