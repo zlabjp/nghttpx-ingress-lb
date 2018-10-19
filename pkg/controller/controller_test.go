@@ -135,25 +135,25 @@ func (f *fixture) runShouldFail(ingKey string) {
 
 func (f *fixture) setupStore() {
 	for _, ing := range f.ingStore {
-		f.lbc.ingLister.indexer.Add(ing)
+		f.lbc.ingInformer.GetIndexer().Add(ing)
 	}
 	for _, ep := range f.epStore {
-		f.lbc.epLister.indexer.Add(ep)
+		f.lbc.epInformer.GetIndexer().Add(ep)
 	}
 	for _, svc := range f.svcStore {
-		f.lbc.svcLister.indexer.Add(svc)
+		f.lbc.svcInformer.GetIndexer().Add(svc)
 	}
 	for _, secret := range f.secretStore {
-		f.lbc.secretLister.indexer.Add(secret)
+		f.lbc.secretInformer.GetIndexer().Add(secret)
 	}
 	for _, cm := range f.cmStore {
-		f.lbc.cmLister.indexer.Add(cm)
+		f.lbc.cmInformer.GetIndexer().Add(cm)
 	}
 	for _, pod := range f.podStore {
-		f.lbc.podLister.indexer.Add(pod)
+		f.lbc.podInformer.GetIndexer().Add(pod)
 	}
 	for _, node := range f.nodeStore {
-		f.lbc.nodeLister.indexer.Add(node)
+		f.lbc.nodeInformer.GetIndexer().Add(node)
 	}
 }
 

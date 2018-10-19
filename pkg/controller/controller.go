@@ -41,14 +41,14 @@ import (
 	clientv1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	listerscore "k8s.io/client-go/listers/core/v1"
+	listersextensions "k8s.io/client-go/listers/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
@@ -80,20 +80,20 @@ func (m *MetaNamespaceKey) Empty() bool {
 // from the loadbalancer
 type LoadBalancerController struct {
 	clientset               clientset.Interface
-	ingController           cache.Controller
-	epController            cache.Controller
-	svcController           cache.Controller
-	secretController        cache.Controller
-	cmController            cache.Controller
-	podController           cache.Controller
-	nodeController          cache.Controller
-	ingLister               *ingressLister
-	svcLister               *serviceLister
-	epLister                *endpointsLister
-	secretLister            *secretLister
-	cmLister                *configMapLister
-	podLister               *podLister
-	nodeLister              *nodeLister
+	ingInformer             cache.SharedIndexInformer
+	epInformer              cache.SharedIndexInformer
+	svcInformer             cache.SharedIndexInformer
+	secretInformer          cache.SharedIndexInformer
+	cmInformer              cache.SharedIndexInformer
+	podInformer             cache.SharedIndexInformer
+	nodeInformer            cache.SharedIndexInformer
+	ingLister               listersextensions.IngressLister
+	svcLister               listerscore.ServiceLister
+	epLister                listerscore.EndpointsLister
+	secretLister            listerscore.SecretLister
+	cmLister                listerscore.ConfigMapLister
+	podLister               listerscore.PodLister
+	nodeLister              listerscore.NodeLister
 	nghttpx                 nghttpx.Interface
 	podInfo                 *PodInfo
 	defaultSvc              MetaNamespaceKey
@@ -197,140 +197,68 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
 	}
 
-	{
-		indexer, controller := cache.NewIndexerInformer(
-			&cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					return lbc.clientset.ExtensionsV1beta1().Ingresses(config.WatchNamespace).List(options)
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					return lbc.clientset.ExtensionsV1beta1().Ingresses(config.WatchNamespace).Watch(options)
-				},
-			},
-			&extensions.Ingress{},
-			config.ResyncPeriod,
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    lbc.addIngressNotification,
-				UpdateFunc: lbc.updateIngressNotification,
-				DeleteFunc: lbc.deleteIngressNotification,
-			},
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-		)
+	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, config.ResyncPeriod, informers.WithNamespace(config.WatchNamespace))
 
-		lbc.ingLister = newIngressLister(indexer)
-		lbc.ingController = controller
+	{
+		f := watchNSInformers.Extensions().V1beta1().Ingresses()
+		lbc.ingLister = f.Lister()
+		lbc.ingInformer = f.Informer()
+		lbc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addIngressNotification,
+			UpdateFunc: lbc.updateIngressNotification,
+			DeleteFunc: lbc.deleteIngressNotification,
+		})
+	}
+
+	allNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, config.ResyncPeriod)
+
+	{
+		f := allNSInformers.Core().V1().Endpoints()
+		lbc.epLister = f.Lister()
+		lbc.epInformer = f.Informer()
+		lbc.epInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addEndpointsNotification,
+			UpdateFunc: lbc.updateEndpointsNotification,
+			DeleteFunc: lbc.deleteEndpointsNotification,
+		}, depResyncPeriod())
+
 	}
 
 	{
-		indexer, controller := cache.NewIndexerInformer(
-			&cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					return lbc.clientset.CoreV1().Endpoints(metav1.NamespaceAll).List(options)
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					return lbc.clientset.CoreV1().Endpoints(metav1.NamespaceAll).Watch(options)
-				},
-			},
-			&v1.Endpoints{},
-			depResyncPeriod(),
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    lbc.addEndpointsNotification,
-				UpdateFunc: lbc.updateEndpointsNotification,
-				DeleteFunc: lbc.deleteEndpointsNotification,
-			},
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-		)
-
-		lbc.epLister = newEndpointsLister(indexer)
-		lbc.epController = controller
+		f := allNSInformers.Core().V1().Services()
+		lbc.svcLister = f.Lister()
+		lbc.svcInformer = f.Informer()
+		lbc.svcInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{}, depResyncPeriod())
 	}
 
 	{
-		indexer, controller := cache.NewIndexerInformer(
-			&cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					return lbc.clientset.CoreV1().Services(metav1.NamespaceAll).List(options)
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					return lbc.clientset.CoreV1().Services(metav1.NamespaceAll).Watch(options)
-				},
-			},
-			&v1.Service{},
-			depResyncPeriod(),
-			cache.ResourceEventHandlerFuncs{},
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-		)
-
-		lbc.svcLister = newServiceLister(indexer)
-		lbc.svcController = controller
+		f := allNSInformers.Core().V1().Secrets()
+		lbc.secretLister = f.Lister()
+		lbc.secretInformer = f.Informer()
+		lbc.secretInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addSecretNotification,
+			UpdateFunc: lbc.updateSecretNotification,
+			DeleteFunc: lbc.deleteSecretNotification,
+		}, depResyncPeriod())
 	}
 
 	{
-		indexer, controller := cache.NewIndexerInformer(
-			&cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					return lbc.clientset.CoreV1().Secrets(metav1.NamespaceAll).List(options)
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					return lbc.clientset.CoreV1().Secrets(metav1.NamespaceAll).Watch(options)
-				},
-			},
-			&v1.Secret{},
-			depResyncPeriod(),
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    lbc.addSecretNotification,
-				UpdateFunc: lbc.updateSecretNotification,
-				DeleteFunc: lbc.deleteSecretNotification,
-			},
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-		)
+		f := allNSInformers.Core().V1().Pods()
+		lbc.podLister = f.Lister()
+		lbc.podInformer = f.Informer()
+		lbc.podInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addPodNotification,
+			UpdateFunc: lbc.updatePodNotification,
+			DeleteFunc: lbc.deletePodNotification,
+		}, depResyncPeriod())
 
-		lbc.secretLister = newSecretLister(indexer)
-		lbc.secretController = controller
 	}
 
 	{
-		indexer, controller := cache.NewIndexerInformer(
-			&cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					return lbc.clientset.CoreV1().Pods(metav1.NamespaceAll).List(options)
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					return lbc.clientset.CoreV1().Pods(metav1.NamespaceAll).Watch(options)
-				},
-			},
-			&v1.Pod{},
-			depResyncPeriod(),
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    lbc.addPodNotification,
-				UpdateFunc: lbc.updatePodNotification,
-				DeleteFunc: lbc.deletePodNotification,
-			},
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-		)
-
-		lbc.podLister = newPodLister(indexer)
-		lbc.podController = controller
-	}
-
-	{
-		indexer, controller := cache.NewIndexerInformer(
-			&cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					return lbc.clientset.CoreV1().Nodes().List(options)
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					return lbc.clientset.CoreV1().Nodes().Watch(options)
-				},
-			},
-			&v1.Node{},
-			depResyncPeriod(),
-			cache.ResourceEventHandlerFuncs{},
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-		)
-
-		lbc.nodeLister = newNodeLister(indexer)
-		lbc.nodeController = controller
+		f := allNSInformers.Core().V1().Nodes()
+		lbc.nodeLister = f.Lister()
+		lbc.nodeInformer = f.Informer()
+		lbc.nodeInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{}, depResyncPeriod())
 	}
 
 	var cmNamespace string
@@ -341,28 +269,18 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		cmNamespace = runtimeInfo.PodNamespace
 	}
 
-	{
-		indexer, controller := cache.NewIndexerInformer(
-			&cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					return lbc.clientset.CoreV1().ConfigMaps(cmNamespace).List(options)
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					return lbc.clientset.CoreV1().ConfigMaps(cmNamespace).Watch(options)
-				},
-			},
-			&v1.ConfigMap{},
-			depResyncPeriod(),
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    lbc.addConfigMapNotification,
-				UpdateFunc: lbc.updateConfigMapNotification,
-				DeleteFunc: lbc.deleteConfigMapNotification,
-			},
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-		)
+	cmNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, config.ResyncPeriod, informers.WithNamespace(cmNamespace))
 
-		lbc.cmLister = newConfigMapLister(indexer)
-		lbc.cmController = controller
+	{
+		f := cmNSInformers.Core().V1().ConfigMaps()
+		lbc.cmLister = f.Lister()
+		lbc.cmInformer = f.Informer()
+		lbc.cmInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addConfigMapNotification,
+			UpdateFunc: lbc.updateConfigMapNotification,
+			DeleteFunc: lbc.deleteConfigMapNotification,
+		}, depResyncPeriod())
+
 	}
 
 	lbc.controllersInSyncHandler = lbc.controllersInSync
@@ -701,13 +619,13 @@ func (lbc *LoadBalancerController) worker() {
 }
 
 func (lbc *LoadBalancerController) controllersInSync() bool {
-	return lbc.ingController.HasSynced() &&
-		lbc.svcController.HasSynced() &&
-		lbc.epController.HasSynced() &&
-		lbc.secretController.HasSynced() &&
-		lbc.cmController.HasSynced() &&
-		lbc.podController.HasSynced() &&
-		lbc.nodeController.HasSynced()
+	return lbc.ingInformer.HasSynced() &&
+		lbc.svcInformer.HasSynced() &&
+		lbc.epInformer.HasSynced() &&
+		lbc.secretInformer.HasSynced() &&
+		lbc.cmInformer.HasSynced() &&
+		lbc.podInformer.HasSynced() &&
+		lbc.nodeInformer.HasSynced()
 }
 
 // getConfigMap returns ConfigMap denoted by cmKey.
@@ -1243,13 +1161,13 @@ func (lbc *LoadBalancerController) Run() {
 		lbc.nghttpx.Start(lbc.nghttpxExecPath, nghttpx.NghttpxConfigPath(lbc.nghttpxConfDir), lbc.stopCh)
 	}()
 
-	go lbc.ingController.Run(lbc.stopCh)
-	go lbc.epController.Run(lbc.stopCh)
-	go lbc.svcController.Run(lbc.stopCh)
-	go lbc.secretController.Run(lbc.stopCh)
-	go lbc.cmController.Run(lbc.stopCh)
-	go lbc.podController.Run(lbc.stopCh)
-	go lbc.nodeController.Run(lbc.stopCh)
+	go lbc.ingInformer.Run(lbc.stopCh)
+	go lbc.epInformer.Run(lbc.stopCh)
+	go lbc.svcInformer.Run(lbc.stopCh)
+	go lbc.secretInformer.Run(lbc.stopCh)
+	go lbc.cmInformer.Run(lbc.stopCh)
+	go lbc.podInformer.Run(lbc.stopCh)
+	go lbc.nodeInformer.Run(lbc.stopCh)
 
 	ready := make(chan struct{})
 	go lbc.waitForControllerToSync(ready)
