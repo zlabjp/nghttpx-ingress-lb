@@ -210,7 +210,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		})
 	}
 
-	allNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, config.ResyncPeriod)
+	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, config.ResyncPeriod)
 
 	{
 		f := allNSInformers.Core().V1().Endpoints()
