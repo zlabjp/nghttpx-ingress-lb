@@ -195,15 +195,15 @@ func main() {
 		glog.Exitf("Failed to create clientset: %v", err)
 	}
 
-	runtimePodInfo := &controller.PodInfo{
-		PodName:      os.Getenv("POD_NAME"),
-		PodNamespace: os.Getenv("POD_NAMESPACE"),
+	runtimePodInfo := &types.NamespacedName{
+		Name:      os.Getenv("POD_NAME"),
+		Namespace: os.Getenv("POD_NAMESPACE"),
 	}
 
-	if runtimePodInfo.PodName == "" {
+	if runtimePodInfo.Name == "" {
 		glog.Exit("POD_NAME environment variable cannot be empty.")
 	}
-	if runtimePodInfo.PodNamespace == "" {
+	if runtimePodInfo.Namespace == "" {
 		glog.Exit("POD_NAMESPACE environment variable cannot be empty.")
 	}
 

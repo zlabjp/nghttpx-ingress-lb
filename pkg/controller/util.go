@@ -34,12 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// podInfo contains runtime information about the pod
-type PodInfo struct {
-	PodName      string
-	PodNamespace string
-}
-
 // depResyncPeriod returns duration between resync for resources other than Ingress.
 //
 // Inspired by Kubernetes apiserver: k8s.io/kubernetes/cmd/kube-controller-manager/app/controllermanager.go

@@ -86,7 +86,7 @@ type LoadBalancerController struct {
 	podLister               listerscore.PodLister
 	nodeLister              listerscore.NodeLister
 	nghttpx                 nghttpx.Interface
-	podInfo                 *PodInfo
+	podInfo                 *types.NamespacedName
 	defaultSvc              types.NamespacedName
 	ngxConfigMap            types.NamespacedName
 	nghttpxHealthPort       int
@@ -154,7 +154,7 @@ type Config struct {
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
-func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *PodInfo) *LoadBalancerController {
+func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *types.NamespacedName) *LoadBalancerController {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(clientset.CoreV1().RESTClient()).Events(config.WatchNamespace)})
@@ -253,8 +253,8 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	if lbc.ngxConfigMap.Name != "" {
 		cmNamespace = lbc.ngxConfigMap.Namespace
 	} else {
-		// Just watch runtimeInfo.PodNamespace to make codebase simple
-		cmNamespace = runtimeInfo.PodNamespace
+		// Just watch runtimeInfo.Namespace to make codebase simple
+		cmNamespace = runtimeInfo.Namespace
 	}
 
 	cmNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, config.ResyncPeriod, informers.WithNamespace(cmNamespace))
@@ -1241,9 +1241,9 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress() erro
 
 // getThisPod returns this controller's pod.
 func (lbc *LoadBalancerController) getThisPod() (*v1.Pod, error) {
-	pod, err := lbc.podLister.Pods(lbc.podInfo.PodNamespace).Get(lbc.podInfo.PodName)
+	pod, err := lbc.podLister.Pods(lbc.podInfo.Namespace).Get(lbc.podInfo.Name)
 	if err != nil {
-		return nil, fmt.Errorf("Could not get Pod %v/%v from lister: %v", lbc.podInfo.PodNamespace, lbc.podInfo.PodName, err)
+		return nil, fmt.Errorf("Could not get Pod %v from lister: %v", lbc.podInfo, err)
 	}
 	return pod, nil
 }

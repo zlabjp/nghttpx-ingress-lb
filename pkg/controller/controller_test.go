@@ -89,9 +89,9 @@ const (
 )
 
 var (
-	defaultRuntimeInfo = PodInfo{
-		PodName:      "nghttpx-ingress-controller",
-		PodNamespace: "kube-system",
+	defaultRuntimeInfo = types.NamespacedName{
+		Name:      "nghttpx-ingress-controller",
+		Namespace: "kube-system",
 	}
 
 	defaultIngPodLables = map[string]string{
@@ -756,7 +756,7 @@ func newIngPod(name, nodeName string) *v1.Pod {
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: defaultRuntimeInfo.PodNamespace,
+			Namespace: defaultRuntimeInfo.Namespace,
 			Labels:    defaultIngPodLables,
 		},
 		Spec: v1.PodSpec{
@@ -792,7 +792,7 @@ func newNode(name string, addrs ...v1.NodeAddress) *v1.Node {
 func TestGetLoadBalancerIngress(t *testing.T) {
 	f := newFixture(t)
 
-	po1 := newIngPod(defaultRuntimeInfo.PodName, "alpha.test")
+	po1 := newIngPod(defaultRuntimeInfo.Name, "alpha.test")
 	node1 := newNode("alpha.test", v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.1"})
 
 	po2 := newIngPod("bravo", "bravo.test")
@@ -880,7 +880,7 @@ func TestUpdateIngressStatus(t *testing.T) {
 func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 	f := newFixture(t)
 
-	po := newIngPod(defaultRuntimeInfo.PodName, "alpha.test")
+	po := newIngPod(defaultRuntimeInfo.Name, "alpha.test")
 	node := newNode("alpha.test", v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.1"})
 
 	lbIngs := []v1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
