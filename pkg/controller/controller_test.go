@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
@@ -103,9 +104,9 @@ func (f *fixture) prepare() {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
 	config := Config{
 		ResyncPeriod:          defaultResyncPeriod,
-		DefaultBackendService: MetaNamespaceKey{Namespace: defaultBackendNamespace, Name: defaultBackendName},
+		DefaultBackendService: types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
 		WatchNamespace:        defaultIngNamespace,
-		NghttpxConfigMap:      MetaNamespaceKey{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
+		NghttpxConfigMap:      types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
 		NghttpxConfDir:        defaultConfDir,
 		IngressClass:          defaultIngressClass,
 	}

@@ -41,6 +41,7 @@ import (
 	"github.com/spf13/pflag"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/server/healthz"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -130,10 +131,10 @@ func main() {
 	glog.Infof("Using build: %v - %v", gitRepo, version)
 
 	var (
-		defaultSvcKey       controller.MetaNamespaceKey
-		defaultTLSSecretKey controller.MetaNamespaceKey
-		nghttpxConfigMapKey controller.MetaNamespaceKey
-		publishSvcKey       controller.MetaNamespaceKey
+		defaultSvcKey       types.NamespacedName
+		defaultTLSSecretKey types.NamespacedName
+		nghttpxConfigMapKey types.NamespacedName
+		publishSvcKey       types.NamespacedName
 	)
 
 	if *defaultSvc == "" {
@@ -142,7 +143,10 @@ func main() {
 	if ns, name, err := cache.SplitMetaNamespaceKey(*defaultSvc); err != nil {
 		glog.Exitf("default-backend-service: invalid Service identifier %v: %v", *defaultSvc, err)
 	} else {
-		defaultSvcKey.Namespace, defaultSvcKey.Name = ns, name
+		defaultSvcKey = types.NamespacedName{
+			Namespace: ns,
+			Name:      name,
+		}
 	}
 
 	if *publishSvc != "" {

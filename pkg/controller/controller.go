@@ -42,6 +42,7 @@ import (
 	extensions "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
@@ -66,15 +67,6 @@ const (
 	syncKey = "ingress"
 )
 
-type MetaNamespaceKey struct {
-	Namespace string
-	Name      string
-}
-
-func (m *MetaNamespaceKey) Empty() bool {
-	return m.Namespace == "" && m.Name == ""
-}
-
 // LoadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
 type LoadBalancerController struct {
@@ -95,22 +87,22 @@ type LoadBalancerController struct {
 	nodeLister              listerscore.NodeLister
 	nghttpx                 nghttpx.Interface
 	podInfo                 *PodInfo
-	defaultSvc              MetaNamespaceKey
-	ngxConfigMap            MetaNamespaceKey
+	defaultSvc              types.NamespacedName
+	ngxConfigMap            types.NamespacedName
 	nghttpxHealthPort       int
 	nghttpxAPIPort          int
 	nghttpxConfDir          string
 	nghttpxExecPath         string
 	nghttpxHTTPPort         int
 	nghttpxHTTPSPort        int
-	defaultTLSSecret        MetaNamespaceKey
+	defaultTLSSecret        types.NamespacedName
 	watchNamespace          string
 	ingressClass            string
 	allowInternalIP         bool
 	ocspRespKey             string
 	fetchOCSPRespFromSecret bool
 	proxyProto              bool
-	publishSvc              MetaNamespaceKey
+	publishSvc              types.NamespacedName
 
 	recorder record.EventRecorder
 
@@ -130,11 +122,11 @@ type Config struct {
 	// ResyncPeriod is the duration that Ingress resources are forcibly processed.
 	ResyncPeriod time.Duration
 	// DefaultBackendService is the default backend service name.
-	DefaultBackendService MetaNamespaceKey
+	DefaultBackendService types.NamespacedName
 	// WatchNamespace is the namespace to watch for Ingress resource updates.
 	WatchNamespace string
 	// NghttpxConfigMap is the name of ConfigMap resource which contains additional configuration for nghttpx.
-	NghttpxConfigMap MetaNamespaceKey
+	NghttpxConfigMap types.NamespacedName
 	// NghttpxHealthPort is the port for nghttpx health monitor endpoint.
 	NghttpxHealthPort int
 	// NghttpxAPIPort is the port for nghttpx API endpoint.
@@ -148,7 +140,7 @@ type Config struct {
 	// NghttpxHTTPSPort is a port to listen to for HTTPS (TLS) requests.
 	NghttpxHTTPSPort int
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
-	DefaultTLSSecret MetaNamespaceKey
+	DefaultTLSSecret types.NamespacedName
 	// IngressClass is the Ingress class this controller is responsible for.
 	IngressClass            string
 	AllowInternalIP         bool
@@ -158,7 +150,7 @@ type Config struct {
 	ProxyProto bool
 	// PublishSvc is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
 	// controller Pod.
-	PublishSvc MetaNamespaceKey
+	PublishSvc types.NamespacedName
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -258,7 +250,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	}
 
 	var cmNamespace string
-	if !lbc.ngxConfigMap.Empty() {
+	if lbc.ngxConfigMap.Name != "" {
 		cmNamespace = lbc.ngxConfigMap.Namespace
 	} else {
 		// Just watch runtimeInfo.PodNamespace to make codebase simple
@@ -613,14 +605,14 @@ func (lbc *LoadBalancerController) worker() {
 }
 
 // getConfigMap returns ConfigMap denoted by cmKey.
-func (lbc *LoadBalancerController) getConfigMap(cmKey MetaNamespaceKey) (*v1.ConfigMap, error) {
-	if cmKey.Empty() {
+func (lbc *LoadBalancerController) getConfigMap(cmKey types.NamespacedName) (*v1.ConfigMap, error) {
+	if cmKey.Name == "" {
 		return &v1.ConfigMap{}, nil
 	}
 
 	cm, err := lbc.cmLister.ConfigMaps(cmKey.Namespace).Get(cmKey.Name)
 	if errors.IsNotFound(err) {
-		glog.V(3).Infof("ConfigMap %v/%v has been deleted", cmKey.Namespace, cmKey.Name)
+		glog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
 		return &v1.ConfigMap{}, nil
 	}
 	if err != nil {
@@ -662,10 +654,10 @@ func (lbc *LoadBalancerController) sync(key string) error {
 }
 
 func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
-	svcKey := fmt.Sprintf("%v/%v", lbc.defaultSvc.Namespace, lbc.defaultSvc.Name)
+	svcKey := lbc.defaultSvc.String()
 	upstream := &nghttpx.Upstream{
 		Name:             svcKey,
-		RedirectIfNotTLS: !lbc.defaultTLSSecret.Empty(),
+		RedirectIfNotTLS: lbc.defaultTLSSecret.Name != "",
 		Affinity:         nghttpx.AffinityNone,
 	}
 	svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name)
@@ -708,7 +700,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 		pems      []*nghttpx.TLSCred
 	)
 
-	if !lbc.defaultTLSSecret.Empty() {
+	if lbc.defaultTLSSecret.Name != "" {
 		tlsCred, err := lbc.getTLSCredFromSecret(lbc.defaultTLSSecret)
 		if err != nil {
 			return nil, err
@@ -850,7 +842,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 		Name:                 upsName,
 		Host:                 host,
 		Path:                 normalizedPath,
-		RedirectIfNotTLS:     requireTLS || !lbc.defaultTLSSecret.Empty(),
+		RedirectIfNotTLS:     requireTLS || lbc.defaultTLSSecret.Name != "",
 		Affinity:             pc.GetAffinity(),
 		AffinityCookieName:   pc.GetAffinityCookieName(),
 		AffinityCookiePath:   pc.GetAffinityCookiePath(),
@@ -912,7 +904,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 }
 
 // getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.
-func (lbc *LoadBalancerController) getTLSCredFromSecret(key MetaNamespaceKey) (*nghttpx.TLSCred, error) {
+func (lbc *LoadBalancerController) getTLSCredFromSecret(key types.NamespacedName) (*nghttpx.TLSCred, error) {
 	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
 	if errors.IsNotFound(err) {
 		return nil, fmt.Errorf("Secret %v has been deleted", key)
@@ -1222,7 +1214,7 @@ func (lbc *LoadBalancerController) syncIngress(stopCh <-chan struct{}) {
 func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress() error {
 	var lbIngs []v1.LoadBalancerIngress
 
-	if lbc.publishSvc.Empty() {
+	if lbc.publishSvc.Name == "" {
 		thisPod, err := lbc.getThisPod()
 		if err != nil {
 			return err
