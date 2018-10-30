@@ -110,7 +110,6 @@ func (f *fixture) prepare() {
 		IngressClass:          defaultIngressClass,
 	}
 	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo)
-	f.lbc.controllersInSyncHandler = func() bool { return true }
 }
 
 func (f *fixture) run(ingKey string) {

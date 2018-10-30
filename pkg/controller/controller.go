@@ -59,7 +59,6 @@ import (
 )
 
 const (
-	podStoreSyncedPollPeriod = 1 * time.Second
 	// Minimum resync period for resources other than Ingress
 	minDepResyncPeriod = 2 * time.Minute
 	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
@@ -123,9 +122,6 @@ type LoadBalancerController struct {
 	stopLock sync.Mutex
 	shutdown bool
 	stopCh   chan struct{}
-
-	// controllersInSyncHandler returns true if all resource controllers have synced.
-	controllersInSyncHandler func() bool
 
 	reloadRateLimiter flowcontrol.RateLimiter
 }
@@ -282,8 +278,6 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		}, depResyncPeriod())
 
 	}
-
-	lbc.controllersInSyncHandler = lbc.controllersInSync
 
 	return &lbc
 }
@@ -616,16 +610,6 @@ func (lbc *LoadBalancerController) worker() {
 			return
 		}
 	}
-}
-
-func (lbc *LoadBalancerController) controllersInSync() bool {
-	return lbc.ingInformer.HasSynced() &&
-		lbc.svcInformer.HasSynced() &&
-		lbc.epInformer.HasSynced() &&
-		lbc.secretInformer.HasSynced() &&
-		lbc.cmInformer.HasSynced() &&
-		lbc.podInformer.HasSynced() &&
-		lbc.nodeInformer.HasSynced()
 }
 
 // getConfigMap returns ConfigMap denoted by cmKey.
@@ -1169,9 +1153,18 @@ func (lbc *LoadBalancerController) Run() {
 	go lbc.podInformer.Run(lbc.stopCh)
 	go lbc.nodeInformer.Run(lbc.stopCh)
 
-	ready := make(chan struct{})
-	go lbc.waitForControllerToSync(ready)
-	<-ready
+	if !cache.WaitForCacheSync(
+		lbc.stopCh,
+		lbc.ingInformer.HasSynced,
+		lbc.epInformer.HasSynced,
+		lbc.svcInformer.HasSynced,
+		lbc.secretInformer.HasSynced,
+		lbc.cmInformer.HasSynced,
+		lbc.podInformer.HasSynced,
+		lbc.nodeInformer.HasSynced,
+	) {
+		return
+	}
 
 	go lbc.worker()
 
@@ -1188,24 +1181,6 @@ func (lbc *LoadBalancerController) Run() {
 	lbc.syncQueue.ShutDown()
 
 	wg.Wait()
-}
-
-// waitForControllerToSync waits for controllers to sync their caches
-func (lbc *LoadBalancerController) waitForControllerToSync(ready chan<- struct{}) {
-Loop:
-	for {
-		if lbc.controllersInSyncHandler() {
-			break
-		}
-
-		select {
-		case <-lbc.stopCh:
-			break Loop
-		case <-time.After(podStoreSyncedPollPeriod):
-		}
-	}
-
-	close(ready)
 }
 
 func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) {
