@@ -88,21 +88,21 @@ type LoadBalancerController struct {
 	nghttpx                 nghttpx.Interface
 	podInfo                 *types.NamespacedName
 	defaultSvc              types.NamespacedName
-	ngxConfigMap            types.NamespacedName
+	ngxConfigMap            *types.NamespacedName
 	nghttpxHealthPort       int
 	nghttpxAPIPort          int
 	nghttpxConfDir          string
 	nghttpxExecPath         string
 	nghttpxHTTPPort         int
 	nghttpxHTTPSPort        int
-	defaultTLSSecret        types.NamespacedName
+	defaultTLSSecret        *types.NamespacedName
 	watchNamespace          string
 	ingressClass            string
 	allowInternalIP         bool
 	ocspRespKey             string
 	fetchOCSPRespFromSecret bool
 	proxyProto              bool
-	publishSvc              types.NamespacedName
+	publishSvc              *types.NamespacedName
 
 	recorder record.EventRecorder
 
@@ -126,7 +126,7 @@ type Config struct {
 	// WatchNamespace is the namespace to watch for Ingress resource updates.
 	WatchNamespace string
 	// NghttpxConfigMap is the name of ConfigMap resource which contains additional configuration for nghttpx.
-	NghttpxConfigMap types.NamespacedName
+	NghttpxConfigMap *types.NamespacedName
 	// NghttpxHealthPort is the port for nghttpx health monitor endpoint.
 	NghttpxHealthPort int
 	// NghttpxAPIPort is the port for nghttpx API endpoint.
@@ -140,7 +140,7 @@ type Config struct {
 	// NghttpxHTTPSPort is a port to listen to for HTTPS (TLS) requests.
 	NghttpxHTTPSPort int
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
-	DefaultTLSSecret types.NamespacedName
+	DefaultTLSSecret *types.NamespacedName
 	// IngressClass is the Ingress class this controller is responsible for.
 	IngressClass            string
 	AllowInternalIP         bool
@@ -150,7 +150,7 @@ type Config struct {
 	ProxyProto bool
 	// PublishSvc is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
 	// controller Pod.
-	PublishSvc types.NamespacedName
+	PublishSvc *types.NamespacedName
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -250,7 +250,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	}
 
 	var cmNamespace string
-	if lbc.ngxConfigMap.Name != "" {
+	if lbc.ngxConfigMap != nil {
 		cmNamespace = lbc.ngxConfigMap.Namespace
 	} else {
 		// Just watch runtimeInfo.Namespace to make codebase simple
@@ -442,7 +442,7 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 
 func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 	c := obj.(*v1.ConfigMap)
-	if c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
+	if lbc.ngxConfigMap == nil || c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
 		return
 	}
 	glog.V(4).Infof("ConfigMap %v/%v added", c.Namespace, c.Name)
@@ -455,7 +455,7 @@ func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interfac
 	}
 
 	curC := cur.(*v1.ConfigMap)
-	if curC.Namespace != lbc.ngxConfigMap.Namespace || curC.Name != lbc.ngxConfigMap.Name {
+	if lbc.ngxConfigMap == nil || curC.Namespace != lbc.ngxConfigMap.Namespace || curC.Name != lbc.ngxConfigMap.Name {
 		return
 	}
 	// updates to configuration configmaps can trigger an update
@@ -477,7 +477,7 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 			return
 		}
 	}
-	if c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
+	if lbc.ngxConfigMap == nil || c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
 		return
 	}
 	glog.V(4).Infof("ConfigMap %v/%v deleted", c.Namespace, c.Name)
@@ -605,8 +605,8 @@ func (lbc *LoadBalancerController) worker() {
 }
 
 // getConfigMap returns ConfigMap denoted by cmKey.
-func (lbc *LoadBalancerController) getConfigMap(cmKey types.NamespacedName) (*v1.ConfigMap, error) {
-	if cmKey.Name == "" {
+func (lbc *LoadBalancerController) getConfigMap(cmKey *types.NamespacedName) (*v1.ConfigMap, error) {
+	if cmKey == nil {
 		return &v1.ConfigMap{}, nil
 	}
 
@@ -657,7 +657,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 	svcKey := lbc.defaultSvc.String()
 	upstream := &nghttpx.Upstream{
 		Name:             svcKey,
-		RedirectIfNotTLS: lbc.defaultTLSSecret.Name != "",
+		RedirectIfNotTLS: lbc.defaultTLSSecret != nil,
 		Affinity:         nghttpx.AffinityNone,
 	}
 	svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name)
@@ -700,7 +700,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 		pems      []*nghttpx.TLSCred
 	)
 
-	if lbc.defaultTLSSecret.Name != "" {
+	if lbc.defaultTLSSecret != nil {
 		tlsCred, err := lbc.getTLSCredFromSecret(lbc.defaultTLSSecret)
 		if err != nil {
 			return nil, err
@@ -842,7 +842,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 		Name:                 upsName,
 		Host:                 host,
 		Path:                 normalizedPath,
-		RedirectIfNotTLS:     requireTLS || lbc.defaultTLSSecret.Name != "",
+		RedirectIfNotTLS:     requireTLS || lbc.defaultTLSSecret != nil,
 		Affinity:             pc.GetAffinity(),
 		AffinityCookieName:   pc.GetAffinityCookieName(),
 		AffinityCookiePath:   pc.GetAffinityCookiePath(),
@@ -904,7 +904,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 }
 
 // getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.
-func (lbc *LoadBalancerController) getTLSCredFromSecret(key types.NamespacedName) (*nghttpx.TLSCred, error) {
+func (lbc *LoadBalancerController) getTLSCredFromSecret(key *types.NamespacedName) (*nghttpx.TLSCred, error) {
 	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
 	if errors.IsNotFound(err) {
 		return nil, fmt.Errorf("Secret %v has been deleted", key)
@@ -974,7 +974,7 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 }
 
 func (lbc *LoadBalancerController) secretReferenced(s *v1.Secret) bool {
-	if s.Namespace == lbc.defaultTLSSecret.Namespace && s.Name == lbc.defaultTLSSecret.Name {
+	if lbc.defaultTLSSecret != nil && s.Namespace == lbc.defaultTLSSecret.Namespace && s.Name == lbc.defaultTLSSecret.Name {
 		return true
 	}
 
@@ -1214,7 +1214,7 @@ func (lbc *LoadBalancerController) syncIngress(stopCh <-chan struct{}) {
 func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress() error {
 	var lbIngs []v1.LoadBalancerIngress
 
-	if lbc.publishSvc.Name == "" {
+	if lbc.publishSvc == nil {
 		thisPod, err := lbc.getThisPod()
 		if err != nil {
 			return err

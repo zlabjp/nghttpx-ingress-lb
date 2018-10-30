@@ -106,7 +106,7 @@ func (f *fixture) prepare() {
 		ResyncPeriod:          defaultResyncPeriod,
 		DefaultBackendService: types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
 		WatchNamespace:        defaultIngNamespace,
-		NghttpxConfigMap:      types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
+		NghttpxConfigMap:      &types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
 		NghttpxConfDir:        defaultConfDir,
 		IngressClass:          defaultIngressClass,
 	}
@@ -448,8 +448,10 @@ func TestSyncDefaultTLSSecretNotFound(t *testing.T) {
 	f.objects = append(f.objects, svc, eps)
 
 	f.prepare()
-	f.lbc.defaultTLSSecret.Namespace = "kube-system"
-	f.lbc.defaultTLSSecret.Name = "default-tls"
+	f.lbc.defaultTLSSecret = &types.NamespacedName{
+		Namespace: "kube-system",
+		Name:      "default-tls",
+	}
 	f.runShouldFail(getKey(svc, t))
 }
 
@@ -469,8 +471,10 @@ func TestSyncDefaultSecret(t *testing.T) {
 	f.objects = append(f.objects, tlsSecret, svc, eps)
 
 	f.prepare()
-	f.lbc.defaultTLSSecret.Namespace = tlsSecret.Namespace
-	f.lbc.defaultTLSSecret.Name = tlsSecret.Name
+	f.lbc.defaultTLSSecret = &types.NamespacedName{
+		Namespace: tlsSecret.Namespace,
+		Name:      tlsSecret.Name,
+	}
 	f.run(getKey(svc, t))
 
 	fm := f.lbc.nghttpx.(*fakeManager)
@@ -519,8 +523,10 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	f.objects = append(f.objects, tlsSecret, svc, eps, bs1, be1, ing1)
 
 	f.prepare()
-	f.lbc.defaultTLSSecret.Namespace = tlsSecret.Namespace
-	f.lbc.defaultTLSSecret.Name = tlsSecret.Name
+	f.lbc.defaultTLSSecret = &types.NamespacedName{
+		Namespace: tlsSecret.Namespace,
+		Name:      tlsSecret.Name,
+	}
 	f.run(getKey(svc, t))
 
 	fm := f.lbc.nghttpx.(*fakeManager)
@@ -977,8 +983,10 @@ func TestGetLoadBalancerIngressFromService(t *testing.T) {
 	}
 
 	f.prepare()
-	f.lbc.publishSvc.Namespace = "alpha"
-	f.lbc.publishSvc.Name = "bravo"
+	f.lbc.publishSvc = &types.NamespacedName{
+		Namespace: "alpha",
+		Name:      "bravo",
+	}
 
 	got := f.lbc.getLoadBalancerIngressFromService(svc)
 

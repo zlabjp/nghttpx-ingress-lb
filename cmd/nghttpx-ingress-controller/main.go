@@ -132,9 +132,9 @@ func main() {
 
 	var (
 		defaultSvcKey       types.NamespacedName
-		defaultTLSSecretKey types.NamespacedName
-		nghttpxConfigMapKey types.NamespacedName
-		publishSvcKey       types.NamespacedName
+		defaultTLSSecretKey *types.NamespacedName
+		nghttpxConfigMapKey *types.NamespacedName
+		publishSvcKey       *types.NamespacedName
 	)
 
 	if *defaultSvc == "" {
@@ -153,7 +153,10 @@ func main() {
 		if ns, name, err := cache.SplitMetaNamespaceKey(*publishSvc); err != nil {
 			glog.Exitf("publish-service: invalid Service identifier %v: %v", *publishSvc, err)
 		} else {
-			publishSvcKey.Namespace, publishSvcKey.Name = ns, name
+			publishSvcKey = &types.NamespacedName{
+				Namespace: ns,
+				Name:      name,
+			}
 		}
 	}
 
@@ -161,7 +164,10 @@ func main() {
 		if ns, name, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
 			glog.Exitf("nghttpx-configmap: invalid ConfigMap identifier %v: %v", *ngxConfigMap, err)
 		} else {
-			nghttpxConfigMapKey.Namespace, nghttpxConfigMapKey.Name = ns, name
+			nghttpxConfigMapKey = &types.NamespacedName{
+				Namespace: ns,
+				Name:      name,
+			}
 		}
 	}
 
@@ -169,7 +175,10 @@ func main() {
 		if ns, name, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
 			glog.Exitf("default-tls-secret: invalid Secret identifier %v: %v", *defaultTLSSecret, err)
 		} else {
-			defaultTLSSecretKey.Namespace, defaultTLSSecretKey.Name = ns, name
+			defaultTLSSecretKey = &types.NamespacedName{
+				Namespace: ns,
+				Name:      name,
+			}
 		}
 	}
 
