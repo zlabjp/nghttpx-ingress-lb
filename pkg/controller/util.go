@@ -26,21 +26,11 @@ package controller
 
 import (
 	"fmt"
-	"math/rand"
 	"sort"
-	"time"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
-
-// depResyncPeriod returns duration between resync for resources other than Ingress.
-//
-// Inspired by Kubernetes apiserver: k8s.io/kubernetes/cmd/kube-controller-manager/app/controllermanager.go
-func depResyncPeriod() time.Duration {
-	factor := rand.Float64() + 1
-	return time.Duration(float64(minDepResyncPeriod.Nanoseconds()) * factor)
-}
 
 // loadBalancerIngressesIPEqual compares a and b, and if their IP fields are equal, returns true.  a and b might not be sorted in the
 // particular order.  They just compared from first to last, and if there is a difference, this function returns false.
