@@ -12,6 +12,16 @@
 			"Rev": "782f4967f2dc4564575ca782fe2d04090b5faca8"
 		},
 		{
+			"ImportPath": "github.com/docker/distribution/digestset",
+			"Comment": "v2.6.0-rc.1-209-gedc3ab29",
+			"Rev": "edc3ab29cdff8694dd6feb85cfeb4b5f1b38ed9c"
+		},
+		{
+			"ImportPath": "github.com/docker/distribution/reference",
+			"Comment": "v2.6.0-rc.1-209-gedc3ab29",
+			"Rev": "edc3ab29cdff8694dd6feb85cfeb4b5f1b38ed9c"
+		},
+		{
 			"ImportPath": "github.com/ghodss/yaml",
 			"Rev": "c7ce16629ff4cd059ed96ed06419dd3856fd3577"
 		},
@@ -115,6 +125,10 @@
 			"Rev": "05fbef0ca5da472bbf96c9322b84a53edc03c9fd"
 		},
 		{
+			"ImportPath": "github.com/opencontainers/go-digest",
+			"Rev": "a6d0ee40d4207ea02364bd3b9e8e77b9159ba1eb"
+		},
+		{
 			"ImportPath": "github.com/peterbourgon/diskv",
 			"Comment": "v2.0.1",
 			"Rev": "5f041e8faa004a95c88a202771f4cc3e991971e6"
@@ -127,6 +141,14 @@
 			"ImportPath": "github.com/spf13/pflag",
 			"Comment": "v1.0.1",
 			"Rev": "583c0c0531f06d5278b7d917446061adc344b5cd"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ed25519",
+			"Rev": "de0752318171da717af4ce24d0a2e8626afaeb11"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ed25519/internal/edwards25519",
+			"Rev": "de0752318171da717af4ce24d0a2e8626afaeb11"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ssh/terminal",
@@ -192,6 +214,26 @@
 			"ImportPath": "gopkg.in/inf.v0",
 			"Comment": "v0.9.0",
 			"Rev": "3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v2",
+			"Comment": "v2.1.6-4-g89060de",
+			"Rev": "89060dee6a84df9a4dae49f676f0c755037834f1"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v2/cipher",
+			"Comment": "v2.1.6-4-g89060de",
+			"Rev": "89060dee6a84df9a4dae49f676f0c755037834f1"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v2/json",
+			"Comment": "v2.1.6-4-g89060de",
+			"Rev": "89060dee6a84df9a4dae49f676f0c755037834f1"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v2/jwt",
+			"Comment": "v2.1.6-4-g89060de",
+			"Rev": "89060dee6a84df9a4dae49f676f0c755037834f1"
 		},
 		{
 			"ImportPath": "gopkg.in/yaml.v2",
@@ -353,6 +395,16 @@
 			"Rev": "fd83cbc87e7632ccd8bbab63d2b673d4e0c631cc"
 		},
 		{
+			"ImportPath": "k8s.io/apiextensions-apiserver/pkg/features",
+			"Comment": "kubernetes-1.12.0",
+			"Rev": "1748dfb29e8a4432b78514bc88a1b07937a9805a"
+		},
+		{
+			"ImportPath": "k8s.io/apimachinery/pkg/api/equality",
+			"Comment": "kubernetes-1.12.2-beta.0",
+			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
+		},
+		{
 			"ImportPath": "k8s.io/apimachinery/pkg/api/errors",
 			"Comment": "kubernetes-1.12.2-beta.0",
 			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
@@ -368,6 +420,11 @@
 			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
 		},
 		{
+			"ImportPath": "k8s.io/apimachinery/pkg/api/validation",
+			"Comment": "kubernetes-1.12.2-beta.0",
+			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
+		},
+		{
 			"ImportPath": "k8s.io/apimachinery/pkg/apis/meta/internalversion",
 			"Comment": "kubernetes-1.12.2-beta.0",
 			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
@@ -379,6 +436,11 @@
 		},
 		{
 			"ImportPath": "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured",
+			"Comment": "kubernetes-1.12.2-beta.0",
+			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
+		},
+		{
+			"ImportPath": "k8s.io/apimachinery/pkg/apis/meta/v1/validation",
 			"Comment": "kubernetes-1.12.2-beta.0",
 			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
 		},
@@ -508,6 +570,11 @@
 			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
 		},
 		{
+			"ImportPath": "k8s.io/apimachinery/pkg/util/rand",
+			"Comment": "kubernetes-1.12.2-beta.0",
+			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
+		},
+		{
 			"ImportPath": "k8s.io/apimachinery/pkg/util/runtime",
 			"Comment": "kubernetes-1.12.2-beta.0",
 			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
@@ -563,7 +630,32 @@
 			"Rev": "6dd46049f39503a1fc8d65de4bd566829e95faff"
 		},
 		{
+			"ImportPath": "k8s.io/apiserver/pkg/authentication/authenticator",
+			"Comment": "kubernetes-1.12.0",
+			"Rev": "e85ad7b666fef0476185731329f4cff1536efff8"
+		},
+		{
+			"ImportPath": "k8s.io/apiserver/pkg/authentication/serviceaccount",
+			"Comment": "kubernetes-1.12.0",
+			"Rev": "e85ad7b666fef0476185731329f4cff1536efff8"
+		},
+		{
+			"ImportPath": "k8s.io/apiserver/pkg/authentication/user",
+			"Comment": "kubernetes-1.12.0",
+			"Rev": "e85ad7b666fef0476185731329f4cff1536efff8"
+		},
+		{
+			"ImportPath": "k8s.io/apiserver/pkg/features",
+			"Comment": "kubernetes-1.12.0",
+			"Rev": "e85ad7b666fef0476185731329f4cff1536efff8"
+		},
+		{
 			"ImportPath": "k8s.io/apiserver/pkg/server/healthz",
+			"Comment": "kubernetes-1.12.0",
+			"Rev": "e85ad7b666fef0476185731329f4cff1536efff8"
+		},
+		{
+			"ImportPath": "k8s.io/apiserver/pkg/util/feature",
 			"Comment": "kubernetes-1.12.0",
 			"Rev": "e85ad7b666fef0476185731329f4cff1536efff8"
 		},
@@ -1348,6 +1440,11 @@
 			"Rev": "1638f8970cefaa404ff3a62950f88b08292b2696"
 		},
 		{
+			"ImportPath": "k8s.io/client-go/tools/watch",
+			"Comment": "v9.0.0",
+			"Rev": "1638f8970cefaa404ff3a62950f88b08292b2696"
+		},
+		{
 			"ImportPath": "k8s.io/client-go/transport",
 			"Comment": "v9.0.0",
 			"Rev": "1638f8970cefaa404ff3a62950f88b08292b2696"
@@ -1395,6 +1492,185 @@
 		{
 			"ImportPath": "k8s.io/kube-openapi/pkg/util/proto",
 			"Rev": "0cf8f7e6ed1d2e3d47d02e3b6e559369af24d803"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/api/legacyscheme",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/api/service",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/api/v1/pod",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/autoscaling",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/core",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/core/helper",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/core/install",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/core/pods",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/core/v1",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/core/v1/helper",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/core/validation",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/extensions",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/networking",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/policy",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apis/scheduling",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/capabilities",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/controller",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/features",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/fieldpath",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/kubelet/apis",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/kubelet/types",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/master/ports",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/scheduler/algorithm",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/scheduler/algorithm/priorities/util",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/scheduler/api",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/scheduler/cache",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/scheduler/util",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/security/apparmor",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/serviceaccount",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/util/file",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/util/hash",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/util/net/sets",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/util/node",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/util/parsers",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/util/taints",
+			"Comment": "v1.12.0",
+			"Rev": "0ed33881dc4355495f623c6f22e7dd0b7632b7c0"
+		},
+		{
+			"ImportPath": "k8s.io/utils/pointer",
+			"Rev": "66066c83e385e385ccc3c964b44fd7dcd413d0ed"
 		}
 	]
 }
