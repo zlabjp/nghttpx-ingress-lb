@@ -55,6 +55,7 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/kubernetes/pkg/controller"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -198,17 +199,17 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		})
 	}
 
-	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, config.ResyncPeriod)
+	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, controller.NoResyncPeriodFunc())
 
 	{
 		f := allNSInformers.Core().V1().Endpoints()
 		lbc.epLister = f.Lister()
 		lbc.epInformer = f.Informer()
-		lbc.epInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		lbc.epInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addEndpointsNotification,
 			UpdateFunc: lbc.updateEndpointsNotification,
 			DeleteFunc: lbc.deleteEndpointsNotification,
-		}, depResyncPeriod())
+		})
 
 	}
 
@@ -216,29 +217,28 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		f := allNSInformers.Core().V1().Services()
 		lbc.svcLister = f.Lister()
 		lbc.svcInformer = f.Informer()
-		lbc.svcInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{}, depResyncPeriod())
 	}
 
 	{
 		f := allNSInformers.Core().V1().Secrets()
 		lbc.secretLister = f.Lister()
 		lbc.secretInformer = f.Informer()
-		lbc.secretInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		lbc.secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addSecretNotification,
 			UpdateFunc: lbc.updateSecretNotification,
 			DeleteFunc: lbc.deleteSecretNotification,
-		}, depResyncPeriod())
+		})
 	}
 
 	{
 		f := allNSInformers.Core().V1().Pods()
 		lbc.podLister = f.Lister()
 		lbc.podInformer = f.Informer()
-		lbc.podInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		lbc.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addPodNotification,
 			UpdateFunc: lbc.updatePodNotification,
 			DeleteFunc: lbc.deletePodNotification,
-		}, depResyncPeriod())
+		})
 
 	}
 
@@ -246,7 +246,6 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		f := allNSInformers.Core().V1().Nodes()
 		lbc.nodeLister = f.Lister()
 		lbc.nodeInformer = f.Informer()
-		lbc.nodeInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{}, depResyncPeriod())
 	}
 
 	var cmNamespace string
@@ -257,17 +256,17 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		cmNamespace = runtimeInfo.Namespace
 	}
 
-	cmNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, config.ResyncPeriod, informers.WithNamespace(cmNamespace))
+	cmNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, controller.NoResyncPeriodFunc(), informers.WithNamespace(cmNamespace))
 
 	{
 		f := cmNSInformers.Core().V1().ConfigMaps()
 		lbc.cmLister = f.Lister()
 		lbc.cmInformer = f.Informer()
-		lbc.cmInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		lbc.cmInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addConfigMapNotification,
 			UpdateFunc: lbc.updateConfigMapNotification,
 			DeleteFunc: lbc.deleteConfigMapNotification,
-		}, depResyncPeriod())
+		})
 
 	}
 
