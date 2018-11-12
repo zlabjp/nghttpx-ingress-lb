@@ -11,6 +11,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
@@ -87,6 +88,8 @@ func (ia ingressAnnotation) getPathConfig() (*nghttpx.PathConfig, map[string]*ng
 		}
 	}
 
+	config = normalizePathKey(config)
+
 	for _, v := range config {
 		nghttpx.FixupPathConfig(v)
 	}
@@ -109,6 +112,24 @@ func (ia ingressAnnotation) getPathConfig() (*nghttpx.PathConfig, map[string]*ng
 	}
 
 	return &defaultConfig, config
+}
+
+// normalizePathKey prepends "/" if key does not contain "/".
+func normalizePathKey(src map[string]*nghttpx.PathConfig) map[string]*nghttpx.PathConfig {
+	if len(src) == 0 {
+		return src
+	}
+
+	dst := make(map[string]*nghttpx.PathConfig)
+	for k, v := range src {
+		if strings.Index(k, "/") == -1 {
+			dst[k+"/"] = v
+		} else {
+			dst[k] = v
+		}
+	}
+
+	return dst
 }
 
 // unmarshal deserializes data into dest.  This function first tries yaml and then JSON.

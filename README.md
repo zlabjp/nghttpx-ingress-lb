@@ -351,11 +351,12 @@ nghttpx-ingress-controller understands
 `ingress.zlab.co.jp/path-config` key in Ingress
 `.metadata.annotations` to allow additional configuration per host and
 path pattern.  Its value is a serialized YAML or JSON dictionary.  The
-configuration is done per host and port pattern.  The key under the
-root dictionary is the concatenation of host and port.  For example,
+configuration is done per host and path pattern.  The key under the
+root dictionary is the concatenation of host and path.  For example,
 if host is "www.example.com" and path is "/foo", its key is
-"www.example.com/foo".  Its value is the dictionary and can contain
-the following key value pairs:
+"www.example.com/foo".  For convenience, if "www.example.com" is
+specified as a key, it is normalized as "www.example.com/".  Its value
+is the dictionary and can contain the following key value pairs:
 
 * `mruby`: Specify mruby script which is invoked when the given
   pattern is selected.  For mruby script, see [nghttpx manual
