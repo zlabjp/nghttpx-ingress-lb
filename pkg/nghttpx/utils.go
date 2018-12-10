@@ -35,10 +35,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/pmezard/go-difflib/difflib"
-
 	"k8s.io/api/core/v1"
+	"k8s.io/klog"
 )
 
 const (
@@ -85,13 +84,13 @@ func needsReload(filename string, newCfg []byte) (bool, error) {
 		return false, nil
 	}
 
-	if glog.V(2) {
+	if klog.V(2) {
 		dData, err := diff(oldCfg, newCfg)
 		if err != nil {
-			glog.Errorf("error computing diff: %s", err)
+			klog.Errorf("error computing diff: %s", err)
 			return true, nil
 		}
-		glog.Infof("nghttpx configuration diff a/%s b/%s\n%v", filename, filename, dData)
+		klog.Infof("nghttpx configuration diff a/%s b/%s\n%v", filename, filename, dData)
 	}
 
 	return true, nil
@@ -114,7 +113,7 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 	case ProtocolH2, ProtocolH1, "":
 		// OK
 	default:
-		glog.Errorf("unrecognized backend protocol %q", config.GetProto())
+		klog.Errorf("unrecognized backend protocol %q", config.GetProto())
 		config.SetProto(ProtocolH1)
 	}
 	// deprecated
@@ -122,7 +121,7 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 	case AffinityNone, AffinityIP, AffinityCookie, "":
 		// OK
 	default:
-		glog.Errorf("unsupported affinity method %v", config.GetAffinity())
+		klog.Errorf("unsupported affinity method %v", config.GetAffinity())
 		config.SetAffinity(AffinityNone)
 	}
 	// deprecated
@@ -130,14 +129,14 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo, "":
 		// OK
 	default:
-		glog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
+		klog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
 		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
 	}
 }
 
 // ApplyDefaultPortBackendConfig applies default field value specified in defaultConfig to config if a corresponding field is missing.
 func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *PortBackendConfig) {
-	glog.V(4).Info("Applying default-backend-config annotation")
+	klog.V(4).Info("Applying default-backend-config annotation")
 	if defaultConfig.Proto != nil && config.Proto == nil {
 		config.SetProto(*defaultConfig.Proto)
 	}
@@ -174,20 +173,20 @@ func FixupPathConfig(config *PathConfig) {
 	case AffinityNone, AffinityIP, AffinityCookie, "":
 		// OK
 	default:
-		glog.Errorf("unsupported affinity method %v", config.GetAffinity())
+		klog.Errorf("unsupported affinity method %v", config.GetAffinity())
 		config.SetAffinity(AffinityNone)
 	}
 	switch config.GetAffinityCookieSecure() {
 	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo, "":
 		// OK
 	default:
-		glog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
+		klog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
 		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
 	}
 }
 
 func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
-	glog.V(4).Info("Applying default-path-config annotation")
+	klog.V(4).Info("Applying default-path-config annotation")
 	if defaultConfig.Mruby != nil && config.Mruby == nil {
 		config.SetMruby(*defaultConfig.Mruby)
 	}

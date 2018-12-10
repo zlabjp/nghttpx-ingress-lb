@@ -34,9 +34,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/golang/glog"
-
 	"k8s.io/api/core/v1"
+	"k8s.io/klog"
 )
 
 const (
@@ -139,7 +138,7 @@ func CommonNames(certBlob []byte) ([]string, error) {
 		cn = append(cn, cert.DNSNames...)
 	}
 
-	glog.V(2).Infof("DNS %v %v\n", cn, len(cn))
+	klog.V(2).Infof("DNS %v %v\n", cn, len(cn))
 	return cn, nil
 }
 

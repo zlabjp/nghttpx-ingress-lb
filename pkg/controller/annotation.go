@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
-	"github.com/golang/glog"
+	"k8s.io/klog"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -43,7 +43,7 @@ func (ia ingressAnnotation) getBackendConfig() (*nghttpx.PortBackendConfig, map[
 	var config map[string]map[string]*nghttpx.PortBackendConfig
 	if data != "" {
 		if err := unmarshal([]byte(data), &config); err != nil {
-			glog.Errorf("unexpected error reading %v annotation: %v", backendConfigKey, err)
+			klog.Errorf("unexpected error reading %v annotation: %v", backendConfigKey, err)
 			return nil, nil
 		}
 	}
@@ -56,13 +56,13 @@ func (ia ingressAnnotation) getBackendConfig() (*nghttpx.PortBackendConfig, map[
 
 	data = ia[defaultBackendConfigKey]
 	if data == "" {
-		glog.V(4).Infof("%v annotation not found", defaultBackendConfigKey)
+		klog.V(4).Infof("%v annotation not found", defaultBackendConfigKey)
 		return nil, config
 	}
 
 	var defaultConfig nghttpx.PortBackendConfig
 	if err := unmarshal([]byte(data), &defaultConfig); err != nil {
-		glog.Errorf("unexpected error reading %v annotation: %v", defaultBackendConfigKey, err)
+		klog.Errorf("unexpected error reading %v annotation: %v", defaultBackendConfigKey, err)
 		return nil, nil
 	}
 	nghttpx.FixupPortBackendConfig(&defaultConfig)
@@ -83,7 +83,7 @@ func (ia ingressAnnotation) getPathConfig() (*nghttpx.PathConfig, map[string]*ng
 	var config map[string]*nghttpx.PathConfig
 	if data != "" {
 		if err := unmarshal([]byte(data), &config); err != nil {
-			glog.Errorf("unexpected error reading %v annotation: %v", pathConfigKey, err)
+			klog.Errorf("unexpected error reading %v annotation: %v", pathConfigKey, err)
 			return nil, nil
 		}
 	}
@@ -96,13 +96,13 @@ func (ia ingressAnnotation) getPathConfig() (*nghttpx.PathConfig, map[string]*ng
 
 	data = ia[defaultPathConfigKey]
 	if data == "" {
-		glog.V(4).Infof("%v annotation not found", defaultPathConfigKey)
+		klog.V(4).Infof("%v annotation not found", defaultPathConfigKey)
 		return nil, config
 	}
 
 	var defaultConfig nghttpx.PathConfig
 	if err := unmarshal([]byte(data), &defaultConfig); err != nil {
-		glog.Errorf("unexpected error reading %v annotation: %v", defaultPathConfigKey, err)
+		klog.Errorf("unexpected error reading %v annotation: %v", defaultPathConfigKey, err)
 		return nil, nil
 	}
 	nghttpx.FixupPathConfig(&defaultConfig)
@@ -135,7 +135,7 @@ func normalizePathKey(src map[string]*nghttpx.PathConfig) map[string]*nghttpx.Pa
 // unmarshal deserializes data into dest.  This function first tries yaml and then JSON.
 func unmarshal(data []byte, dest interface{}) error {
 	if err := yaml.Unmarshal(data, dest); err != nil {
-		glog.Infof("Could not unmarshal YAML string; fall back to JSON: %v", err)
+		klog.Infof("Could not unmarshal YAML string; fall back to JSON: %v", err)
 		if err := json.Unmarshal(data, dest); err != nil {
 			return fmt.Errorf("Could not unmarshal JSON string: %v", err)
 		}

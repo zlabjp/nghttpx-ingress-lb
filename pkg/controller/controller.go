@@ -35,8 +35,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
-
 	"k8s.io/api/core/v1"
 	clientv1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
@@ -55,6 +53,7 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/controller"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
@@ -157,7 +156,7 @@ type Config struct {
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
 func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *types.NamespacedName) *LoadBalancerController {
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartLogging(glog.Infof)
+	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(clientset.CoreV1().RESTClient()).Events(config.WatchNamespace)})
 
 	lbc := LoadBalancerController{
@@ -278,7 +277,7 @@ func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
 	if !lbc.validateIngressClass(ing) {
 		return
 	}
-	glog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
+	klog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -288,7 +287,7 @@ func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cu
 	if !lbc.validateIngressClass(oldIng) && !lbc.validateIngressClass(curIng) {
 		return
 	}
-	glog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
+	klog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -297,19 +296,19 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
 		ing, ok = tombstone.Obj.(*extensions.Ingress)
 		if !ok {
-			glog.Errorf("Tombstone contained object that is not an Ingress %+v", obj)
+			klog.Errorf("Tombstone contained object that is not an Ingress %+v", obj)
 			return
 		}
 	}
 	if !lbc.validateIngressClass(ing) {
 		return
 	}
-	glog.V(4).Infof("Ingress %v/%v deleted", ing.Namespace, ing.Name)
+	klog.V(4).Infof("Ingress %v/%v deleted", ing.Namespace, ing.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -318,7 +317,7 @@ func (lbc *LoadBalancerController) addEndpointsNotification(obj interface{}) {
 	if !lbc.endpointsReferenced(ep) {
 		return
 	}
-	glog.V(4).Infof("Endpoints %v/%v added", ep.Namespace, ep.Name)
+	klog.V(4).Infof("Endpoints %v/%v added", ep.Namespace, ep.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -332,7 +331,7 @@ func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interfac
 	if !lbc.endpointsReferenced(oldEp) && !lbc.endpointsReferenced(curEp) {
 		return
 	}
-	glog.V(4).Infof("Endpoints %v/%v updated", curEp.Namespace, curEp.Name)
+	klog.V(4).Infof("Endpoints %v/%v updated", curEp.Namespace, curEp.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -341,19 +340,19 @@ func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) 
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
 		ep, ok = tombstone.Obj.(*v1.Endpoints)
 		if !ok {
-			glog.Errorf("Tombstone contained object that is not Endpoints %+v", obj)
+			klog.Errorf("Tombstone contained object that is not Endpoints %+v", obj)
 			return
 		}
 	}
 	if !lbc.endpointsReferenced(ep) {
 		return
 	}
-	glog.V(4).Infof("Endpoints %v/%v deleted", ep.Namespace, ep.Name)
+	klog.V(4).Infof("Endpoints %v/%v deleted", ep.Namespace, ep.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -365,7 +364,7 @@ func (lbc *LoadBalancerController) endpointsReferenced(ep *v1.Endpoints) bool {
 
 	ings, err := lbc.ingLister.Ingresses(ep.Namespace).List(labels.Everything())
 	if err != nil {
-		glog.Errorf("Could not list Ingress namespace=%v: %v", ep.Namespace, err)
+		klog.Errorf("Could not list Ingress namespace=%v: %v", ep.Namespace, err)
 		return false
 	}
 	for _, ing := range ings {
@@ -373,7 +372,7 @@ func (lbc *LoadBalancerController) endpointsReferenced(ep *v1.Endpoints) bool {
 			continue
 		}
 		if ing.Spec.Backend != nil && ep.Name == ing.Spec.Backend.ServiceName {
-			glog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
+			klog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
 			return true
 		}
 		for i := range ing.Spec.Rules {
@@ -384,7 +383,7 @@ func (lbc *LoadBalancerController) endpointsReferenced(ep *v1.Endpoints) bool {
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
 				if ep.Name == path.Backend.ServiceName {
-					glog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
+					klog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
 					return true
 				}
 			}
@@ -399,7 +398,7 @@ func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
 		return
 	}
 
-	glog.V(4).Infof("Secret %v/%v added", s.Namespace, s.Name)
+	klog.V(4).Infof("Secret %v/%v added", s.Namespace, s.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -414,7 +413,7 @@ func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}
 		return
 	}
 
-	glog.V(4).Infof("Secret %v/%v updated", curS.Namespace, curS.Name)
+	klog.V(4).Infof("Secret %v/%v updated", curS.Namespace, curS.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -423,19 +422,19 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
 		s, ok = tombstone.Obj.(*v1.Secret)
 		if !ok {
-			glog.Errorf("Tombstone contained object that is not a Secret %+v", obj)
+			klog.Errorf("Tombstone contained object that is not a Secret %+v", obj)
 			return
 		}
 	}
 	if !lbc.secretReferenced(s) {
 		return
 	}
-	glog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
+	klog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -444,7 +443,7 @@ func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 	if lbc.ngxConfigMap == nil || c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
 		return
 	}
-	glog.V(4).Infof("ConfigMap %v/%v added", c.Namespace, c.Name)
+	klog.V(4).Infof("ConfigMap %v/%v added", c.Namespace, c.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -458,7 +457,7 @@ func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interfac
 		return
 	}
 	// updates to configuration configmaps can trigger an update
-	glog.V(4).Infof("ConfigMap %v/%v updated", curC.Namespace, curC.Name)
+	klog.V(4).Infof("ConfigMap %v/%v updated", curC.Namespace, curC.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -467,19 +466,19 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
 		c, ok = tombstone.Obj.(*v1.ConfigMap)
 		if !ok {
-			glog.Errorf("Tombstone contained object that is not a ConfigMap %+v", obj)
+			klog.Errorf("Tombstone contained object that is not a ConfigMap %+v", obj)
 			return
 		}
 	}
 	if lbc.ngxConfigMap == nil || c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
 		return
 	}
-	glog.V(4).Infof("ConfigMap %v/%v deleted", c.Namespace, c.Name)
+	klog.V(4).Infof("ConfigMap %v/%v deleted", c.Namespace, c.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -488,7 +487,7 @@ func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
 	if !lbc.podReferenced(pod) {
 		return
 	}
-	glog.V(4).Infof("Pod %v/%v added", pod.Namespace, pod.Name)
+	klog.V(4).Infof("Pod %v/%v added", pod.Namespace, pod.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -502,7 +501,7 @@ func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
 	if !lbc.podReferenced(oldPod) && !lbc.podReferenced(curPod) {
 		return
 	}
-	glog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
+	klog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -511,19 +510,19 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
 		pod, ok = tombstone.Obj.(*v1.Pod)
 		if !ok {
-			glog.Errorf("Tombstone contained object that is not Pod %+v", obj)
+			klog.Errorf("Tombstone contained object that is not Pod %+v", obj)
 			return
 		}
 	}
 	if !lbc.podReferenced(pod) {
 		return
 	}
-	glog.V(4).Infof("Pod %v/%v deleted", pod.Namespace, pod.Name)
+	klog.V(4).Infof("Pod %v/%v deleted", pod.Namespace, pod.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -531,14 +530,14 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
 	if svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name); err == nil {
 		if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
-			glog.V(4).Infof("Pod %v/%v is referenced by default Service %v/%v", pod.Namespace, pod.Name, lbc.defaultSvc.Namespace, lbc.defaultSvc.Name)
+			klog.V(4).Infof("Pod %v/%v is referenced by default Service %v/%v", pod.Namespace, pod.Name, lbc.defaultSvc.Namespace, lbc.defaultSvc.Name)
 			return true
 		}
 	}
 
 	ings, err := lbc.ingLister.Ingresses(pod.Namespace).List(labels.Everything())
 	if err != nil {
-		glog.Errorf("Could not list Ingress namespace=%v: %v", pod.Namespace, err)
+		klog.Errorf("Could not list Ingress namespace=%v: %v", pod.Namespace, err)
 		return false
 	}
 	for _, ing := range ings {
@@ -548,7 +547,7 @@ func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
 		if ing.Spec.Backend != nil {
 			if svc, err := lbc.svcLister.Services(pod.Namespace).Get(ing.Spec.Backend.ServiceName); err == nil {
 				if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
-					glog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
+					klog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
 						pod.Namespace, pod.Name, ing.Namespace, ing.Name, svc.Namespace, svc.Name)
 					return true
 				}
@@ -566,7 +565,7 @@ func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
 					continue
 				}
 				if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
-					glog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
+					klog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
 						pod.Namespace, pod.Name, ing.Namespace, ing.Name, svc.Namespace, svc.Name)
 					return true
 				}
@@ -590,7 +589,7 @@ func (lbc *LoadBalancerController) worker() {
 
 		defer lbc.syncQueue.Done(key)
 		if err := lbc.sync(key.(string)); err != nil {
-			glog.Error(err)
+			klog.Error(err)
 		}
 
 		return false
@@ -611,7 +610,7 @@ func (lbc *LoadBalancerController) getConfigMap(cmKey *types.NamespacedName) (*v
 
 	cm, err := lbc.cmLister.ConfigMaps(cmKey.Namespace).Get(cmKey.Name)
 	if errors.IsNotFound(err) {
-		glog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
+		klog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
 		return &v1.ConfigMap{}, nil
 	}
 	if err != nil {
@@ -646,7 +645,7 @@ func (lbc *LoadBalancerController) sync(key string) error {
 	if reloaded, err := lbc.nghttpx.CheckAndReload(ingConfig); err != nil {
 		return err
 	} else if !reloaded {
-		glog.V(4).Infof("No need to reload configuration.")
+		klog.V(4).Infof("No need to reload configuration.")
 	}
 
 	return nil
@@ -661,20 +660,20 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 	}
 	svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name)
 	if errors.IsNotFound(err) {
-		glog.Warningf("service %v does no exists", svcKey)
+		klog.Warningf("service %v does no exists", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
 		return upstream
 	}
 
 	if err != nil {
-		glog.Warningf("unexpected error searching the default backend %v: %v", svcKey, err)
+		klog.Warningf("unexpected error searching the default backend %v: %v", svcKey, err)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
 		return upstream
 	}
 
 	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], v1.ProtocolTCP, &nghttpx.PortBackendConfig{})
 	if len(eps) == 0 {
-		glog.Warningf("service %v does no have any active endpoints", svcKey)
+		klog.Warningf("service %v does no have any active endpoints", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
 	} else {
 		upstream.Backends = append(upstream.Backends, eps...)
@@ -713,15 +712,15 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 
 	for _, ing := range ings {
 		if !lbc.validateIngressClass(ing) {
-			glog.V(4).Infof("Skip Ingress %v/%v which has Ingress class %v", ing.Namespace, ing.Name, ingressAnnotation(ing.Annotations).getIngressClass())
+			klog.V(4).Infof("Skip Ingress %v/%v which has Ingress class %v", ing.Namespace, ing.Name, ingressAnnotation(ing.Annotations).getIngressClass())
 			continue
 		}
 
-		glog.Infof("Processing Ingress %v/%v", ing.Namespace, ing.Name)
+		klog.Infof("Processing Ingress %v/%v", ing.Namespace, ing.Name)
 
 		var requireTLS bool
 		if ingPems, err := lbc.getTLSCredFromIngress(ing); err != nil {
-			glog.Warningf("Ingress %v/%v is disabled because its TLS Secret cannot be processed: %v", ing.Namespace, ing.Name, err)
+			klog.Warningf("Ingress %v/%v is disabled because its TLS Secret cannot be processed: %v", ing.Namespace, ing.Name, err)
 			continue
 		} else {
 			pems = append(pems, ingPems...)
@@ -735,7 +734,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 			// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress resource
 			// specifies this.  But specification does not any rules how to deal with it.  Just use the one we meet last.
 			if ups, err := lbc.createUpstream(ing, "", "/", ing.Spec.Backend, false, defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
-				glog.Errorf("Could not create default backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
+				klog.Errorf("Could not create default backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 			} else {
 				defaultUpstream = ups
 			}
@@ -751,7 +750,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
 				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, &path.Backend, requireTLS, defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
-					glog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
+					klog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 					continue
 				} else {
 					upstreams = append(upstreams, ups)
@@ -854,7 +853,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 		ups.Mruby = nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, []byte(mruby))
 	}
 
-	glog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
+	klog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
 
 	svcKey := fmt.Sprintf("%v/%v", ing.Namespace, backend.ServiceName)
 	svc, err := lbc.svcLister.Services(ing.Namespace).Get(backend.ServiceName)
@@ -866,7 +865,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 		return nil, fmt.Errorf("error getting service %v from the cache: %v", svcKey, err)
 	}
 
-	glog.V(3).Infof("obtaining port information for service %v", svcKey)
+	klog.V(3).Infof("obtaining port information for service %v", svcKey)
 	bp := backend.ServicePort.String()
 
 	svcBackendConfig := backendConfig[backend.ServiceName]
@@ -886,7 +885,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 
 			eps := lbc.getEndpoints(svc, servicePort, v1.ProtocolTCP, portBackendConfig)
 			if len(eps) == 0 {
-				glog.Warningf("service %v does no have any active endpoints", svcKey)
+				klog.Warningf("service %v does no have any active endpoints", svcKey)
 				break
 			}
 
@@ -979,7 +978,7 @@ func (lbc *LoadBalancerController) secretReferenced(s *v1.Secret) bool {
 
 	ings, err := lbc.ingLister.Ingresses(s.Namespace).List(labels.Everything())
 	if err != nil {
-		glog.Errorf("Could not list Ingress namespace=%v: %v", s.Namespace, err)
+		klog.Errorf("Could not list Ingress namespace=%v: %v", s.Namespace, err)
 		return false
 	}
 	for _, ing := range ings {
@@ -1000,10 +999,10 @@ func (lbc *LoadBalancerController) secretReferenced(s *v1.Secret) bool {
 // service/target port combination.  portBackendConfig is additional
 // per-port configuration for backend, which must not be nil.
 func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.ServicePort, proto v1.Protocol, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
-	glog.V(3).Infof("getting endpoints for service %v/%v and port %v target port %v protocol %v", s.Namespace, s.Name, servicePort.Port, servicePort.TargetPort.String(), servicePort.Protocol)
+	klog.V(3).Infof("getting endpoints for service %v/%v and port %v target port %v protocol %v", s.Namespace, s.Name, servicePort.Port, servicePort.TargetPort.String(), servicePort.Protocol)
 	ep, err := lbc.epLister.Endpoints(s.Namespace).Get(s.Name)
 	if err != nil {
-		glog.Warningf("unexpected error obtaining service endpoints: %v", err)
+		klog.Warningf("unexpected error obtaining service endpoints: %v", err)
 		return []nghttpx.UpstreamServer{}
 	}
 
@@ -1038,7 +1037,7 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 					if p, err := strconv.Atoi(servicePort.TargetPort.StrVal); err != nil {
 						port, err = lbc.getNamedPortFromPod(s, servicePort)
 						if err != nil {
-							glog.Warningf("Could not find named port %v in Pod spec: %v", servicePort.TargetPort.String(), err)
+							klog.Warningf("Could not find named port %v in Pod spec: %v", servicePort.TargetPort.String(), err)
 							continue
 						}
 					} else {
@@ -1051,7 +1050,7 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 			}
 
 			if targetPort == 0 {
-				glog.V(4).Infof("Endpoint port %v does not match Service port %v", epPort.Port, servicePort.TargetPort.String())
+				klog.V(4).Infof("Endpoint port %v does not match Service port %v", epPort.Port, servicePort.TargetPort.String())
 				continue
 			}
 
@@ -1083,7 +1082,7 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 		}
 	}
 
-	glog.V(3).Infof("endpoints found: %+v", upsServers)
+	klog.V(3).Infof("endpoints found: %+v", upsServers)
 	return upsServers
 }
 
@@ -1114,11 +1113,11 @@ func (lbc *LoadBalancerController) Stop() {
 
 	// Only try draining the workqueue if we haven't already.
 	if lbc.shutdown {
-		glog.Infof("Shutting down is already in progress")
+		klog.Infof("Shutting down is already in progress")
 		return
 	}
 
-	glog.Infof("Commencing shutting down")
+	klog.Infof("Commencing shutting down")
 
 	lbc.shutdown = true
 	close(lbc.stopCh)
@@ -1126,7 +1125,7 @@ func (lbc *LoadBalancerController) Stop() {
 
 // Run starts the loadbalancer controller.
 func (lbc *LoadBalancerController) Run() {
-	glog.Infof("Starting nghttpx loadbalancer controller")
+	klog.Infof("Starting nghttpx loadbalancer controller")
 
 	var wg sync.WaitGroup
 
@@ -1167,7 +1166,7 @@ func (lbc *LoadBalancerController) Run() {
 
 	<-lbc.stopCh
 
-	glog.Infof("Shutting down nghttpx loadbalancer controller")
+	klog.Infof("Shutting down nghttpx loadbalancer controller")
 
 	lbc.syncQueue.ShutDown()
 
@@ -1195,13 +1194,13 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *extensions.Ingress)
 func (lbc *LoadBalancerController) syncIngress(stopCh <-chan struct{}) {
 	for {
 		if err := lbc.getLoadBalancerIngressAndUpdateIngress(); err != nil {
-			glog.Errorf("Could not update Ingress status: %v", err)
+			klog.Errorf("Could not update Ingress status: %v", err)
 		}
 
 		select {
 		case <-stopCh:
 			if err := lbc.removeAddressFromLoadBalancerIngress(); err != nil {
-				glog.Error(err)
+				klog.Error(err)
 			}
 			return
 		case <-time.After(time.Duration(float64(30*time.Second) * (rand.Float64() + 1))):
@@ -1272,13 +1271,13 @@ func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []v1.LoadBalancerI
 			continue
 		}
 
-		glog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %q", ing.Namespace, ing.Name, lbIngs)
+		klog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %q", ing.Namespace, ing.Name, lbIngs)
 
 		newIng := ing.DeepCopy()
 		newIng.Status.LoadBalancer.Ingress = lbIngs
 
 		if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).UpdateStatus(newIng); err != nil {
-			glog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
+			klog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
 		}
 	}
 
@@ -1297,7 +1296,7 @@ func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Select
 	for _, pod := range pods {
 		externalIP, err := lbc.getPodAddress(pod)
 		if err != nil {
-			glog.Error(err)
+			klog.Error(err)
 			continue
 		}
 
@@ -1363,7 +1362,7 @@ func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
 
 // removeAddressFromLoadBalancerIngress removes this address from all Ingress.Status.LoadBalancer.Ingress.
 func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error {
-	glog.Infof("Remove this address from all Ingress.Status.LoadBalancer.Ingress.")
+	klog.Infof("Remove this address from all Ingress.Status.LoadBalancer.Ingress.")
 
 	thisPod, err := lbc.getThisPod()
 	if err != nil {
@@ -1409,7 +1408,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 			}
 			return nil
 		}); err != nil {
-			glog.Errorf("Could not remove address from LoadBalancerIngress from Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
+			klog.Errorf("Could not remove address from LoadBalancerIngress from Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 		}
 	}
 

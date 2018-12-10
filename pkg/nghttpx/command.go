@@ -36,39 +36,38 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 // Start starts a nghttpx process using nghttpx executable at path, and wait.
 func (ngx *Manager) Start(path, confPath string, stopCh <-chan struct{}) {
-	glog.Infof("Starting nghttpx process: %v --conf %v", path, confPath)
+	klog.Infof("Starting nghttpx process: %v --conf %v", path, confPath)
 	cmd := exec.Command(path, "--conf", confPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		glog.Errorf("nghttpx didn't started successfully: %v", err)
+		klog.Errorf("nghttpx didn't started successfully: %v", err)
 		return
 	}
 
 	waitDoneCh := make(chan struct{})
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			glog.Errorf("nghttpx didn't complete successfully: %v", err)
+			klog.Errorf("nghttpx didn't complete successfully: %v", err)
 		}
 		close(waitDoneCh)
 	}()
 
 	select {
 	case <-waitDoneCh:
-		glog.Infof("nghttpx exited")
+		klog.Infof("nghttpx exited")
 	case <-stopCh:
-		glog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", cmd.Process.Pid)
+		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", cmd.Process.Pid)
 		if err := cmd.Process.Signal(syscall.SIGQUIT); err != nil {
-			glog.Errorf("Could not send signal to nghttpx process (PID %v): %v", cmd.Process.Pid, err)
+			klog.Errorf("Could not send signal to nghttpx process (PID %v): %v", cmd.Process.Pid, err)
 		}
 		<-waitDoneCh
-		glog.Infof("nghttpx exited")
+		klog.Infof("nghttpx exited")
 	}
 }
 
@@ -93,12 +92,12 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		return false, nil
 	}
 
-	if glog.V(3) {
+	if klog.V(3) {
 		b, err := json.MarshalIndent(ingressCfg, "", "  ")
 		if err != nil {
 			fmt.Println("error:", err)
 		}
-		glog.Infof("nghttpx configuration:\n%v", string(b))
+		klog.Infof("nghttpx configuration:\n%v", string(b))
 	}
 
 	switch changed {
@@ -119,7 +118,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 
 		cmd := "killall"
 		args := []string{"-HUP", "nghttpx"}
-		glog.Info("change in configuration detected. Reloading...")
+		klog.Info("change in configuration detected. Reloading...")
 		out, err := exec.Command(cmd, args...).CombinedOutput()
 		if err != nil {
 			return false, fmt.Errorf("failed to execute %v %v: %v", cmd, args, string(out))
@@ -129,10 +128,10 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 			return false, err
 		}
 
-		glog.Info("nghttpx has finished reloading new configuration")
+		klog.Info("nghttpx has finished reloading new configuration")
 
 		if err := deleteStaleAssets(ingressCfg); err != nil {
-			glog.Errorf("Could not delete stale assets: %v", err)
+			klog.Errorf("Could not delete stale assets: %v", err)
 		}
 	case backendConfigChanged:
 		if err := writePerPatternMrubyFile(ingressCfg); err != nil {
@@ -144,7 +143,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		}
 
 		if err := deleteStaleMrubyAssets(ingressCfg); err != nil {
-			glog.Errorf("Could not delete stale assets: %v", err)
+			klog.Errorf("Could not delete stale assets: %v", err)
 		}
 	}
 
@@ -212,7 +211,7 @@ func deleteAssetFiles(dir string, keep map[string]bool) error {
 		if keep[path] {
 			continue
 		}
-		glog.V(4).Infof("Removing stale asset file %v", path)
+		klog.V(4).Infof("Removing stale asset file %v", path)
 		if err := os.Remove(path); err != nil {
 			return err
 		}
@@ -222,7 +221,7 @@ func deleteAssetFiles(dir string, keep map[string]bool) error {
 }
 
 func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
-	glog.Infof("Issuing API request %v", ngx.backendconfigURI)
+	klog.Infof("Issuing API request %v", ngx.backendconfigURI)
 
 	backendConfigPath := NghttpxBackendConfigPath(ingConfig.ConfDir)
 
@@ -257,11 +256,11 @@ func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 		return fmt.Errorf("Error while reading API response body: %v", err)
 	}
 
-	if glog.V(3) {
-		glog.Infof("API request returned response body: %v", string(respBody))
+	if klog.V(3) {
+		klog.Infof("API request returned response body: %v", string(respBody))
 	}
 
-	glog.Info("API request has completed successfully")
+	klog.Info("API request has completed successfully")
 
 	return nil
 }
@@ -275,7 +274,7 @@ type apiResult struct {
 
 // getNghttpxConfigRevision returns the current nghttpx configRevision through configrevision API call.
 func (ngx *Manager) getNghttpxConfigRevision() (string, error) {
-	glog.V(4).Infof("Issuing API request %v", ngx.configrevisionURI)
+	klog.V(4).Infof("Issuing API request %v", ngx.configrevisionURI)
 
 	resp, err := ngx.httpClient.Get(ngx.configrevisionURI)
 	if err != nil {
@@ -306,18 +305,18 @@ func (ngx *Manager) getNghttpxConfigRevision() (string, error) {
 		return "", fmt.Errorf("nghttpx configuration API result has non json.Number configRevision")
 	}
 
-	glog.V(4).Infof("nghttpx configRevision is %v", confRev)
+	klog.V(4).Infof("nghttpx configRevision is %v", confRev)
 
 	return confRev.String(), nil
 }
 
 // waitUntilConfigRevisionChanges waits for the current nghttpx configuration to change from old value, oldConfRev.
 func (ngx *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
-	glog.Infof("Waiting for nghttpx to finish reloading configuration")
+	klog.Infof("Waiting for nghttpx to finish reloading configuration")
 
 	if err := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
 		if newConfRev, err := ngx.getNghttpxConfigRevision(); err != nil {
-			glog.Error(err)
+			klog.Error(err)
 			return false, nil
 		} else if newConfRev == oldConfRev {
 			return false, nil
