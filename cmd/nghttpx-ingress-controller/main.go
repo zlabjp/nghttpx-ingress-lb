@@ -37,9 +37,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/spf13/pflag"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/server/healthz"
@@ -47,10 +45,15 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
+
+func init() {
+	klog.InitFlags(flag.CommandLine)
+}
 
 var (
 	// value overwritten during build. This can be used to resolve issues.
@@ -128,7 +131,7 @@ func main() {
 
 	flags.Parse(os.Args)
 
-	glog.Infof("Using build: %v - %v", gitRepo, version)
+	klog.Infof("Using build: %v - %v", gitRepo, version)
 
 	var (
 		defaultSvcKey       types.NamespacedName
@@ -138,10 +141,10 @@ func main() {
 	)
 
 	if *defaultSvc == "" {
-		glog.Exitf("default-backend-service cannot be empty")
+		klog.Exitf("default-backend-service cannot be empty")
 	}
 	if ns, name, err := cache.SplitMetaNamespaceKey(*defaultSvc); err != nil {
-		glog.Exitf("default-backend-service: invalid Service identifier %v: %v", *defaultSvc, err)
+		klog.Exitf("default-backend-service: invalid Service identifier %v: %v", *defaultSvc, err)
 	} else {
 		defaultSvcKey = types.NamespacedName{
 			Namespace: ns,
@@ -151,7 +154,7 @@ func main() {
 
 	if *publishSvc != "" {
 		if ns, name, err := cache.SplitMetaNamespaceKey(*publishSvc); err != nil {
-			glog.Exitf("publish-service: invalid Service identifier %v: %v", *publishSvc, err)
+			klog.Exitf("publish-service: invalid Service identifier %v: %v", *publishSvc, err)
 		} else {
 			publishSvcKey = &types.NamespacedName{
 				Namespace: ns,
@@ -162,7 +165,7 @@ func main() {
 
 	if *ngxConfigMap != "" {
 		if ns, name, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
-			glog.Exitf("nghttpx-configmap: invalid ConfigMap identifier %v: %v", *ngxConfigMap, err)
+			klog.Exitf("nghttpx-configmap: invalid ConfigMap identifier %v: %v", *ngxConfigMap, err)
 		} else {
 			nghttpxConfigMapKey = &types.NamespacedName{
 				Namespace: ns,
@@ -173,7 +176,7 @@ func main() {
 
 	if *defaultTLSSecret != "" {
 		if ns, name, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
-			glog.Exitf("default-tls-secret: invalid Secret identifier %v: %v", *defaultTLSSecret, err)
+			klog.Exitf("default-tls-secret: invalid Secret identifier %v: %v", *defaultTLSSecret, err)
 		} else {
 			defaultTLSSecretKey = &types.NamespacedName{
 				Namespace: ns,
@@ -196,12 +199,12 @@ func main() {
 		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(&loadingRules, &configOverrides).ClientConfig()
 	}
 	if err != nil {
-		glog.Exitf("Could not get clientConfig: %v", err)
+		klog.Exitf("Could not get clientConfig: %v", err)
 	}
 
 	clientset, err := clientset.NewForConfig(config)
 	if err != nil {
-		glog.Exitf("Failed to create clientset: %v", err)
+		klog.Exitf("Failed to create clientset: %v", err)
 	}
 
 	runtimePodInfo := &types.NamespacedName{
@@ -210,10 +213,10 @@ func main() {
 	}
 
 	if runtimePodInfo.Name == "" {
-		glog.Exit("POD_NAME environment variable cannot be empty.")
+		klog.Exit("POD_NAME environment variable cannot be empty.")
 	}
 	if runtimePodInfo.Namespace == "" {
-		glog.Exit("POD_NAMESPACE environment variable cannot be empty.")
+		klog.Exit("POD_NAMESPACE environment variable cannot be empty.")
 	}
 
 	controllerConfig := controller.Config{
@@ -237,7 +240,7 @@ func main() {
 	}
 
 	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {
-		glog.Exit(err)
+		klog.Exit(err)
 	}
 
 	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(*nghttpxAPIPort), &controllerConfig, runtimePodInfo)
@@ -304,14 +307,14 @@ func registerHandlers(lbc *controller.LoadBalancerController) {
 		Addr:    fmt.Sprintf(":%v", *healthzPort),
 		Handler: mux,
 	}
-	glog.Exit(server.ListenAndServe())
+	klog.Exit(server.ListenAndServe())
 }
 
 func handleSigterm(lbc *controller.LoadBalancerController) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM)
 	<-signalChan
-	glog.Infof("Received SIGTERM, shutting down")
+	klog.Infof("Received SIGTERM, shutting down")
 
 	lbc.Stop()
 }
