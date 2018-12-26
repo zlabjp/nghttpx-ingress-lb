@@ -13,14 +13,15 @@ The official Docker images are available at [Docker Hub](https://hub.docker.com/
 
 ## Requirements
 
-- default backend [404-server](https://github.com/kubernetes/contrib/tree/master/404-server)
+- default backend [404-server](examples/default-backend.yaml)
 
 Actually, any backend web server will suffice as long as it returns
 some kind of error code for any requests.
 
 ## Deploy the Ingress controller
 
-Before the deploy of the Ingress controller we need a default backend [404-server](https://github.com/kubernetes/contrib/tree/master/404-server)
+Before the deploy of the Ingress controller we need a default backend:
+
 ```
 $ kubectl create -f examples/default-backend.yaml
 $ kubectl expose deployment default-http-backend --port=80 --target-port=8080 --name=default-http-backend
