@@ -132,6 +132,15 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 		klog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
 		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
 	}
+	weight := config.GetWeight()
+	switch {
+	case weight < 1:
+		klog.Errorf("invalid weight %v.  It must be [1, 256], inclusive", weight)
+		config.SetWeight(1)
+	case weight > 256:
+		klog.Errorf("invalid weight %v.  It must be [1, 256], inclusive", weight)
+		config.SetWeight(256)
+	}
 }
 
 // ApplyDefaultPortBackendConfig applies default field value specified in defaultConfig to config if a corresponding field is missing.
@@ -164,6 +173,9 @@ func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *Por
 	// deprecated
 	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
 		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
+	}
+	if defaultConfig.Weight != nil && config.Weight == nil {
+		config.SetWeight(*defaultConfig.Weight)
 	}
 }
 

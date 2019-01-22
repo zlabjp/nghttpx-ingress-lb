@@ -268,6 +268,17 @@ is the JSON dictionary, and can contain the following key value pairs:
 * `dns`: Specify whether backend host name should be resolved
   dynamically.
 
+* `weight`: Specify the weight of the backend selection.  nghttpx
+  ingress controller can aggregates multiple services under single
+  host and path pattern.  The weight specifies how frequently this
+  service is selected compareted to the other services aggreated under
+  the same pattern.  The service with weight 3 is 3 times more
+  frequently used than the one with weight 1.  Using this settings,
+  one can send more/less traffic to a particular service.  This is
+  useful, for example, if one wants to send 80% of traffic to Service
+  A, while remaining 20% traffic to Service B.  The value must be [1,
+  256], inclusive.
+
 The affinity settings in backend-config have been deprecated.  In
 order to configure affinity, use
 [path-config](#ingresszlabcojppath-config-annotation) annotation.
