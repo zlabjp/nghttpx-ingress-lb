@@ -1067,6 +1067,8 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 					AffinityCookieName:   portBackendConfig.GetAffinityCookieName(),
 					AffinityCookiePath:   portBackendConfig.GetAffinityCookiePath(),
 					AffinityCookieSecure: portBackendConfig.GetAffinityCookieSecure(),
+					Group:                fmt.Sprintf("%v/%v", s.Namespace, s.Name),
+					Weight:               portBackendConfig.GetWeight(),
 				}
 				// Set Protocol and Affinity here if they are empty.  Template expects them.
 				if ups.Protocol == "" {

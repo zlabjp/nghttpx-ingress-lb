@@ -21,18 +21,22 @@ func TestFixupPortBackendConfig(t *testing.T) {
 		inProto                 Protocol
 		inAffinity              Affinity
 		inAffinityCookieSecure  AffinityCookieSecure
+		inWeight                uint32
 		outProto                Protocol
 		outAffinity             Affinity
 		outAffinityCookieSecure AffinityCookieSecure
+		outWeight               uint32
 	}{
 		// 0
 		{
 			inProto:                 "foo",
 			inAffinity:              "bar",
 			inAffinityCookieSecure:  "buzz",
+			inWeight:                0,
 			outProto:                ProtocolH1,
 			outAffinity:             AffinityNone,
 			outAffinityCookieSecure: AffinityCookieSecureAuto,
+			outWeight:               1,
 		},
 		// 1
 		{
@@ -44,9 +48,11 @@ func TestFixupPortBackendConfig(t *testing.T) {
 			inProto:                 ProtocolH2,
 			inAffinity:              AffinityIP,
 			inAffinityCookieSecure:  AffinityCookieSecureYes,
+			inWeight:                256,
 			outProto:                ProtocolH2,
 			outAffinity:             AffinityIP,
 			outAffinityCookieSecure: AffinityCookieSecureYes,
+			outWeight:               256,
 		},
 	}
 

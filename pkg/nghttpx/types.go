@@ -136,6 +136,8 @@ type UpstreamServer struct {
 	AffinityCookiePath string
 	// Deprecated.  Use Upstream instead.
 	AffinityCookieSecure AffinityCookieSecure
+	Group                string
+	Weight               uint32
 }
 
 // TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte string.
@@ -177,6 +179,8 @@ type PortBackendConfig struct {
 	// (Deprecated) AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.  This field is deleted.
 	// Use PathConfig instead.
 	AffinityCookieSecure *AffinityCookieSecure `json:"affinityCookieSecure,omitempty"`
+	// Weight is a weight of backend selection.
+	Weight *uint32 `json:"weight,omitempty"`
 }
 
 func (pbc *PortBackendConfig) GetProto() Protocol {
@@ -273,6 +277,18 @@ func (pbc *PortBackendConfig) GetAffinityCookieSecure() AffinityCookieSecure {
 func (pbc *PortBackendConfig) SetAffinityCookieSecure(affinityCookieSecure AffinityCookieSecure) {
 	pbc.AffinityCookieSecure = new(AffinityCookieSecure)
 	*pbc.AffinityCookieSecure = affinityCookieSecure
+}
+
+func (pbc *PortBackendConfig) GetWeight() uint32 {
+	if pbc == nil || pbc.Weight == nil {
+		return 1
+	}
+	return *pbc.Weight
+}
+
+func (pbc *PortBackendConfig) SetWeight(weight uint32) {
+	pbc.Weight = new(uint32)
+	*pbc.Weight = weight
 }
 
 // PathConfig is per-pattern configuration obtained from Ingress annotation, specified per host and path pattern.
