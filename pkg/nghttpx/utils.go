@@ -132,14 +132,16 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 		klog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
 		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
 	}
-	weight := config.GetWeight()
-	switch {
-	case weight < 1:
-		klog.Errorf("invalid weight %v.  It must be [1, 256], inclusive", weight)
-		config.SetWeight(1)
-	case weight > 256:
-		klog.Errorf("invalid weight %v.  It must be [1, 256], inclusive", weight)
-		config.SetWeight(256)
+	if config.Weight != nil {
+		weight := config.GetWeight()
+		switch {
+		case weight < 1:
+			klog.Errorf("invalid weight %v.  It must be [1, 256], inclusive", weight)
+			config.SetWeight(1)
+		case weight > 256:
+			klog.Errorf("invalid weight %v.  It must be [1, 256], inclusive", weight)
+			config.SetWeight(256)
+		}
 	}
 }
 

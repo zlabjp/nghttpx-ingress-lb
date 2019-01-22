@@ -281,7 +281,7 @@ func (pbc *PortBackendConfig) SetAffinityCookieSecure(affinityCookieSecure Affin
 
 func (pbc *PortBackendConfig) GetWeight() uint32 {
 	if pbc == nil || pbc.Weight == nil {
-		return 1
+		return 0
 	}
 	return *pbc.Weight
 }
