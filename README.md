@@ -4,7 +4,7 @@ This is an Ingress Controller which uses
 [nghttpx](https://nghttp2.org/documentation/nghttpx.1.html) as L7 load
 balancer.
 
-nghttpx ingress controller is created based on
+nghttpx ingress controller was initially created based on
 [nginx ingress controller](https://github.com/kubernetes/contrib/tree/master/ingress/controllers/nginx).
 
 ## Docker images
@@ -27,7 +27,7 @@ $ kubectl create -f examples/default-backend.yaml
 $ kubectl expose deployment default-http-backend --port=80 --target-port=8080 --name=default-http-backend
 ```
 
-Loadbalancers are created via a Deployment or DaemonSet:
+Load balancers are created via a Deployment or DaemonSet:
 
 ```
 $ kubectl create -f examples/default/service-account.yaml
@@ -45,7 +45,7 @@ annotation, or its value is empty.
 
 First we need to deploy some application to publish. To keep this
 simple we will use the [echoheaders app](https://github.com/kubernetes/contrib/blob/master/ingress/echoheaders/echo-app.yaml)
-that just returns information about the http request as output
+that just returns information about the HTTP request as output
 
 ```
 kubectl create deployment echoheaders --image=k8s.gcr.io/echoserver:1.4
@@ -126,7 +126,7 @@ spec:
 ```
 
 If TLS is configured for a service, and it is accessed via cleartext
-HTTP, those requests are redirected to https URI.  If
+HTTP, those requests are redirected to HTTPS URI.  If
 --default-tls-secret flag is used, all cleartext HTTP requests are
 redirected to https URI.
 
