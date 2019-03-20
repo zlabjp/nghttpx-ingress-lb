@@ -2,12 +2,14 @@ accesslog-file=/dev/stdout
 
 include={{ .ConfDir }}/nghttpx-backend.conf
 
+{{ if .HTTPPort }}
 frontend=*,{{ .HTTPPort }};no-tls{{ if .ProxyProto }};proxyproto{{ end }}
+{{ end }}
 
 # API endpoints
 frontend=127.0.0.1,{{ .APIPort }};api;no-tls
 
-{{ if .TLS }}
+{{ if and .HTTPSPort .TLS }}
 frontend=*,{{ .HTTPSPort }}{{ if .ProxyProto }};proxyproto{{ end }}
 
 {{ $defaultCred := .DefaultTLSCred }}
@@ -21,7 +23,7 @@ certificate-file={{ $defaultCred.Cert.Path }}
 subcert={{ $cred.Key.Path }}:{{ $cred.Cert.Path }}
 {{ end }}
 
-{{ else }}
+{{ else if .HTTPSPort }}
 # just listen {{ .HTTPSPort }} to gain port {{ .HTTPSPort }}, so that we can always bind that address.
 frontend=*,{{ .HTTPSPort }};no-tls{{ if .ProxyProto }};proxyproto{{ end }}
 {{ end }}

@@ -103,10 +103,10 @@ var (
 		`Path to the nghttpx executable.`)
 
 	nghttpxHTTPPort = flags.Int("nghttpx-http-port", 80,
-		`Port to listen to for HTTP (non-TLS) requests.`)
+		`Port to listen to for HTTP (non-TLS) requests.  Specifying 0 disables HTTP port.`)
 
 	nghttpxHTTPSPort = flags.Int("nghttpx-https-port", 443,
-		`Port to listen to for HTTPS (TLS) requests.`)
+		`Port to listen to for HTTPS (TLS) requests.  Specifying 0 disables HTTPS port.`)
 
 	fetchOCSPRespFromSecret = flags.Bool("fetch-ocsp-resp-from-secret", false,
 		`Fetch OCSP response from TLS secret.`)
