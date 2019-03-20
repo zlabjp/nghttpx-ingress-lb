@@ -73,7 +73,7 @@ var (
 	kubeconfig = flags.String("kubeconfig", "", `Path to kubeconfig file which overrides in-cluster configuration.`)
 
 	resyncPeriod = flags.Duration("sync-period", 30*time.Second,
-		`Relist and confirm cloud resources this often.`)
+		`Resync resources this often.`)
 
 	watchNamespace = flags.String("watch-namespace", metav1.NamespaceAll,
 		`Namespace to watch for Ingress. Default is to watch all namespaces`)
@@ -91,7 +91,7 @@ var (
                 NodeLegacyHostIP is not assigned or cannot be used.`)
 
 	defaultTLSSecret = flags.String("default-tls-secret", "",
-		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permantently.`)
+		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.`)
 
 	ingressClass = flags.String("ingress-class", "nghttpx",
 		`Ingress class which this controller is responsible for.`)
@@ -257,7 +257,7 @@ type healthzChecker struct {
 	targetURI string
 }
 
-// newHealthChecker returns new healthzChecker.
+// newHealthzChecker returns new healthzChecker.
 func newHealthzChecker(healthPort int) *healthzChecker {
 	return &healthzChecker{
 		targetURI: fmt.Sprintf("http://127.0.0.1:%v/healthz", healthPort),

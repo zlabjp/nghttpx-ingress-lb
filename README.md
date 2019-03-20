@@ -27,7 +27,7 @@ $ kubectl create -f examples/default-backend.yaml
 $ kubectl expose deployment default-http-backend --port=80 --target-port=8080 --name=default-http-backend
 ```
 
-Loadbalancers are created via a Deployment or Daemonset:
+Loadbalancers are created via a Deployment or DaemonSet:
 
 ```
 $ kubectl create -f examples/default/service-account.yaml
@@ -88,7 +88,11 @@ address there.
 
 ## TLS
 
-You can secure an Ingress by specifying a secret that contains a TLS private key and certificate. Currently the Ingress only supports a single TLS port, 443, and assumes TLS termination. This controller supports SNI. The TLS secret must contain keys named tls.crt and tls.key that contain the certificate and private key to use for TLS, eg:
+You can secure an Ingress by specifying a secret that contains a TLS
+private key and certificate. Currently the Ingress only supports a
+single TLS port, 443, and assumes TLS termination. This controller
+supports SNI. The TLS secret must contain keys named tls.crt and
+tls.key that contain the certificate and private key to use for TLS:
 
 ```yaml
 apiVersion: v1
@@ -105,7 +109,8 @@ type: Opaque
 You can create this kind of secret using `kubectl create secret tls`
 subcommand.
 
-Referencing this secret in an Ingress will tell the Ingress controller to secure the channel from the client to the loadbalancer using TLS:
+Referencing this secret in an Ingress will tell the Ingress controller
+to secure the channel from the client to the load balancer using TLS:
 
 ```yaml
 apiVersion: extensions/v1beta1
@@ -271,7 +276,7 @@ is the JSON dictionary, and can contain the following key value pairs:
 * `weight`: Specify the weight of the backend selection.  nghttpx
   ingress controller can aggregates multiple services under single
   host and path pattern.  The weight specifies how frequently this
-  service is selected compareted to the other services aggreated under
+  service is selected compared to the other services aggregated under
   the same pattern.  The service with weight 3 is 3 times more
   frequently used than the one with weight 1.  Using this settings,
   one can send more/less traffic to a particular service.  This is
