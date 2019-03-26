@@ -113,7 +113,7 @@ Referencing this secret in an Ingress will tell the Ingress controller
 to secure the channel from the client to the load balancer using TLS:
 
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: no-rules-map
@@ -124,6 +124,9 @@ spec:
     serviceName: s1
     servicePort: 80
 ```
+
+For k8s v1.13 or earlier, use `extensions/v1beta1` instead of
+`networking.k8s.io/v1beta1`.
 
 If TLS is configured for a service, and it is accessed via cleartext
 HTTP, those requests are redirected to HTTPS URI.  If
@@ -292,7 +295,7 @@ The following example specifies HTTP/2 as backend connection for
 service "greeter", and service port "50051":
 
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: greeter
@@ -311,7 +314,7 @@ spec:
 Or in YAML:
 
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: greeter
@@ -415,7 +418,7 @@ is the dictionary and can contain the following key value pairs:
 Here is an example to rewrite request path to "/foo" from "/pub/foo" using mruby:
 
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: greeter
