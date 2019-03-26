@@ -17,7 +17,7 @@
 # For the full copyright and license information, please view the LICENSE
 # file that was distributed with this source code.
 
-FROM k8s.gcr.io/debian-base-amd64:0.4.1
+FROM k8s.gcr.io/debian-base-amd64:1.0.0
 
 COPY extra-mrbgem.patch /
 
