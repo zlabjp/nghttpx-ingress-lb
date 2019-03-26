@@ -97,7 +97,7 @@ svc:
 
 // TestGetPathConfig verifies getPathConfig.
 func TestGetPathConfig(t *testing.T) {
-	d120 := metav1.Duration{120 * time.Second}
+	d120 := metav1.Duration{Duration: 120 * time.Second}
 	rb := "rb"
 	tests := []struct {
 		annotationDefaultConfig string
