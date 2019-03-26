@@ -1,10 +1,11 @@
 sudo: required
 language: go
 go:
-- "1.11"
+- "1.12"
 services:
 - docker
 script:
+- make vet
 - make check
 - make controller
 - docker build -t zlabjp/nghttpx-ingress-controller .

@@ -120,7 +120,7 @@ func TestRemoveDuplicatePems(t *testing.T) {
 
 	for i, tt := range tests {
 		if got, want := RemoveDuplicatePems(tt.in), tt.out; !reflect.DeepEqual(got, want) {
-			t.Errorf("#%v: RemoveDuplicatePems(%q) = %q, want %q", i, tt.in, got, want)
+			t.Errorf("#%v: RemoveDuplicatePems(%v) = %v, want %v", i, tt.in, got, want)
 		}
 	}
 }

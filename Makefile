@@ -27,7 +27,7 @@ clean:
 	rm -f nghttpx-ingress-controller
 
 vet:
-	go tool vet -printfuncs Infof,Warningf,Errorf,Fatalf,Exitf pkg
+	go vet -printfuncs Infof,Warningf,Errorf,Fatalf,Exitf github.com/zlabjp/nghttpx-ingress-lb/pkg/... github.com/zlabjp/nghttpx-ingress-lb/cmd/...
 
 fmt:
 	go fmt github.com/zlabjp/nghttpx-ingress-lb/pkg/... github.com/zlabjp/nghttpx-ingress-lb/cmd/...
