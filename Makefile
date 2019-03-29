@@ -10,6 +10,8 @@ ifndef VERSION
   VERSION := git-$(shell git rev-parse --short HEAD)
 endif
 
+export GO111MODULE=on
+
 .PHONY: controller container push clean vet fmt check
 
 controller: clean
