@@ -118,6 +118,8 @@ var (
 
 	publishSvc = flags.String("publish-service", "", `Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
 
+	deferredShutdownPeriod = flags.Duration("deferred-shutdown-period", 0, `How long the controller waits before actually starting shutting down.  In this period, the health check endpoint returns error.`)
+
 	configOverrides clientcmd.ConfigOverrides
 )
 
@@ -237,6 +239,7 @@ func main() {
 		FetchOCSPRespFromSecret: *fetchOCSPRespFromSecret,
 		ProxyProto:              *proxyProto,
 		PublishSvc:              publishSvcKey,
+		DeferredShutdownPeriod:  *deferredShutdownPeriod,
 	}
 
 	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {
@@ -255,12 +258,14 @@ func main() {
 type healthzChecker struct {
 	// targetURI is the nghttpx health monitor endpoint.
 	targetURI string
+	lbc       *controller.LoadBalancerController
 }
 
 // newHealthzChecker returns new healthzChecker.
-func newHealthzChecker(healthPort int) *healthzChecker {
+func newHealthzChecker(healthPort int, lbc *controller.LoadBalancerController) *healthzChecker {
 	return &healthzChecker{
 		targetURI: fmt.Sprintf("http://127.0.0.1:%v/healthz", healthPort),
+		lbc:       lbc,
 	}
 }
 
@@ -271,6 +276,10 @@ func (hc healthzChecker) Name() string {
 
 // Check returns if the nghttpx healthz endpoint is returning ok (status code 200)
 func (hc healthzChecker) Check(_ *http.Request) error {
+	if hc.lbc.ShutdownCommenced() {
+		return fmt.Errorf("nghttpx is shutting down")
+	}
+
 	res, err := http.Get(hc.targetURI)
 	if err != nil {
 		return err
@@ -286,7 +295,7 @@ func (hc healthzChecker) Check(_ *http.Request) error {
 
 func registerHandlers(lbc *controller.LoadBalancerController) {
 	mux := http.NewServeMux()
-	healthz.InstallHandler(mux, newHealthzChecker(*nghttpxHealthPort))
+	healthz.InstallHandler(mux, newHealthzChecker(*nghttpxHealthPort, lbc))
 
 	http.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
