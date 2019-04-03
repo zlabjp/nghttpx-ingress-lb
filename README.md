@@ -48,7 +48,7 @@ simple we will use the [echoheaders app](https://github.com/kubernetes/contrib/b
 that just returns information about the HTTP request as output
 
 ```
-kubectl create deployment echoheaders --image=k8s.gcr.io/echoserver:1.4
+kubectl create deployment echoheaders --image=k8s.gcr.io/echoserver:1.10
 ```
 
 Now we expose the same application in two different services (so we can create different Ingress rules)
@@ -65,13 +65,8 @@ kubectl create -f examples/ingress.yaml
 we check that ingress rules are defined:
 ```
 $ kubectl get ing
-NAME      RULE          BACKEND   ADDRESS
-echomap   -
-          foo.bar.com
-          /foo          echoheaders-x:80
-          bar.baz.com
-          /bar          echoheaders-y:80
-          /foo          echoheaders-x:80
+NAME      HOSTS                     ADDRESS         PORTS   AGE
+echomap   foo.bar.com,bar.baz.com   192.168.0.1     80      1m11s
 ```
 
 Check nghttpx it is running with the defined Ingress rules:
