@@ -103,7 +103,6 @@ type LoadBalancerController struct {
 	fetchOCSPRespFromSecret bool
 	proxyProto              bool
 	publishSvc              *types.NamespacedName
-	deferredShutdownPeriod  time.Duration
 
 	recorder record.EventRecorder
 
@@ -152,8 +151,6 @@ type Config struct {
 	// PublishSvc is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
 	// controller Pod.
 	PublishSvc *types.NamespacedName
-	// DeferredShutdownPeriod is a period before the controller starts shutting down when it receives shutdown signal.
-	DeferredShutdownPeriod time.Duration
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -183,7 +180,6 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		fetchOCSPRespFromSecret: config.FetchOCSPRespFromSecret,
 		proxyProto:              config.ProxyProto,
 		publishSvc:              config.PublishSvc,
-		deferredShutdownPeriod:  config.DeferredShutdownPeriod,
 		recorder:                eventBroadcaster.NewRecorder(scheme.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:               workqueue.New(),
 		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
@@ -1123,25 +1119,10 @@ func (lbc *LoadBalancerController) Stop() {
 		return
 	}
 
+	klog.Infof("Commencing shutting down")
+
 	lbc.shutdown = true
-
-	go func() {
-		klog.Infof("Deferred shutdown period is %v", lbc.deferredShutdownPeriod)
-
-		<-time.After(lbc.deferredShutdownPeriod)
-
-		klog.Infof("Commencing shutting down")
-
-		close(lbc.stopCh)
-	}()
-}
-
-// ShutdownCommenced returns true if the controller is shutting down.  This includes deferred shutdown period.
-func (lbc *LoadBalancerController) ShutdownCommenced() bool {
-	lbc.stopLock.Lock()
-	defer lbc.stopLock.Unlock()
-
-	return lbc.shutdown
+	close(lbc.stopCh)
 }
 
 // Run starts the loadbalancer controller.
