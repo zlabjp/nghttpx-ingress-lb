@@ -28,7 +28,7 @@ RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotoo
         python && \
     git clone -b OpenSSL_1_1_1a --depth 1 https://github.com/openssl/openssl.git && \
     cd openssl && ./config --openssldir=/etc/ssl && make -j$(nproc) && make install_sw && cd .. && rm -rf openssl && \
-    git clone --depth 1 -b v1.37.0 https://github.com/nghttp2/nghttp2.git && \
+    git clone --depth 1 -b v1.38.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     git submodule update --init && autoreconf -i && \
