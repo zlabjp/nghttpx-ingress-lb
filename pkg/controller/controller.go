@@ -157,7 +157,7 @@ type Config struct {
 func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *types.NamespacedName) *LoadBalancerController {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
-	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(clientset.CoreV1().RESTClient()).Events(config.WatchNamespace)})
+	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: clientset.CoreV1().Events(config.WatchNamespace)})
 
 	lbc := LoadBalancerController{
 		clientset:               clientset,
