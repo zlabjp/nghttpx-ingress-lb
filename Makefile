@@ -1,8 +1,8 @@
 all: push
 
 # 0.0 shouldn't clobber any release builds
-PREFIX="zlabjp/nghttpx-ingress-controller"
-TAG=latest
+PREFIX="quay.corp.zlab.co.jp/zlab/nghttpx-ingress-controller"
+TAG=experimental-tatsuhiro
 
 REPO_INFO=$(shell git config --get remote.origin.url)
 
