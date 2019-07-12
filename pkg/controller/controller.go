@@ -660,7 +660,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 	}
 	svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name)
 	if errors.IsNotFound(err) {
-		klog.Warningf("service %v does no exists", svcKey)
+		klog.Warningf("service %v not found", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
 		return upstream
 	}
@@ -673,7 +673,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 
 	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], v1.ProtocolTCP, &nghttpx.PortBackendConfig{})
 	if len(eps) == 0 {
-		klog.Warningf("service %v does no have any active endpoints", svcKey)
+		klog.Warningf("service %v does not have any active endpoints", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
 	} else {
 		upstream.Backends = append(upstream.Backends, eps...)
@@ -858,7 +858,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 	svcKey := fmt.Sprintf("%v/%v", ing.Namespace, backend.ServiceName)
 	svc, err := lbc.svcLister.Services(ing.Namespace).Get(backend.ServiceName)
 	if errors.IsNotFound(err) {
-		return nil, fmt.Errorf("service %v does no exists", svcKey)
+		return nil, fmt.Errorf("service %v not found", svcKey)
 	}
 
 	if err != nil {
@@ -885,7 +885,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host,
 
 			eps := lbc.getEndpoints(svc, servicePort, v1.ProtocolTCP, portBackendConfig)
 			if len(eps) == 0 {
-				klog.Warningf("service %v does no have any active endpoints", svcKey)
+				klog.Warningf("service %v does not have any active endpoints", svcKey)
 				break
 			}
 
