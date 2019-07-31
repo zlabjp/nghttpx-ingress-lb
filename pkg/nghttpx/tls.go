@@ -25,17 +25,10 @@ limitations under the License.
 package nghttpx
 
 import (
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
-	"errors"
 	"fmt"
 	"path/filepath"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/klog"
 )
 
 const (
@@ -117,71 +110,6 @@ func writeTLSCred(tlsCred *TLSCred) error {
 	}
 
 	return nil
-}
-
-// commonNames checks if the certificate and key file are valid
-// returning the result of the validation and the list of hostnames
-// contained in the common name/s
-func CommonNames(certBlob []byte) ([]string, error) {
-	block, _ := pem.Decode(certBlob)
-	if block == nil {
-		return []string{}, fmt.Errorf("No valid PEM formatted block found from certificate")
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return []string{}, err
-	}
-
-	cn := []string{cert.Subject.CommonName}
-	if len(cert.DNSNames) > 0 {
-		cn = append(cn, cert.DNSNames...)
-	}
-
-	klog.V(2).Infof("DNS %v %v\n", cn, len(cn))
-	return cn, nil
-}
-
-// checkPrivateKey checks if the key is valid.
-func CheckPrivateKey(keyBlob []byte) error {
-	block, _ := pem.Decode(keyBlob)
-	if block == nil {
-		return fmt.Errorf("No valid PEM formatted block found from private key")
-	}
-
-	if _, err := parsePrivateKey(block.Bytes); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// parsePrivateKey parses private key given in der.  This function is
-// copied from crypto/tls/tls.go and has been modified to suite to our
-// need.  The origina code has the following copyright notice:
-//
-// Copyright 2009 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
-	if key, err := x509.ParsePKCS1PrivateKey(der); err == nil {
-		return key, nil
-	}
-
-	if key, err := x509.ParsePKCS8PrivateKey(der); err == nil {
-		switch key := key.(type) {
-		case *rsa.PrivateKey, *ecdsa.PrivateKey:
-			return key, nil
-		default:
-			return nil, errors.New("Found unknown private key type in PKCS#8 wrapping")
-		}
-	}
-
-	if key, err := x509.ParseECPrivateKey(der); err == nil {
-		return key, nil
-	}
-
-	return nil, errors.New("Failed to parse private key")
 }
 
 // RemoveDuplicatePems removes duplicates from pems.  It assumes that pems are sorted using TLSCredKeyLess.

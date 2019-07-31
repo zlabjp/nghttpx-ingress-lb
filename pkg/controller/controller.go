@@ -25,6 +25,7 @@ limitations under the License.
 package controller
 
 import (
+	"crypto/tls"
 	"fmt"
 	"math/rand"
 	"net"
@@ -952,12 +953,8 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 		return nil, fmt.Errorf("Secret %v/%v has no private key", secret.Namespace, secret.Name)
 	}
 
-	if _, err := nghttpx.CommonNames(cert); err != nil {
-		return nil, fmt.Errorf("No valid TLS certificate found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
-	}
-
-	if err := nghttpx.CheckPrivateKey(key); err != nil {
-		return nil, fmt.Errorf("No valid TLS private key found in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+	if _, err := tls.X509KeyPair(cert, key); err != nil {
+		return nil, err
 	}
 
 	// OCSP response in TLS secret is optional feature.
