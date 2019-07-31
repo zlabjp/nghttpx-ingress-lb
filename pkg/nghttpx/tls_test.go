@@ -25,6 +25,7 @@ limitations under the License.
 package nghttpx
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"path/filepath"
@@ -70,17 +71,8 @@ func TestCreateTLSCred(t *testing.T) {
 		t.Errorf("tlsCred.OCSPResp.Path = %v, want %v", got, want)
 	}
 
-	if err := CheckPrivateKey(dKey); err != nil {
-		t.Fatalf("unexpected error checking TLS private key: %v", err)
-	}
-
-	cnames, err := CommonNames(dCrt)
-	if len(cnames) == 0 {
-		t.Fatalf("expected at least one cname but none returned")
-	}
-
-	if cnames[0] != "echoheaders" {
-		t.Fatalf("expected cname echoheaders but %v returned", cnames[0])
+	if _, err := tls.X509KeyPair(dCrt, dKey); err != nil {
+		t.Fatalf("unexpected error parsing TLS key pair: %v", err)
 	}
 }
 
