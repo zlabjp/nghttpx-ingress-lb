@@ -15,7 +15,7 @@ export GO111MODULE=on
 .PHONY: controller container push clean vet fmt check
 
 controller: clean
-	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags \
+	CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo -ldflags \
 		"-w -X main.version=${VERSION} -X main.gitRepo=${REPO_INFO}" \
 		github.com/zlabjp/nghttpx-ingress-lb/cmd/...
 
