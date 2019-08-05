@@ -1,14 +1,15 @@
-sudo: required
 language: go
 go:
 - "1.12"
 services:
 - docker
 script:
+- set -e
 - make vet
 - make check
 - make controller
 - docker build -t zlabjp/nghttpx-ingress-controller .
+- set +e
 after_success:
 - docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
 - if [ ! -z "$TRAVIS_TAG" ]; then docker tag zlabjp/nghttpx-ingress-controller zlabjp/nghttpx-ingress-controller:"$TRAVIS_TAG" && docker push zlabjp/nghttpx-ingress-controller:"$TRAVIS_TAG"; fi
