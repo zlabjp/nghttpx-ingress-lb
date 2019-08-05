@@ -55,7 +55,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
-	"k8s.io/kubernetes/pkg/controller"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -66,6 +65,8 @@ const (
 	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
 	// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
 	syncKey = "ingress"
+
+	noResyncPeriod = 0
 )
 
 // LoadBalancerController watches the kubernetes api and adds/removes services
@@ -199,7 +200,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		})
 	}
 
-	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, controller.NoResyncPeriodFunc())
+	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod)
 
 	{
 		f := allNSInformers.Core().V1().Endpoints()
@@ -256,7 +257,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		cmNamespace = runtimeInfo.Namespace
 	}
 
-	cmNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, controller.NoResyncPeriodFunc(), informers.WithNamespace(cmNamespace))
+	cmNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(cmNamespace))
 
 	{
 		f := cmNSInformers.Core().V1().ConfigMaps()
