@@ -19,7 +19,7 @@
 
 FROM k8s.gcr.io/debian-base-amd64:1.0.0
 
-COPY extra-mrbgem.patch 0001-nghttpx-Fix-request-stall.patch /
+COPY extra-mrbgem.patch /
 
 RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch \
@@ -28,10 +28,9 @@ RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotoo
         python && \
     git clone -b OpenSSL_1_1_1c --depth 1 https://github.com/openssl/openssl.git && \
     cd openssl && ./config --openssldir=/etc/ssl && make -j$(nproc) && make install_sw && cd .. && rm -rf openssl && \
-    git clone --depth 1 -b v1.39.1 https://github.com/nghttp2/nghttp2.git && \
+    git clone --depth 1 -b v1.39.2 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
-    patch -p1 < /0001-nghttpx-Fix-request-stall.patch && \
     git submodule update --init && autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
     make -j$(nproc) install-strip && \
@@ -43,7 +42,7 @@ RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotoo
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch && \
     apt-get -y autoremove --purge && \
     rm -rf /var/log/* && \
-    rm /extra-mrbgem.patch /0001-nghttpx-Fix-request-stall.patch
+    rm /extra-mrbgem.patch
 
 RUN mkdir -p /var/log/nghttpx
 
