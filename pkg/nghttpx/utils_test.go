@@ -265,6 +265,13 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 				return a
 			}(),
 		},
+		{
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
+				a.SetRedirectIfNotTLS(false)
+				return a
+			}(),
+		},
 	}
 
 	for i, tt := range tests {
@@ -291,6 +298,9 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 		}
 		if got, want := a.GetWriteTimeout(), tt.defaultConf.GetWriteTimeout(); !((got != nil && want != nil && *got == *want) || (got == nil && want == nil)) {
 			t.Errorf("#%v: a.GetWriteTimeout() = %v, want %v", i, got, want)
+		}
+		if got, want := a.GetRedirectIfNotTLS(), tt.defaultConf.GetRedirectIfNotTLS(); got != want {
+			t.Errorf("#%v: a.GetRedirectIfNotTLS() = %v, want %v", i, got, want)
 		}
 	}
 }

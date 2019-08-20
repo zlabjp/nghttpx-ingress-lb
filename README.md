@@ -126,7 +126,8 @@ For k8s v1.13 or earlier, use `extensions/v1beta1` instead of
 If TLS is configured for a service, and it is accessed via cleartext
 HTTP, those requests are redirected to HTTPS URI.  If
 --default-tls-secret flag is used, all cleartext HTTP requests are
-redirected to https URI.
+redirected to https URI.  This behaviour is configurable using
+[path-config](#ingresszlabcojppath-config-annotation) annotation.
 
 ## TLS OCSP stapling
 
@@ -409,6 +410,9 @@ is the dictionary and can contain the following key value pairs:
   [--backend-write-timeout](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-backend-write-timeout).
   You can use string representation of time used in Golang (e.g., 5s,
   5m)
+
+* `redirectIfNotTLS`: Specify whether cleartext HTTP request is
+  redirected to HTTPS if TLS is configured.  This defaults to true.
 
 Here is an example to rewrite request path to "/foo" from "/pub/foo" using mruby:
 
