@@ -222,6 +222,9 @@ func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
 	if defaultConfig.WriteTimeout != nil && config.WriteTimeout == nil {
 		config.SetWriteTimeout(*defaultConfig.WriteTimeout)
 	}
+	if defaultConfig.RedirectIfNotTLS != nil && config.RedirectIfNotTLS == nil {
+		config.SetRedirectIfNotTLS(*defaultConfig.RedirectIfNotTLS)
+	}
 }
 
 // ResolvePathConfig returns a PathConfig which should be used for the pattern denoted by host and path.

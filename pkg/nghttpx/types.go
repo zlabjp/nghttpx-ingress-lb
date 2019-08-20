@@ -307,6 +307,8 @@ type PathConfig struct {
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty"`
 	// WriteTimeout is a write timeout when this path is selected.
 	WriteTimeout *metav1.Duration `json:"writeTimeout,omitempty"`
+	// RedirectIfNotTLS, if set to true, redirects cleartext HTTP to HTTPS.
+	RedirectIfNotTLS *bool `json:"redirectIfNotTLS,omitempty"`
 }
 
 func (pc *PathConfig) GetMruby() string {
@@ -391,6 +393,18 @@ func (pc *PathConfig) GetWriteTimeout() *metav1.Duration {
 func (pc *PathConfig) SetWriteTimeout(writeTimeout metav1.Duration) {
 	pc.WriteTimeout = new(metav1.Duration)
 	*pc.WriteTimeout = writeTimeout
+}
+
+func (pc *PathConfig) GetRedirectIfNotTLS() bool {
+	if pc == nil || pc.RedirectIfNotTLS == nil {
+		return true
+	}
+	return *pc.RedirectIfNotTLS
+}
+
+func (pc *PathConfig) SetRedirectIfNotTLS(b bool) {
+	pc.RedirectIfNotTLS = new(bool)
+	*pc.RedirectIfNotTLS = b
 }
 
 // ChecksumFile represents a file with path, its arbitrary content, and its checksum.
