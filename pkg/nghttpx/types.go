@@ -361,7 +361,7 @@ func (pc *PathConfig) SetAffinityCookiePath(affinityCookiePath string) {
 
 func (pc *PathConfig) GetAffinityCookieSecure() AffinityCookieSecure {
 	if pc == nil || pc.AffinityCookieSecure == nil {
-		return ""
+		return AffinityCookieSecureAuto
 	}
 	return *pc.AffinityCookieSecure
 }
