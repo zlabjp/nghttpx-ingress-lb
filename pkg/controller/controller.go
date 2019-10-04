@@ -38,7 +38,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	clientv1 "k8s.io/api/core/v1"
-	extensions "k8s.io/api/extensions/v1beta1"
+	networking "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -48,7 +48,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	listerscore "k8s.io/client-go/listers/core/v1"
-	listersextensions "k8s.io/client-go/listers/extensions/v1beta1"
+	listersnetworking "k8s.io/client-go/listers/networking/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
@@ -80,7 +80,7 @@ type LoadBalancerController struct {
 	cmInformer              cache.SharedIndexInformer
 	podInformer             cache.SharedIndexInformer
 	nodeInformer            cache.SharedIndexInformer
-	ingLister               listersextensions.IngressLister
+	ingLister               listersnetworking.IngressLister
 	svcLister               listerscore.ServiceLister
 	epLister                listerscore.EndpointsLister
 	secretLister            listerscore.SecretLister
@@ -190,7 +190,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, config.ResyncPeriod, informers.WithNamespace(config.WatchNamespace))
 
 	{
-		f := watchNSInformers.Extensions().V1beta1().Ingresses()
+		f := watchNSInformers.Networking().V1beta1().Ingresses()
 		lbc.ingLister = f.Lister()
 		lbc.ingInformer = f.Informer()
 		lbc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -275,7 +275,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 }
 
 func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
-	ing := obj.(*extensions.Ingress)
+	ing := obj.(*networking.Ingress)
 	if !lbc.validateIngressClass(ing) {
 		return
 	}
@@ -284,8 +284,8 @@ func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
 }
 
 func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
-	oldIng := old.(*extensions.Ingress)
-	curIng := cur.(*extensions.Ingress)
+	oldIng := old.(*networking.Ingress)
+	curIng := cur.(*networking.Ingress)
 	if !lbc.validateIngressClass(oldIng) && !lbc.validateIngressClass(curIng) {
 		return
 	}
@@ -294,14 +294,14 @@ func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cu
 }
 
 func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
-	ing, ok := obj.(*extensions.Ingress)
+	ing, ok := obj.(*networking.Ingress)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Couldn't get object from tombstone %+v", obj)
 			return
 		}
-		ing, ok = tombstone.Obj.(*extensions.Ingress)
+		ing, ok = tombstone.Obj.(*networking.Ingress)
 		if !ok {
 			klog.Errorf("Tombstone contained object that is not an Ingress %+v", obj)
 			return
@@ -685,7 +685,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 }
 
 // in nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
-func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress) (*nghttpx.IngressConfig, error) {
+func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress) (*nghttpx.IngressConfig, error) {
 	ingConfig := nghttpx.NewIngressConfig()
 	ingConfig.HealthPort = lbc.nghttpxHealthPort
 	ingConfig.APIPort = lbc.nghttpxAPIPort
@@ -825,7 +825,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*extensions.Ingress
 }
 
 // createUpstream creates new nghttpx.Upstream for ing, host, path and backend.
-func (lbc *LoadBalancerController) createUpstream(ing *extensions.Ingress, host, path string, backend *extensions.IngressBackend,
+func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host, path string, backend *networking.IngressBackend,
 	requireTLS bool, defaultPathConfig *nghttpx.PathConfig, pathConfig map[string]*nghttpx.PathConfig, defaultPortBackendConfig *nghttpx.PortBackendConfig, backendConfig map[string]map[string]*nghttpx.PortBackendConfig) (*nghttpx.Upstream, error) {
 	var normalizedPath string
 	if path == "" {
@@ -920,7 +920,7 @@ func (lbc *LoadBalancerController) getTLSCredFromSecret(key *types.NamespacedNam
 }
 
 // getTLSCredFromIngress returns list of nghttpx.TLSCred obtained from Ingress resource.
-func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *extensions.Ingress) ([]*nghttpx.TLSCred, error) {
+func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *networking.Ingress) ([]*nghttpx.TLSCred, error) {
 	var pems []*nghttpx.TLSCred
 
 	for i := range ing.Spec.TLS {
@@ -1181,7 +1181,7 @@ func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) 
 
 // validateIngressClass checks whether this controller should process ing or not.  If ing has "kubernetes.io/ingress.class" annotation, its
 // value should be empty or "nghttpx".
-func (lbc *LoadBalancerController) validateIngressClass(ing *extensions.Ingress) bool {
+func (lbc *LoadBalancerController) validateIngressClass(ing *networking.Ingress) bool {
 	switch ingressAnnotation(ing.Annotations).getIngressClass() {
 	case "", lbc.ingressClass:
 		return true
@@ -1276,7 +1276,7 @@ func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []v1.LoadBalancerI
 		newIng := ing.DeepCopy()
 		newIng.Status.LoadBalancer.Ingress = lbIngs
 
-		if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(ing.Namespace).UpdateStatus(newIng); err != nil {
+		if _, err := lbc.clientset.NetworkingV1beta1().Ingresses(ing.Namespace).UpdateStatus(newIng); err != nil {
 			klog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
 		}
 	}
@@ -1403,7 +1403,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 			newIng := ing.DeepCopy()
 			newIng.Status.LoadBalancer.Ingress = lbIngs
 
-			if _, err := lbc.clientset.ExtensionsV1beta1().Ingresses(newIng.Namespace).UpdateStatus(newIng); err != nil {
+			if _, err := lbc.clientset.NetworkingV1beta1().Ingresses(newIng.Namespace).UpdateStatus(newIng); err != nil {
 				return err
 			}
 			return nil

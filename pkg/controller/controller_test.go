@@ -32,7 +32,7 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
-	extensions "k8s.io/api/extensions/v1beta1"
+	networking "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -53,7 +53,7 @@ type fixture struct {
 
 	lbc *LoadBalancerController
 
-	ingStore    []*extensions.Ingress
+	ingStore    []*networking.Ingress
 	epStore     []*v1.Endpoints
 	svcStore    []*v1.Service
 	secretStore []*v1.Secret
@@ -180,12 +180,12 @@ func (f *fixture) expectGetCMAction(cm *v1.ConfigMap) {
 }
 
 // expectGetIngAction adds an expectation that get for ing should occur.
-func (f *fixture) expectGetIngAction(ing *extensions.Ingress) {
+func (f *fixture) expectGetIngAction(ing *networking.Ingress) {
 	f.actions = append(f.actions, core.NewGetAction(schema.GroupVersionResource{Resource: "ingresses"}, ing.Namespace, ing.Name))
 }
 
 // expectUpdateIngAction adds an expectation that update for ing should occur.
-func (f *fixture) expectUpdateIngAction(ing *extensions.Ingress) {
+func (f *fixture) expectUpdateIngAction(ing *networking.Ingress) {
 	f.actions = append(f.actions, core.NewUpdateAction(schema.GroupVersionResource{Resource: "ingresses"}, ing.Namespace, ing))
 }
 
@@ -319,16 +319,16 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 	return svc, eps
 }
 
-func newIngressTLS(namespace, name, svcName, svcPort, tlsSecretName string) *extensions.Ingress {
+func newIngressTLS(namespace, name, svcName, svcPort, tlsSecretName string) *networking.Ingress {
 	ing := newIngress(namespace, name, svcName, svcPort)
-	ing.Spec.TLS = []extensions.IngressTLS{
+	ing.Spec.TLS = []networking.IngressTLS{
 		{SecretName: tlsSecretName},
 	}
 	return ing
 }
 
-func newIngress(namespace, name, svcName, svcPort string) *extensions.Ingress {
-	return &extensions.Ingress{
+func newIngress(namespace, name, svcName, svcPort string) *networking.Ingress {
+	return &networking.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -336,16 +336,16 @@ func newIngress(namespace, name, svcName, svcPort string) *extensions.Ingress {
 				ingressClassKey: defaultIngressClass,
 			},
 		},
-		Spec: extensions.IngressSpec{
-			Rules: []extensions.IngressRule{
+		Spec: networking.IngressSpec{
+			Rules: []networking.IngressRule{
 				{
 					Host: fmt.Sprintf("%v.%v.test", name, namespace),
-					IngressRuleValue: extensions.IngressRuleValue{
-						HTTP: &extensions.HTTPIngressRuleValue{
-							Paths: []extensions.HTTPIngressPath{
+					IngressRuleValue: networking.IngressRuleValue{
+						HTTP: &networking.HTTPIngressRuleValue{
+							Paths: []networking.HTTPIngressPath{
 								{
 									Path: "/",
-									Backend: extensions.IngressBackend{
+									Backend: networking.IngressBackend{
 										ServiceName: svcName,
 										ServicePort: intstr.FromString(svcPort),
 									},
@@ -723,7 +723,7 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	bs1, be1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
 	bs2, be2 := newBackend(metav1.NamespaceDefault, "bravo", []string{"192.168.10.2"})
 	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
-	ing1.Spec.Backend = &extensions.IngressBackend{
+	ing1.Spec.Backend = &networking.IngressBackend{
 		ServiceName: "bravo",
 		ServicePort: bs2.Spec.Ports[0].TargetPort,
 	}
@@ -866,14 +866,14 @@ func TestUpdateIngressStatus(t *testing.T) {
 		t.Fatalf("f.lbc.updateIngressStatus(lbIngs) returned unexpected error %v", err)
 	}
 
-	if updatedIng, err := f.clientset.ExtensionsV1beta1().Ingresses(ing1.Namespace).Get(ing1.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.clientset.NetworkingV1beta1().Ingresses(ing1.Namespace).Get(ing1.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
 	} else {
 		if got, want := updatedIng.Status.LoadBalancer.Ingress, lbIngs; !reflect.DeepEqual(got, want) {
 			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
 		}
 	}
-	if updatedIng, err := f.clientset.ExtensionsV1beta1().Ingresses(ing2.Namespace).Get(ing2.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.clientset.NetworkingV1beta1().Ingresses(ing2.Namespace).Get(ing2.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing2.Namespace, ing2.Name, err)
 	} else {
 		if got, want := updatedIng.Status.LoadBalancer.Ingress, lbIngs; !reflect.DeepEqual(got, want) {
@@ -919,7 +919,7 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		t.Fatalf("f.lbc.removeAddressFromLoadBalancerIngress() returned unexpected error %v", err)
 	}
 
-	if updatedIng, err := f.lbc.clientset.ExtensionsV1beta1().Ingresses(ing1.Namespace).Get(ing1.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.lbc.clientset.NetworkingV1beta1().Ingresses(ing1.Namespace).Get(ing1.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
 	} else {
 		ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
@@ -928,7 +928,7 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		}
 	}
 
-	if updatedIng, err := f.lbc.clientset.ExtensionsV1beta1().Ingresses(ing4.Namespace).Get(ing4.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.lbc.clientset.NetworkingV1beta1().Ingresses(ing4.Namespace).Get(ing4.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing4.Namespace, ing4.Name, err)
 	} else {
 		ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
