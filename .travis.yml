@@ -13,7 +13,7 @@ script:
 - make controller
 - docker build -t zlabjp/nghttpx-ingress-controller .
 after_success:
-- docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+- echo "$DOCKER_PASSWORD" | docker login -u="$DOCKER_USERNAME" --password-stdin
 - if [ ! -z "$TRAVIS_TAG" ]; then docker tag zlabjp/nghttpx-ingress-controller zlabjp/nghttpx-ingress-controller:"$TRAVIS_TAG" && docker push zlabjp/nghttpx-ingress-controller:"$TRAVIS_TAG"; fi
 - if [ "$TRAVIS_BRANCH" = "master" ]; then docker push zlabjp/nghttpx-ingress-controller; fi
 env:
