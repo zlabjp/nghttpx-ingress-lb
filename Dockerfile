@@ -17,17 +17,15 @@
 # For the full copyright and license information, please view the LICENSE
 # file that was distributed with this source code.
 
-FROM k8s.gcr.io/debian-base-amd64:1.0.0
+FROM k8s.gcr.io/debian-base-amd64:v2.0.0
 
 COPY extra-mrbgem.patch 0001-Finish-memory-leak.patch /
 
 RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
-        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch \
-        zlib1g libev4 libjemalloc1 libc-ares2 \
-        ca-certificates psmisc \
+        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev libssl-dev bison patch \
+        zlib1g libev4 libjemalloc2 libc-ares2 \
+        ca-certificates psmisc openssl \
         python && \
-    git clone -b OpenSSL_1_1_1c --depth 1 https://github.com/openssl/openssl.git && \
-    cd openssl && ./config --openssldir=/etc/ssl && make -j$(nproc) && make install_sw && cd .. && rm -rf openssl && \
     git clone --depth 1 -b v1.39.2 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
@@ -38,10 +36,8 @@ RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotoo
     make -j$(nproc) install-strip && \
     cd .. && \
     rm -rf nghttp2 && \
-    strip /usr/local/lib/*.so.*.* /usr/local/lib/engines-*/*.so && \
-    rm -rf /usr/local/lib/libssl.so /usr/local/lib/libcrypto.so /usr/local/lib/libssl.a /usr/local/lib/libcrypto.a /usr/local/lib/pkgconfig/*ssl.pc /usr/local/include/openssl/* && \
     apt-get -y purge git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
-        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch && \
+        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev libssl-dev bison patch && \
     apt-get -y autoremove --purge && \
     rm -rf /var/log/* && \
     rm /extra-mrbgem.patch /0001-Finish-memory-leak.patch
