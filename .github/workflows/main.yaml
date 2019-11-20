@@ -20,3 +20,6 @@ jobs:
     - name: build
       run: |
         make vet check controller
+    - name: docker-build
+      run: |
+        docker build -t zlabjp/nghttpx-ingress-controller .
