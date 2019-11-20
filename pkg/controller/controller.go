@@ -1328,6 +1328,9 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressFromService(svc *v1.Ser
 }
 
 // getPodAddress returns pod's address.  It prefers external IP.  It may return internal IP if configuration allows it.
+//
+// TODO: This function actually returns the IP address of Node where pod is deployed rather than the address of pod.  Should we return the
+// address of pod if hostNetwork is true?
 func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
 	node, err := lbc.nodeLister.Get(pod.Spec.NodeName)
 	if errors.IsNotFound(err) {
