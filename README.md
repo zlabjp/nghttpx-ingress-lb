@@ -36,10 +36,16 @@ $ kubectl create -f examples/default/rc-default.yaml
 
 ## Ingress class
 
-This controller supports `kubernetes.io/ingress.class` Ingress
-annotation.  By default, the controller processes "nghttpx" class.  It
-also processes the Ingress object which has no Ingress class
-annotation, or its value is empty.
+This controller supports the now deprecated
+`kubernetes.io/ingress.class` Ingress annotation.  By default, the
+controller processes "nghttpx" class.  It also processes the Ingress
+object which has no Ingress class annotation, or its value is empty.
+
+It also supports IngressClass resource if controller detects that API
+server supports it.  For backward compatibility, the deprecated
+annotation takes precedence over IngressClass resource.  The default
+IngressClass controller name is "zlab.co.jp/nghttpx".  It supports
+`ingressclass.kubernetes.io/is-default-class` annotation.
 
 ## HTTP
 
