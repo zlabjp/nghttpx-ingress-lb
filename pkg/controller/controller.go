@@ -25,6 +25,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"math/rand"
@@ -40,6 +41,7 @@ import (
 	clientv1 "k8s.io/api/core/v1"
 	networking "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -1276,7 +1278,7 @@ func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []v1.LoadBalancerI
 		newIng := ing.DeepCopy()
 		newIng.Status.LoadBalancer.Ingress = lbIngs
 
-		if _, err := lbc.clientset.NetworkingV1beta1().Ingresses(ing.Namespace).UpdateStatus(newIng); err != nil {
+		if _, err := lbc.clientset.NetworkingV1beta1().Ingresses(ing.Namespace).UpdateStatus(context.TODO(), newIng, metav1.UpdateOptions{}); err != nil {
 			klog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
 		}
 	}
@@ -1406,7 +1408,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 			newIng := ing.DeepCopy()
 			newIng.Status.LoadBalancer.Ingress = lbIngs
 
-			if _, err := lbc.clientset.NetworkingV1beta1().Ingresses(newIng.Namespace).UpdateStatus(newIng); err != nil {
+			if _, err := lbc.clientset.NetworkingV1beta1().Ingresses(newIng.Namespace).UpdateStatus(context.TODO(), newIng, metav1.UpdateOptions{}); err != nil {
 				return err
 			}
 			return nil
