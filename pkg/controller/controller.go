@@ -76,6 +76,7 @@ const (
 type LoadBalancerController struct {
 	clientset               clientset.Interface
 	ingInformer             cache.SharedIndexInformer
+	ingClassInformer        cache.SharedIndexInformer
 	epInformer              cache.SharedIndexInformer
 	svcInformer             cache.SharedIndexInformer
 	secretInformer          cache.SharedIndexInformer
@@ -83,6 +84,7 @@ type LoadBalancerController struct {
 	podInformer             cache.SharedIndexInformer
 	nodeInformer            cache.SharedIndexInformer
 	ingLister               listersnetworking.IngressLister
+	ingClassLister          listersnetworking.IngressClassLister
 	svcLister               listerscore.ServiceLister
 	epLister                listerscore.EndpointsLister
 	secretLister            listerscore.SecretLister
@@ -102,6 +104,7 @@ type LoadBalancerController struct {
 	defaultTLSSecret        *types.NamespacedName
 	watchNamespace          string
 	ingressClass            string
+	ingressClassController  string
 	allowInternalIP         bool
 	ocspRespKey             string
 	fetchOCSPRespFromSecret bool
@@ -145,8 +148,13 @@ type Config struct {
 	NghttpxHTTPSPort int
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret *types.NamespacedName
-	// IngressClass is the Ingress class this controller is responsible for.
-	IngressClass            string
+	// IngressClass is the Ingress class this controller is responsible for.  It is the value of the deprecated
+	// "kubernetes.io/ingress.class" annotation.
+	IngressClass string
+	// IngressClassController is the name of IngressClass controller for this controller.
+	IngressClassController string
+	// EnableIngressClass enables IngressClass support which has been added since Kubernetes v1.18.
+	EnableIngressClass      bool
 	AllowInternalIP         bool
 	OCSPRespKey             string
 	FetchOCSPRespFromSecret bool
@@ -179,6 +187,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		defaultTLSSecret:        config.DefaultTLSSecret,
 		watchNamespace:          config.WatchNamespace,
 		ingressClass:            config.IngressClass,
+		ingressClassController:  config.IngressClassController,
 		allowInternalIP:         config.AllowInternalIP,
 		ocspRespKey:             config.OCSPRespKey,
 		fetchOCSPRespFromSecret: config.FetchOCSPRespFromSecret,
@@ -251,6 +260,17 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		lbc.nodeInformer = f.Informer()
 	}
 
+	if config.EnableIngressClass {
+		f := allNSInformers.Networking().V1beta1().IngressClasses()
+		lbc.ingClassLister = f.Lister()
+		lbc.ingClassInformer = f.Informer()
+		lbc.ingClassInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addIngressClassNotification,
+			UpdateFunc: lbc.updateIngressClassNotification,
+			DeleteFunc: lbc.deleteIngressClassNotification,
+		})
+	}
+
 	var cmNamespace string
 	if lbc.ngxConfigMap != nil {
 		cmNamespace = lbc.ngxConfigMap.Namespace
@@ -313,6 +333,36 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Ingress %v/%v deleted", ing.Namespace, ing.Name)
+	lbc.enqueue(syncKey)
+}
+
+func (lbc *LoadBalancerController) addIngressClassNotification(obj interface{}) {
+	ingClass := obj.(*networking.IngressClass)
+	klog.V(4).Infof("IngressClass %v added", ingClass.Name)
+	lbc.enqueue(syncKey)
+}
+
+func (lbc *LoadBalancerController) updateIngressClassNotification(old interface{}, cur interface{}) {
+	ingClass := cur.(*networking.IngressClass)
+	klog.V(4).Infof("IngressClass %v updated", ingClass.Name)
+	lbc.enqueue(syncKey)
+}
+
+func (lbc *LoadBalancerController) deleteIngressClassNotification(obj interface{}) {
+	ingClass, ok := obj.(*networking.IngressClass)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			return
+		}
+		ingClass, ok = tombstone.Obj.(*networking.IngressClass)
+		if !ok {
+			klog.Errorf("Tombstone contained object that is not IngressClass %+v", obj)
+			return
+		}
+	}
+	klog.V(4).Infof("IngressClass %v deleted", ingClass.Name)
 	lbc.enqueue(syncKey)
 }
 
@@ -716,7 +766,6 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 
 	for _, ing := range ings {
 		if !lbc.validateIngressClass(ing) {
-			klog.V(4).Infof("Skip Ingress %v/%v which has Ingress class %v", ing.Namespace, ing.Name, ingressAnnotation(ing.Annotations).getIngressClass())
 			continue
 		}
 
@@ -1158,6 +1207,14 @@ func (lbc *LoadBalancerController) Run() {
 		return
 	}
 
+	if lbc.ingClassInformer != nil {
+		go lbc.ingClassInformer.Run(lbc.stopCh)
+
+		if !cache.WaitForCacheSync(lbc.stopCh, lbc.ingClassInformer.HasSynced) {
+			return
+		}
+	}
+
 	go lbc.worker()
 
 	wg.Add(1)
@@ -1181,15 +1238,60 @@ func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) 
 	}
 }
 
-// validateIngressClass checks whether this controller should process ing or not.  If ing has "kubernetes.io/ingress.class" annotation, its
-// value should be empty or "nghttpx".
+// validateIngressClass checks whether this controller should process ing or not.  If ing has deprecated "kubernetes.io/ingress.class"
+// annotation, its value should be empty or lbc.ingressClass.  If the annotation is not present, check ing.Spec.IngressClassName.  The
+// deprecated annotation takes precedence over the field for backward compatibility.
 func (lbc *LoadBalancerController) validateIngressClass(ing *networking.Ingress) bool {
-	switch ingressAnnotation(ing.Annotations).getIngressClass() {
-	case "", lbc.ingressClass:
+	if _, ok := ing.Annotations[networking.AnnotationIngressClass]; ok {
+		switch cls := ingressAnnotation(ing.Annotations).getIngressClass(); cls {
+		case "", lbc.ingressClass:
+			return true
+		default:
+			klog.V(4).Infof("Skip Ingress %v/%v which has Ingress class %v", ing.Namespace, ing.Name, cls)
+			return false
+		}
+	}
+
+	if lbc.ingClassLister == nil {
+		// If there is no IngressClass support and no deprecated annotation, process the Ingress.
 		return true
-	default:
+	}
+
+	if ing.Spec.IngressClassName != nil {
+		ingClass, err := lbc.ingClassLister.Get(*ing.Spec.IngressClassName)
+		if err != nil {
+			klog.Errorf("Could not get IngressClass %v: %v", *ing.Spec.IngressClassName, err)
+			return false
+		}
+		if ingClass.Spec.Controller != lbc.ingressClassController {
+			klog.V(4).Infof("Skip Ingress %v/%v which needs IngressClass %v controller %v", ing.Namespace, ing.Name,
+				ingClass.Name, ingClass.Spec.Controller)
+			return false
+		}
+		return true
+	}
+
+	// Check defaults
+
+	ingClasses, err := lbc.ingClassLister.List(labels.Everything())
+	if err != nil {
+		klog.Errorf("Could not list IngressClass: %v", err)
 		return false
 	}
+
+	for _, ingClass := range ingClasses {
+		if ingClass.Annotations[networking.AnnotationIsDefaultIngressClass] == "true" {
+			if ingClass.Spec.Controller != lbc.ingressClassController {
+				klog.V(4).Infof("Skip Ingress %v/%v because it defaults to IngressClass %v controller %v", ing.Namespace, ing.Name,
+					ingClass.Name, ingClass.Spec.Controller)
+				return false
+			}
+			return true
+		}
+	}
+
+	// If there is no default IngressClass and no deprecated annotation, process the Ingress.
+	return true
 }
 
 // syncIngress udpates Ingress resource status.

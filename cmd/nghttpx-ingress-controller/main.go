@@ -38,9 +38,11 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	networking "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/server/healthz"
+	"k8s.io/client-go/discovery"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -94,7 +96,10 @@ var (
 		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.`)
 
 	ingressClass = flags.String("ingress-class", "nghttpx",
-		`Ingress class which this controller is responsible for.`)
+		`Ingress class which this controller is responsible for.  This is the value of the deprecated "kubernetes.io/ingress.class" annotation.  For Kubernetes v1.18 or later, use ingress-class-controller flag and IngressClass resource.`)
+
+	ingressClassController = flags.String("ingress-class-controller", "zlab.co.jp/nghttpx",
+		`The name of IngressClass controller for this controller.  This is the value specified in IngressClass.spec.controller.  Only works with Kubernetes v1.18 or later `)
 
 	nghttpxConfDir = flags.String("nghttpx-conf-dir", "/etc/nghttpx",
 		`Path to the directory which contains nghttpx configuration files.  The controller reads and writes these configuration files.`)
@@ -207,6 +212,11 @@ func main() {
 		klog.Exitf("Failed to create clientset: %v", err)
 	}
 
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		klog.Exitf("Failed to create discoveryClient: %v", err)
+	}
+
 	runtimePodInfo := &types.NamespacedName{
 		Name:      os.Getenv("POD_NAME"),
 		Namespace: os.Getenv("POD_NAMESPACE"),
@@ -232,6 +242,8 @@ func main() {
 		NghttpxHTTPSPort:        *nghttpxHTTPSPort,
 		DefaultTLSSecret:        defaultTLSSecretKey,
 		IngressClass:            *ingressClass,
+		IngressClassController:  *ingressClassController,
+		EnableIngressClass:      checkIngressClassAvailability(discoveryClient),
 		AllowInternalIP:         *allowInternalIP,
 		OCSPRespKey:             *ocspRespKey,
 		FetchOCSPRespFromSecret: *fetchOCSPRespFromSecret,
@@ -339,4 +351,22 @@ func generateDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nght
 	}
 
 	return nil
+}
+
+func checkIngressClassAvailability(d discovery.DiscoveryInterface) bool {
+	resList, err := d.ServerResourcesForGroupVersion(networking.SchemeGroupVersion.String())
+	if err != nil {
+		klog.Exitf("Could not get Server resources %v", err)
+	}
+
+	for i := range resList.APIResources {
+		r := &resList.APIResources[i]
+		if r.Kind == "IngressClass" {
+			return true
+		}
+	}
+
+	klog.Infof("Server does not support %v IngressClass", networking.SchemeGroupVersion.String())
+
+	return false
 }

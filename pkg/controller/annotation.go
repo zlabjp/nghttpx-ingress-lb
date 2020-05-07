@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
+	networking "k8s.io/api/networking/v1beta1"
 	"k8s.io/klog"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
@@ -25,8 +26,6 @@ const (
 	// defaultBackendConfigKey is a key to annotation for default backend configuration which applies to all entries in a Ingress
 	// resource.
 	defaultBackendConfigKey = "ingress.zlab.co.jp/default-backend-config"
-	// ingressClassKey is a key to annotation in order to run multiple Ingress controllers.
-	ingressClassKey = "kubernetes.io/ingress.class"
 	// pathConfigKey is a key to annotation for extra path configuration.
 	pathConfigKey = "ingress.zlab.co.jp/path-config"
 	// defaultPathConfigKey is a key to annotation for default path configuration which applies to all entries in a Ingress resource.
@@ -145,5 +144,5 @@ func unmarshal(data []byte, dest interface{}) error {
 
 // getIngressClass returns Ingress class from annotation.
 func (ia ingressAnnotation) getIngressClass() string {
-	return ia[ingressClassKey]
+	return ia[networking.AnnotationIngressClass]
 }
