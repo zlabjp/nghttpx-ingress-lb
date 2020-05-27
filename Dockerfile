@@ -17,15 +17,19 @@
 # For the full copyright and license information, please view the LICENSE
 # file that was distributed with this source code.
 
-FROM us.gcr.io/k8s-artifacts-prod/build-image/debian-base:v2.1.0
+FROM ubuntu:20.04
 
 COPY extra-mrbgem.patch /
 
-RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
+# Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev libssl-dev bison patch \
         zlib1g libev4 libjemalloc2 libc-ares2 \
         ca-certificates psmisc openssl \
         python && \
+    apt-get clean -y && \
     git clone --depth 1 -b v1.40.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
@@ -38,7 +42,12 @@ RUN /usr/local/bin/clean-install git g++ make binutils autoconf automake autotoo
     apt-get -y purge git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev libssl-dev bison patch && \
     apt-get -y autoremove --purge && \
-    rm -rf /var/log/* && \
+    rm -rf \
+        /var/cache/debconf/* \
+        /var/lib/apt/lists/* \
+        /var/log/* \
+        /tmp/* \
+        /var/tmp/* && \
     rm /extra-mrbgem.patch
 
 RUN mkdir -p /var/log/nghttpx
