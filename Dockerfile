@@ -30,7 +30,7 @@ RUN apt-get update && \
         ca-certificates psmisc openssl \
         python && \
     apt-get clean -y && \
-    git clone --depth 1 -b v1.40.0 https://github.com/nghttp2/nghttp2.git && \
+    git clone --depth 1 -b v1.41.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     git submodule update --init && \
