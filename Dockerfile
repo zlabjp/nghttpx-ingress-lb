@@ -51,11 +51,10 @@ RUN apt-get update && \
 
 RUN mkdir -p /var/log/nghttpx
 
-COPY nghttpx-ingress-controller fetch-ocsp-response /
+COPY nghttpx-ingress-controller fetch-ocsp-response cat-ocsp-resp /
 COPY nghttpx.tmpl /
 COPY nghttpx-backend.tmpl /
 COPY default.tmpl /
-COPY cat-ocsp-resp.sh /
 
 WORKDIR /
 
