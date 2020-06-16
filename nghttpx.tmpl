@@ -45,4 +45,6 @@ mruby-file={{ .MrubyFile.Path }}
 
 {{ if .FetchOCSPRespFromSecret }}
 fetch-ocsp-response-file=/cat-ocsp-resp.sh
+{{ else }}
+fetch-ocsp-response-file=/fetch-ocsp-response
 {{ end}}

@@ -27,8 +27,7 @@ RUN apt-get update && \
         git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev libssl-dev bison patch \
         zlib1g libev4 libjemalloc2 libc-ares2 \
-        ca-certificates openssl \
-        python && \
+        ca-certificates openssl && \
     apt-get clean -y && \
     git clone --depth 1 -b v1.41.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
@@ -52,7 +51,7 @@ RUN apt-get update && \
 
 RUN mkdir -p /var/log/nghttpx
 
-COPY nghttpx-ingress-controller /
+COPY nghttpx-ingress-controller fetch-ocsp-response /
 COPY nghttpx.tmpl /
 COPY nghttpx-backend.tmpl /
 COPY default.tmpl /

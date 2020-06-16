@@ -17,7 +17,9 @@ export GO111MODULE=on
 controller: clean
 	CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo -ldflags \
 		"-w -X main.version=${VERSION} -X main.gitRepo=${REPO_INFO}" \
-		github.com/zlabjp/nghttpx-ingress-lb/cmd/...
+		github.com/zlabjp/nghttpx-ingress-lb/cmd/nghttpx-ingress-controller/...
+	CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo \
+		github.com/zlabjp/nghttpx-ingress-lb/cmd/fetch-ocsp-response/...
 
 container: controller
 	docker build -t "${PREFIX}:${TAG}" .
