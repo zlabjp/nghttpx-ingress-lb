@@ -27,6 +27,7 @@ package nghttpx
 import (
 	"fmt"
 	"net/http"
+	"os/exec"
 	"text/template"
 	"time"
 )
@@ -49,6 +50,9 @@ type Manager struct {
 	backendconfigURI string
 	// configrevisionURI is the nghttpx configrevision endpoint.
 	configrevisionURI string
+
+	// cmd is nghttpx command.
+	cmd *exec.Cmd
 }
 
 // NewManager ...

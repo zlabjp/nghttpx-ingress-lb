@@ -42,17 +42,17 @@ import (
 // Start starts a nghttpx process using nghttpx executable at path, and wait.
 func (ngx *Manager) Start(path, confPath string, stopCh <-chan struct{}) {
 	klog.Infof("Starting nghttpx process: %v --conf %v", path, confPath)
-	cmd := exec.Command(path, "--conf", confPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
+	ngx.cmd = exec.Command(path, "--conf", confPath)
+	ngx.cmd.Stdout = os.Stdout
+	ngx.cmd.Stderr = os.Stderr
+	if err := ngx.cmd.Start(); err != nil {
 		klog.Errorf("nghttpx didn't started successfully: %v", err)
 		return
 	}
 
 	waitDoneCh := make(chan struct{})
 	go func() {
-		if err := cmd.Wait(); err != nil {
+		if err := ngx.cmd.Wait(); err != nil {
 			klog.Errorf("nghttpx didn't complete successfully: %v", err)
 		}
 		close(waitDoneCh)
@@ -62,9 +62,9 @@ func (ngx *Manager) Start(path, confPath string, stopCh <-chan struct{}) {
 	case <-waitDoneCh:
 		klog.Infof("nghttpx exited")
 	case <-stopCh:
-		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", cmd.Process.Pid)
-		if err := cmd.Process.Signal(syscall.SIGQUIT); err != nil {
-			klog.Errorf("Could not send signal to nghttpx process (PID %v): %v", cmd.Process.Pid, err)
+		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", ngx.cmd.Process.Pid)
+		if err := ngx.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
+			klog.Errorf("Could not send signal to nghttpx process (PID %v): %v", ngx.cmd.Process.Pid, err)
 		}
 		<-waitDoneCh
 		klog.Infof("nghttpx exited")
@@ -116,12 +116,9 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 			return false, err
 		}
 
-		cmd := "killall"
-		args := []string{"-HUP", "nghttpx"}
 		klog.Info("change in configuration detected. Reloading...")
-		out, err := exec.Command(cmd, args...).CombinedOutput()
-		if err != nil {
-			return false, fmt.Errorf("failed to execute %v %v: %v", cmd, args, string(out))
+		if err := ngx.cmd.Process.Signal(syscall.SIGHUP); err != nil {
+			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %v", ngx.cmd.Process.Pid, err)
 		}
 
 		if err := ngx.waitUntilConfigRevisionChanges(oldConfRev); err != nil {
