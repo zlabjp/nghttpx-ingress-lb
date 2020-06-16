@@ -27,7 +27,7 @@ RUN apt-get update && \
         git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev libssl-dev bison patch \
         zlib1g libev4 libjemalloc2 libc-ares2 \
-        ca-certificates psmisc openssl \
+        ca-certificates openssl \
         python && \
     apt-get clean -y && \
     git clone --depth 1 -b v1.41.0 https://github.com/nghttp2/nghttp2.git && \
