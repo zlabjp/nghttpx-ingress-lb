@@ -123,6 +123,8 @@ var (
 
 	publishSvc = flags.String("publish-service", "", `Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
 
+	endpointSlices = flags.Bool("endpoint-slices", false, `Get endpoints from EndpointSlice resource instead of Endpoints resource`)
+
 	configOverrides clientcmd.ConfigOverrides
 )
 
@@ -249,6 +251,7 @@ func main() {
 		FetchOCSPRespFromSecret: *fetchOCSPRespFromSecret,
 		ProxyProto:              *proxyProto,
 		PublishSvc:              publishSvcKey,
+		EnableEndpointSlice:     *endpointSlices,
 	}
 
 	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {

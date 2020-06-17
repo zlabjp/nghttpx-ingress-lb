@@ -39,6 +39,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	clientv1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1beta1"
 	networking "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,6 +51,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	listerscore "k8s.io/client-go/listers/core/v1"
+	listersdiscovery "k8s.io/client-go/listers/discovery/v1beta1"
 	listersnetworking "k8s.io/client-go/listers/networking/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
@@ -78,6 +80,7 @@ type LoadBalancerController struct {
 	ingInformer             cache.SharedIndexInformer
 	ingClassInformer        cache.SharedIndexInformer
 	epInformer              cache.SharedIndexInformer
+	epSliceInformer         cache.SharedIndexInformer
 	svcInformer             cache.SharedIndexInformer
 	secretInformer          cache.SharedIndexInformer
 	cmInformer              cache.SharedIndexInformer
@@ -87,6 +90,7 @@ type LoadBalancerController struct {
 	ingClassLister          listersnetworking.IngressClassLister
 	svcLister               listerscore.ServiceLister
 	epLister                listerscore.EndpointsLister
+	epSliceLister           listersdiscovery.EndpointSliceLister
 	secretLister            listerscore.SecretLister
 	cmLister                listerscore.ConfigMapLister
 	podLister               listerscore.PodLister
@@ -163,6 +167,8 @@ type Config struct {
 	// PublishSvc is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
 	// controller Pod.
 	PublishSvc *types.NamespacedName
+	// EnableEndpointSlice tells controller to use EndpointSlices instead of Endpoints.
+	EnableEndpointSlice bool
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -213,7 +219,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 
 	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod)
 
-	{
+	if !config.EnableEndpointSlice {
 		f := allNSInformers.Core().V1().Endpoints()
 		lbc.epLister = f.Lister()
 		lbc.epInformer = f.Informer()
@@ -223,12 +229,32 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 			DeleteFunc: lbc.deleteEndpointsNotification,
 		})
 
+	} else {
+		epSliceInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+				opts.LabelSelector =
+					discovery.LabelManagedBy + "=endpointslice-controller.k8s.io," + discovery.LabelServiceName
+			}))
+
+		f := epSliceInformers.Discovery().V1beta1().EndpointSlices()
+		lbc.epSliceLister = f.Lister()
+		lbc.epSliceInformer = f.Informer()
+		lbc.epSliceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addEndpointSliceNotification,
+			UpdateFunc: lbc.updateEndpointSliceNotification,
+			DeleteFunc: lbc.deleteEndpointSliceNotification,
+		})
 	}
 
 	{
 		f := allNSInformers.Core().V1().Services()
 		lbc.svcLister = f.Lister()
 		lbc.svcInformer = f.Informer()
+		lbc.svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addServiceNotification,
+			UpdateFunc: lbc.updateServiceNotification,
+			DeleteFunc: lbc.deleteServiceNotification,
+		})
 	}
 
 	{
@@ -412,21 +438,128 @@ func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) 
 
 // endpointsReferenced returns true if we are interested in ep.
 func (lbc *LoadBalancerController) endpointsReferenced(ep *v1.Endpoints) bool {
-	if ep.Namespace == lbc.defaultSvc.Namespace && ep.Name == lbc.defaultSvc.Name {
+	return lbc.serviceReferenced(types.NamespacedName{Name: ep.Name, Namespace: ep.Namespace})
+}
+
+func (lbc *LoadBalancerController) addEndpointSliceNotification(obj interface{}) {
+	es := obj.(*discovery.EndpointSlice)
+	if !lbc.endpointSliceReferenced(es) {
+		return
+	}
+	klog.V(4).Infof("EndpointSlice %v/%v added", es.Namespace, es.Name)
+	lbc.enqueue(syncKey)
+}
+
+func (lbc *LoadBalancerController) updateEndpointSliceNotification(old, cur interface{}) {
+	if reflect.DeepEqual(old, cur) {
+		return
+	}
+
+	oldES := old.(*discovery.EndpointSlice)
+	curES := cur.(*discovery.EndpointSlice)
+	if !lbc.endpointSliceReferenced(oldES) && !lbc.endpointSliceReferenced(curES) {
+		return
+	}
+	klog.V(4).Infof("EndpointSlice %v/%v updated", curES.Namespace, curES.Name)
+	lbc.enqueue(syncKey)
+}
+
+func (lbc *LoadBalancerController) deleteEndpointSliceNotification(obj interface{}) {
+	es, ok := obj.(*discovery.EndpointSlice)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			return
+		}
+		es, ok = tombstone.Obj.(*discovery.EndpointSlice)
+		if !ok {
+			klog.Errorf("Tombstone contained object that is not EndpointSlice %+v", obj)
+			return
+		}
+	}
+	if !lbc.endpointSliceReferenced(es) {
+		return
+	}
+	klog.V(4).Infof("EndpointSlice %v/%v deleted", es.Namespace, es.Name)
+	lbc.enqueue(syncKey)
+}
+
+// endpointSliceReferenced returns true if we are interested in es.
+func (lbc *LoadBalancerController) endpointSliceReferenced(es *discovery.EndpointSlice) bool {
+	svcName := es.Labels[discovery.LabelServiceName]
+	if svcName == "" {
+		return false
+	}
+
+	return lbc.serviceReferenced(types.NamespacedName{Name: svcName, Namespace: es.Namespace})
+}
+
+func (lbc *LoadBalancerController) addServiceNotification(obj interface{}) {
+	svc := obj.(*v1.Service)
+	if !lbc.serviceReferenced(namespacedName(svc)) {
+		return
+	}
+	klog.V(4).Infof("Service %v/%v added", svc.Namespace, svc.Name)
+	lbc.enqueue(syncKey)
+}
+
+func (lbc *LoadBalancerController) updateServiceNotification(old, cur interface{}) {
+	if reflect.DeepEqual(old, cur) {
+		return
+	}
+
+	oldSvc := old.(*v1.Service)
+	curSvc := cur.(*v1.Service)
+	if !lbc.serviceReferenced(namespacedName(oldSvc)) && !lbc.serviceReferenced(namespacedName(curSvc)) {
+		return
+	}
+	klog.V(4).Infof("Service %v/%v updated", curSvc.Namespace, curSvc.Name)
+	lbc.enqueue(syncKey)
+}
+
+func (lbc *LoadBalancerController) deleteServiceNotification(obj interface{}) {
+	svc, ok := obj.(*v1.Service)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			return
+		}
+		svc, ok = tombstone.Obj.(*v1.Service)
+		if !ok {
+			klog.Errorf("Tombstone contained object that is not Service %+v", obj)
+			return
+		}
+	}
+	if !lbc.serviceReferenced(namespacedName(svc)) {
+		return
+	}
+	klog.V(4).Infof("Service %v/%v deleted", svc.Namespace, svc.Name)
+	lbc.enqueue(syncKey)
+}
+
+func namespacedName(obj metav1.Object) types.NamespacedName {
+	return types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
+}
+
+// serviceReferenced returns true if we are interested in svc.
+func (lbc *LoadBalancerController) serviceReferenced(svc types.NamespacedName) bool {
+	if svc.Namespace == lbc.defaultSvc.Namespace && svc.Name == lbc.defaultSvc.Name {
 		return true
 	}
 
-	ings, err := lbc.ingLister.Ingresses(ep.Namespace).List(labels.Everything())
+	ings, err := lbc.ingLister.Ingresses(svc.Namespace).List(labels.Everything())
 	if err != nil {
-		klog.Errorf("Could not list Ingress namespace=%v: %v", ep.Namespace, err)
+		klog.Errorf("Could not list Ingress namespace=%v: %v", svc.Namespace, err)
 		return false
 	}
 	for _, ing := range ings {
 		if !lbc.validateIngressClass(ing) {
 			continue
 		}
-		if ing.Spec.Backend != nil && ep.Name == ing.Spec.Backend.ServiceName {
-			klog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
+		if ing.Spec.Backend != nil && svc.Name == ing.Spec.Backend.ServiceName {
+			klog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", svc.Namespace, svc.Name, ing.Namespace, ing.Name)
 			return true
 		}
 		for i := range ing.Spec.Rules {
@@ -436,8 +569,8 @@ func (lbc *LoadBalancerController) endpointsReferenced(ep *v1.Endpoints) bool {
 			}
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
-				if ep.Name == path.Backend.ServiceName {
-					klog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", ep.Namespace, ep.Name, ing.Namespace, ing.Name)
+				if svc.Name == path.Backend.ServiceName {
+					klog.V(4).Infof("Service %v/%v is referenced by Ingress %v/%v", svc.Namespace, svc.Name, ing.Namespace, ing.Name)
 					return true
 				}
 			}
@@ -725,7 +858,7 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 		return upstream
 	}
 
-	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], v1.ProtocolTCP, &nghttpx.PortBackendConfig{})
+	eps := lbc.getEndpoints(svc, &nghttpx.PortBackendConfig{})
 	if len(eps) == 0 {
 		klog.Warningf("service %v does not have any active endpoints", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
@@ -936,7 +1069,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 				}
 			}
 
-			eps := lbc.getEndpoints(svc, servicePort, v1.ProtocolTCP, portBackendConfig)
+			eps := lbc.getEndpoints(svc, portBackendConfig)
 			if len(eps) == 0 {
 				klog.Warningf("service %v does not have any active endpoints", svcKey)
 				break
@@ -1044,12 +1177,35 @@ func (lbc *LoadBalancerController) secretReferenced(s *v1.Secret) bool {
 	return false
 }
 
-// getEndpoints returns a list of <endpoint ip>:<port> for a given
-// service/target port combination.  portBackendConfig is additional
-// per-port configuration for backend, which must not be nil.
-func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.ServicePort, proto v1.Protocol, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
-	klog.V(3).Infof("getting endpoints for service %v/%v and port %v target port %v protocol %v", s.Namespace, s.Name, servicePort.Port, servicePort.TargetPort.String(), servicePort.Protocol)
-	ep, err := lbc.epLister.Endpoints(s.Namespace).Get(s.Name)
+// getEndpoints returns a list of UpstreamServer for a given service.  portBackendConfig is additional per-port configuration for backend,
+// which must not be nil.
+func (lbc *LoadBalancerController) getEndpoints(svc *v1.Service, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+	if len(svc.Spec.Ports) == 0 {
+		klog.Warningf("Service %v/%v has no ports", svc.Namespace, svc.Name)
+		return nil
+	}
+
+	svcPort := &svc.Spec.Ports[0]
+	if svcPort.Protocol != "" && svcPort.Protocol != v1.ProtocolTCP {
+		klog.Infof("Service %v/%v has unsupported protocol %v", svc.Namespace, svc.Name, svcPort.Protocol)
+		return nil
+	}
+
+	klog.V(3).Infof("getting endpoints for Service %v/%v and port %v target port %v",
+		svc.Namespace, svc.Name, svcPort.Port, svcPort.TargetPort.String())
+
+	switch {
+	case lbc.epLister != nil:
+		return lbc.getEndpointsFromEndpoints(svc, portBackendConfig)
+	case lbc.epSliceLister != nil:
+		return lbc.getEndpointsFromEndpointSlice(svc, portBackendConfig)
+	default:
+		panic("unreachable")
+	}
+}
+
+func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *v1.Service, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+	ep, err := lbc.epLister.Endpoints(svc.Namespace).Get(svc.Name)
 	if err != nil {
 		klog.Warningf("unexpected error obtaining service endpoints: %v", err)
 		return []nghttpx.UpstreamServer{}
@@ -1060,81 +1216,158 @@ func (lbc *LoadBalancerController) getEndpoints(s *v1.Service, servicePort *v1.S
 	for i := range ep.Subsets {
 		ss := &ep.Subsets[i]
 		for i := range ss.Ports {
-			epPort := &ss.Ports[i]
-			if epPort.Protocol != proto {
+			port := &ss.Ports[i]
+
+			if port.Protocol != "" && port.Protocol != v1.ProtocolTCP {
 				continue
 			}
 
-			var targetPort int32
-
-			if servicePort.TargetPort.String() == "" {
-				if epPort.Port == servicePort.Port {
-					targetPort = epPort.Port
-				}
-			} else {
-				switch servicePort.TargetPort.Type {
-				case intstr.Int:
-					if epPort.Port == servicePort.TargetPort.IntVal {
-						targetPort = epPort.Port
-					}
-				case intstr.String:
-					// TODO Is this necessary?
-					if servicePort.TargetPort.StrVal == "" {
-						break
-					}
-					var port int32
-					if p, err := strconv.Atoi(servicePort.TargetPort.StrVal); err != nil {
-						port, err = lbc.getNamedPortFromPod(s, servicePort)
-						if err != nil {
-							klog.Warningf("Could not find named port %v in Pod spec: %v", servicePort.TargetPort.String(), err)
-							continue
-						}
-					} else {
-						port = int32(p)
-					}
-					if epPort.Port == port {
-						targetPort = port
-					}
-				}
+			epPort := &discovery.EndpointPort{
+				Port: &port.Port,
 			}
 
-			if targetPort == 0 {
-				klog.V(4).Infof("Endpoint port %v does not match Service port %v", epPort.Port, servicePort.TargetPort.String())
+			targetPort, err := lbc.resolveTargetPort(svc, epPort)
+			if err != nil {
+				klog.Warningf("unable to get target port for Service %v/%v: %v", svc.Namespace, svc.Name, err)
 				continue
 			}
 
 			for i := range ss.Addresses {
-				epAddress := &ss.Addresses[i]
-				ups := nghttpx.UpstreamServer{
-					Address:              epAddress.IP,
-					Port:                 strconv.Itoa(int(targetPort)),
-					Protocol:             portBackendConfig.GetProto(),
-					TLS:                  portBackendConfig.GetTLS(),
-					SNI:                  portBackendConfig.GetSNI(),
-					DNS:                  portBackendConfig.GetDNS(),
-					Affinity:             portBackendConfig.GetAffinity(),
-					AffinityCookieName:   portBackendConfig.GetAffinityCookieName(),
-					AffinityCookiePath:   portBackendConfig.GetAffinityCookiePath(),
-					AffinityCookieSecure: portBackendConfig.GetAffinityCookieSecure(),
-					Group:                fmt.Sprintf("%v/%v", s.Namespace, s.Name),
-					Weight:               portBackendConfig.GetWeight(),
-				}
-				// Set Protocol and Affinity here if they are empty.  Template expects them.
-				if ups.Protocol == "" {
-					ups.Protocol = nghttpx.ProtocolH1
-				}
-				if ups.Affinity == "" {
-					ups.Affinity = nghttpx.AffinityNone
-				} else if ups.Affinity == nghttpx.AffinityCookie && ups.AffinityCookieSecure == "" {
-					ups.AffinityCookieSecure = nghttpx.AffinityCookieSecureAuto
-				}
-				upsServers = append(upsServers, ups)
+				upsServers = append(upsServers, lbc.createUpstreamServer(svc, ss.Addresses[i].IP, targetPort, portBackendConfig))
 			}
 		}
 	}
 
 	klog.V(3).Infof("endpoints found: %+v", upsServers)
 	return upsServers
+}
+
+func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *v1.Service, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+	ess, err := lbc.epSliceLister.EndpointSlices(svc.Namespace).List(newEndpointSliceSelector(svc))
+	if err != nil {
+		klog.Warningf("unexpected error obtaining EndpointSlice: %v", err)
+		return nil
+	}
+
+	var upsServers []nghttpx.UpstreamServer
+
+	for _, es := range ess {
+		switch es.AddressType {
+		case "IPv4", "IPv6":
+		default:
+			klog.Warningf("EndpointSlice %v/%v has unsupported address type %v", es.Namespace, es.Name, es.AddressType)
+			continue
+		}
+
+		if len(es.Ports) == 0 {
+			klog.Warningf("EndpointSlice %v/%v has no port defined", es.Namespace, es.Name)
+			continue
+		}
+
+		epPort := &es.Ports[0]
+
+		if epPort.Protocol != nil && *epPort.Protocol != v1.ProtocolTCP {
+			continue
+		}
+
+		targetPort, err := lbc.resolveTargetPort(svc, epPort)
+		if err != nil {
+			klog.Warningf("EndpointSlice %v/%v has port but it does not match Service %v/%v: %v",
+				es.Namespace, es.Name, svc.Namespace, svc.Name, err)
+			continue
+		}
+
+		for i := range es.Endpoints {
+			ep := &es.Endpoints[i]
+			// TODO We historically added all addresses in Endpoints code.  Not sure we should just pick one here instead.
+			for _, addr := range ep.Addresses {
+				upsServers = append(upsServers, lbc.createUpstreamServer(svc, addr, targetPort, portBackendConfig))
+			}
+		}
+	}
+
+	klog.V(3).Infof("endpoints found: %+v", upsServers)
+	return upsServers
+}
+
+func newEndpointSliceSelector(svc *v1.Service) labels.Selector {
+	return labels.SelectorFromSet(labels.Set{
+		discovery.LabelServiceName: svc.Name,
+	})
+}
+
+func (lbc *LoadBalancerController) createUpstreamServer(svc *v1.Service, address string, targetPort int32, portBackendConfig *nghttpx.PortBackendConfig) nghttpx.UpstreamServer {
+	ups := nghttpx.UpstreamServer{
+		Address:              address,
+		Port:                 strconv.Itoa(int(targetPort)),
+		Protocol:             portBackendConfig.GetProto(),
+		TLS:                  portBackendConfig.GetTLS(),
+		SNI:                  portBackendConfig.GetSNI(),
+		DNS:                  portBackendConfig.GetDNS(),
+		Affinity:             portBackendConfig.GetAffinity(),
+		AffinityCookieName:   portBackendConfig.GetAffinityCookieName(),
+		AffinityCookiePath:   portBackendConfig.GetAffinityCookiePath(),
+		AffinityCookieSecure: portBackendConfig.GetAffinityCookieSecure(),
+		Group:                fmt.Sprintf("%v/%v", svc.Namespace, svc.Name),
+		Weight:               portBackendConfig.GetWeight(),
+	}
+	// Set Protocol and Affinity here if they are empty.  Template expects them.
+	if ups.Protocol == "" {
+		ups.Protocol = nghttpx.ProtocolH1
+	}
+	if ups.Affinity == "" {
+		ups.Affinity = nghttpx.AffinityNone
+	} else if ups.Affinity == nghttpx.AffinityCookie && ups.AffinityCookieSecure == "" {
+		ups.AffinityCookieSecure = nghttpx.AffinityCookieSecureAuto
+	}
+
+	return ups
+}
+
+// resolveTargetPort returns port number for one of service endpoint.  This function verifies that endpoint port given in epPort matches the
+// port defined in svc.
+func (lbc *LoadBalancerController) resolveTargetPort(svc *v1.Service, epPort *discovery.EndpointPort) (int32, error) {
+	svcPort := &svc.Spec.Ports[0]
+
+	if epPort.Port == nil {
+		return 0, fmt.Errorf("EndpointPort has no port defined")
+	}
+
+	if svcPort.TargetPort.String() == "" {
+		if *epPort.Port == svcPort.Port {
+			return *epPort.Port, nil
+		}
+	} else {
+		switch svcPort.TargetPort.Type {
+		case intstr.Int:
+			if *epPort.Port == svcPort.TargetPort.IntVal {
+				return *epPort.Port, nil
+			}
+		case intstr.String:
+			// TODO Is this necessary?
+			if svcPort.TargetPort.StrVal == "" {
+				break
+			}
+
+			port, err := strconv.Atoi(svcPort.TargetPort.StrVal)
+			if err != nil {
+				port, err := lbc.getNamedPortFromPod(svc, svcPort)
+				if err != nil {
+					return 0, fmt.Errorf("could not find named port %v in Pod spec: %v", svcPort.TargetPort.String(), err)
+				}
+				if *epPort.Port == port {
+					return *epPort.Port, nil
+				}
+				break
+			}
+
+			if *epPort.Port == int32(port) {
+				return *epPort.Port, nil
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("no matching port found")
 }
 
 // getNamedPortFromPod returns port number from Pod sharing the same port name with servicePort.
@@ -1187,32 +1420,36 @@ func (lbc *LoadBalancerController) Run() {
 	}()
 
 	go lbc.ingInformer.Run(lbc.stopCh)
-	go lbc.epInformer.Run(lbc.stopCh)
 	go lbc.svcInformer.Run(lbc.stopCh)
 	go lbc.secretInformer.Run(lbc.stopCh)
 	go lbc.cmInformer.Run(lbc.stopCh)
 	go lbc.podInformer.Run(lbc.stopCh)
 	go lbc.nodeInformer.Run(lbc.stopCh)
 
-	if !cache.WaitForCacheSync(
-		lbc.stopCh,
+	hasSynced := []cache.InformerSynced{
 		lbc.ingInformer.HasSynced,
-		lbc.epInformer.HasSynced,
 		lbc.svcInformer.HasSynced,
 		lbc.secretInformer.HasSynced,
 		lbc.cmInformer.HasSynced,
 		lbc.podInformer.HasSynced,
 		lbc.nodeInformer.HasSynced,
-	) {
-		return
 	}
 
 	if lbc.ingClassInformer != nil {
 		go lbc.ingClassInformer.Run(lbc.stopCh)
+		hasSynced = append(hasSynced, lbc.ingClassInformer.HasSynced)
+	}
+	if lbc.epInformer != nil {
+		go lbc.epInformer.Run(lbc.stopCh)
+		hasSynced = append(hasSynced, lbc.epInformer.HasSynced)
+	}
+	if lbc.epSliceInformer != nil {
+		go lbc.epSliceInformer.Run(lbc.stopCh)
+		hasSynced = append(hasSynced, lbc.epSliceInformer.HasSynced)
+	}
 
-		if !cache.WaitForCacheSync(lbc.stopCh, lbc.ingClassInformer.HasSynced) {
-			return
-		}
+	if !cache.WaitForCacheSync(lbc.stopCh, hasSynced...) {
+		return
 	}
 
 	go lbc.worker()
