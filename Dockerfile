@@ -33,7 +33,19 @@ RUN apt-get update && \
     git submodule update --init && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
-    make -j$(nproc) install-strip
+    make -j$(nproc) install-strip && \
+    cd .. && \
+    rm -rf nghttp2 && \
+    apt-get -y purge git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
+        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev libssl-dev bison patch && \
+    apt-get -y autoremove --purge && \
+    rm -rf \
+        /var/cache/debconf/* \
+        /var/lib/apt/lists/* \
+        /var/log/* \
+        /tmp/* \
+        /var/tmp/* && \
+    rm /extra-mrbgem.patch /static.patch
 
 FROM gcr.io/distroless/cc-debian10@sha256:fdc2db094a9ceaaf7cc3458a5f8987c1b68396dbc27bfab3a594cbe911c705d1
 
