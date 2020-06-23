@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1beta1"
 	networking "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -61,12 +62,14 @@ type fixture struct {
 	cmStore       []*v1.ConfigMap
 	podStore      []*v1.Pod
 	nodeStore     []*v1.Node
+	epSliceStore  []*discovery.EndpointSlice
 
 	objects []runtime.Object
 
 	actions []core.Action
 
-	enableIngressClass bool
+	enableIngressClass  bool
+	enableEndpointSlice bool
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -135,6 +138,7 @@ func (f *fixture) prepare() {
 		IngressClass:           defaultIngressClass,
 		IngressClassController: defaultIngressClassController,
 		EnableIngressClass:     f.enableIngressClass,
+		EnableEndpointSlice:    f.enableEndpointSlice,
 	}
 	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo)
 }
@@ -166,8 +170,14 @@ func (f *fixture) setupStore() {
 	for _, ingClass := range f.ingClassStore {
 		f.lbc.ingClassInformer.GetIndexer().Add(ingClass)
 	}
-	for _, ep := range f.epStore {
-		f.lbc.epInformer.GetIndexer().Add(ep)
+	if f.enableEndpointSlice {
+		for _, es := range f.epSliceStore {
+			f.lbc.epSliceInformer.GetIndexer().Add(es)
+		}
+	} else {
+		for _, ep := range f.epStore {
+			f.lbc.epInformer.GetIndexer().Add(ep)
+		}
 	}
 	for _, svc := range f.svcStore {
 		f.lbc.svcInformer.GetIndexer().Add(svc)
@@ -247,6 +257,10 @@ func stringPtr(s string) *string {
 	return &s
 }
 
+func int32Ptr(n int32) *int32 {
+	return &n
+}
+
 // keyPair contains certificate key, and cert, and their name.
 type keyPair struct {
 	name string
@@ -266,7 +280,7 @@ func newEmptyConfigMap() *v1.ConfigMap {
 }
 
 // newDefaultBackend returns Service and Endpoints for default backend.
-func newDefaultBackend() (*v1.Service, *v1.Endpoints) {
+func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice) {
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      defaultBackendName,
@@ -303,10 +317,77 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints) {
 		},
 	}
 
-	return svc, eps
+	ess := []*discovery.EndpointSlice{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      defaultBackendName + "-a",
+				Namespace: defaultBackendNamespace,
+				Labels: map[string]string{
+					discovery.LabelServiceName: defaultBackendName,
+				},
+			},
+			AddressType: "IPv4",
+			Ports: []discovery.EndpointPort{
+				{
+					Port: int32Ptr(8080),
+				},
+			},
+			Endpoints: []discovery.Endpoint{
+				{
+					Addresses: []string{
+						"192.168.100.1",
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      defaultBackendName + "-b",
+				Namespace: defaultBackendNamespace,
+				Labels: map[string]string{
+					discovery.LabelServiceName: defaultBackendName,
+				},
+			},
+			AddressType: "IPv4",
+			Ports: []discovery.EndpointPort{
+				{
+					Port: int32Ptr(8080),
+				},
+			},
+			Endpoints: []discovery.Endpoint{
+				{
+					Addresses: []string{
+						"192.168.100.2",
+					},
+				},
+			},
+		},
+		// This must be ignored.
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      defaultBackendName + "-c",
+				Namespace: defaultBackendNamespace,
+			},
+			AddressType: "FQDN",
+			Ports: []discovery.EndpointPort{
+				{
+					Port: int32Ptr(8080),
+				},
+			},
+			Endpoints: []discovery.Endpoint{
+				{
+					Addresses: []string{
+						"192.168.100.3",
+					},
+				},
+			},
+		},
+	}
+
+	return svc, eps, ess
 }
 
-func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoints) {
+func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoints, *discovery.EndpointSlice) {
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -349,7 +430,32 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 
 	eps.Subsets[0].Addresses = endpointAddrs
 
-	return svc, eps
+	proto := v1.ProtocolTCP
+
+	es := &discovery.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-aaaa",
+			Namespace: namespace,
+			Labels: map[string]string{
+				discovery.LabelServiceName: name,
+			},
+		},
+		AddressType: "IPv4",
+		Ports: []discovery.EndpointPort{
+			{
+				Protocol: &proto,
+				Port:     int32Ptr(80),
+			},
+		},
+	}
+
+	for _, addr := range addrs {
+		es.Endpoints = append(es.Endpoints, discovery.Endpoint{
+			Addresses: []string{addr},
+		})
+	}
+
+	return svc, eps, es
 }
 
 func newIngressTLS(namespace, name, svcName, svcPort, tlsSecretName string) *networking.Ingress {
@@ -416,56 +522,75 @@ func getKey(obj runtime.Object, t *testing.T) string {
 
 // TestSyncDefaultBackend verifies that controller creates configuration for default service backend.
 func TestSyncDefaultBackend(t *testing.T) {
-	f := newFixture(t)
-
-	cm := newEmptyConfigMap()
-	cm.Data[nghttpx.NghttpxExtraConfigKey] = "Test"
-	const mrubyContent = "mruby"
-	cm.Data[nghttpx.NghttpxMrubyFileContentKey] = mrubyContent
-	svc, eps := newDefaultBackend()
-
-	f.cmStore = append(f.cmStore, cm)
-	f.svcStore = append(f.svcStore, svc)
-	f.epStore = append(f.epStore, eps)
-
-	f.objects = append(f.objects, cm, svc, eps)
-
-	f.prepare()
-	f.run(getKey(svc, t))
-
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
-
-	if got, want := ingConfig.TLS, false; got != want {
-		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
+	tests := []struct {
+		desc                string
+		enableEndpointSlice bool
+	}{
+		{
+			desc: "With Endpoints",
+		},
+		{
+			desc:                "With EndpointSlice",
+			enableEndpointSlice: true,
+		},
 	}
 
-	if got, want := len(ingConfig.Upstreams), 1; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	} else {
-		upstream := ingConfig.Upstreams[0]
-		if got, want := upstream.Path, ""; got != want {
-			t.Errorf("upstream.Path = %v, want %v", got, want)
-		}
-		backends := upstream.Backends
-		if got, want := len(backends), 2; got != want {
-			t.Errorf("len(backends) = %v, want %v", got, want)
-		}
-		us := backends[0]
-		if got, want := us.Address, "192.168.100.1"; got != want {
-			t.Errorf("0: us.Address = %v, want %v", got, want)
-		}
-	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+			f.enableEndpointSlice = tt.enableEndpointSlice
 
-	if got, want := fm.ingConfig.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
-		t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
-	}
-	if got, want := fm.ingConfig.MrubyFile, (&nghttpx.ChecksumFile{
-		Path:     nghttpx.NghttpxMrubyRbPath(defaultConfDir),
-		Content:  []byte(mrubyContent),
-		Checksum: nghttpx.Checksum([]byte(mrubyContent)),
-	}); !reflect.DeepEqual(got, want) {
-		t.Errorf("fm.ingConfig.MrubyFile = %q, want %q", got, want)
+			cm := newEmptyConfigMap()
+			cm.Data[nghttpx.NghttpxExtraConfigKey] = "Test"
+			const mrubyContent = "mruby"
+			cm.Data[nghttpx.NghttpxMrubyFileContentKey] = mrubyContent
+			svc, eps, ess := newDefaultBackend()
+
+			f.cmStore = append(f.cmStore, cm)
+			f.svcStore = append(f.svcStore, svc)
+			f.epStore = append(f.epStore, eps)
+			f.epSliceStore = append(f.epSliceStore, ess...)
+
+			f.objects = append(f.objects, cm, svc, eps)
+
+			f.prepare()
+			f.run(getKey(svc, t))
+
+			fm := f.lbc.nghttpx.(*fakeManager)
+			ingConfig := fm.ingConfig
+
+			if got, want := ingConfig.TLS, false; got != want {
+				t.Errorf("ingConfig.TLS = %v, want %v", got, want)
+			}
+
+			if got, want := len(ingConfig.Upstreams), 1; got != want {
+				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+			} else {
+				upstream := ingConfig.Upstreams[0]
+				if got, want := upstream.Path, ""; got != want {
+					t.Errorf("upstream.Path = %v, want %v", got, want)
+				}
+				backends := upstream.Backends
+				if got, want := len(backends), 2; got != want {
+					t.Errorf("len(backends) = %v, want %v", got, want)
+				}
+				us := backends[0]
+				if got, want := us.Address, "192.168.100.1"; got != want {
+					t.Errorf("0: us.Address = %v, want %v", got, want)
+				}
+			}
+
+			if got, want := fm.ingConfig.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
+				t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
+			}
+			if got, want := fm.ingConfig.MrubyFile, (&nghttpx.ChecksumFile{
+				Path:     nghttpx.NghttpxMrubyRbPath(defaultConfDir),
+				Content:  []byte(mrubyContent),
+				Checksum: nghttpx.Checksum([]byte(mrubyContent)),
+			}); !reflect.DeepEqual(got, want) {
+				t.Errorf("fm.ingConfig.MrubyFile = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -473,7 +598,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 func TestSyncDefaultTLSSecretNotFound(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps := newDefaultBackend()
+	svc, eps, _ := newDefaultBackend()
 
 	f.svcStore = append(f.svcStore, svc)
 	f.epStore = append(f.epStore, eps)
@@ -495,7 +620,7 @@ func TestSyncDefaultSecret(t *testing.T) {
 	dCrt := []byte(tlsCrt)
 	dKey := []byte(tlsKey)
 	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
-	svc, eps := newDefaultBackend()
+	svc, eps, _ := newDefaultBackend()
 
 	f.secretStore = append(f.secretStore, tlsSecret)
 	f.svcStore = append(f.svcStore, svc)
@@ -543,9 +668,9 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	dCrt := []byte(tlsCrt)
 	dKey := []byte(tlsKey)
 	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
-	svc, eps := newDefaultBackend()
+	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
 	ing1 := newIngressTLS(metav1.NamespaceDefault, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String(), tlsSecret.Name)
 
 	f.secretStore = append(f.secretStore, tlsSecret)
@@ -586,93 +711,133 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 
 // TestSyncStringNamedPort verifies that if service target port is a named port, it is looked up from Pod spec.
 func TestSyncStringNamedPort(t *testing.T) {
-	f := newFixture(t)
-
-	svc, eps := newDefaultBackend()
-
-	bs1, be1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	bs1.Spec.Ports[0] = v1.ServicePort{
-		TargetPort: intstr.FromString("my-port"),
-		Protocol:   v1.ProtocolTCP,
-	}
-	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
-
-	bp1 := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "alpha-pod-1",
-			Namespace: bs1.Namespace,
-			Labels:    bs1.Spec.Selector,
+	tests := []struct {
+		desc                string
+		enableEndpointSlice bool
+	}{
+		{
+			desc: "With Endpoints",
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Ports: []v1.ContainerPort{
+		{
+			desc:                "With EndpointSlice",
+			enableEndpointSlice: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+			f.enableEndpointSlice = tt.enableEndpointSlice
+
+			svc, eps, ess := newDefaultBackend()
+
+			bs1, be1, bes1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+			bs1.Spec.Ports[0] = v1.ServicePort{
+				TargetPort: intstr.FromString("my-port"),
+				Protocol:   v1.ProtocolTCP,
+			}
+			ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
+
+			bp1 := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "alpha-pod-1",
+					Namespace: bs1.Namespace,
+					Labels:    bs1.Spec.Selector,
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
 						{
-							Name:          "my-port",
-							ContainerPort: 80,
-							Protocol:      v1.ProtocolTCP,
+							Ports: []v1.ContainerPort{
+								{
+									Name:          "my-port",
+									ContainerPort: 80,
+									Protocol:      v1.ProtocolTCP,
+								},
+							},
 						},
 					},
 				},
-			},
-		},
-	}
+			}
 
-	f.svcStore = append(f.svcStore, svc, bs1)
-	f.epStore = append(f.epStore, eps, be1)
-	f.ingStore = append(f.ingStore, ing1)
-	f.podStore = append(f.podStore, bp1)
+			f.svcStore = append(f.svcStore, svc, bs1)
+			f.epStore = append(f.epStore, eps, be1)
+			f.epSliceStore = append(f.epSliceStore, ess...)
+			f.epSliceStore = append(f.epSliceStore, bes1)
+			f.ingStore = append(f.ingStore, ing1)
+			f.podStore = append(f.podStore, bp1)
 
-	f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bp1)
+			f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bp1)
 
-	f.prepare()
-	f.run(getKey(svc, t))
+			f.prepare()
+			f.run(getKey(svc, t))
 
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
+			fm := f.lbc.nghttpx.(*fakeManager)
+			ingConfig := fm.ingConfig
 
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	}
+			if got, want := len(ingConfig.Upstreams), 2; got != want {
+				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+			}
 
-	backend := ingConfig.Upstreams[0].Backends[0]
-	if got, want := backend.Port, "80"; got != want {
-		t.Errorf("backend.Port = %v, want %v", got, want)
+			backend := ingConfig.Upstreams[0].Backends[0]
+			if got, want := backend.Port, "80"; got != want {
+				t.Errorf("backend.Port = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
 // TestSyncNumericTargetPort verifies that if target port is numeric, it is compared to endpoint port directly.
 func TestSyncNumericTargetPort(t *testing.T) {
-	f := newFixture(t)
-
-	svc, eps := newDefaultBackend()
-
-	bs1, be1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	bs1.Spec.Ports[0] = v1.ServicePort{
-		TargetPort: intstr.FromString("80"),
-		Protocol:   v1.ProtocolTCP,
-	}
-	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
-
-	f.svcStore = append(f.svcStore, svc, bs1)
-	f.epStore = append(f.epStore, eps, be1)
-	f.ingStore = append(f.ingStore, ing1)
-
-	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
-
-	f.prepare()
-	f.run(getKey(svc, t))
-
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
-
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	tests := []struct {
+		desc                string
+		enableEndpointSlice bool
+	}{
+		{
+			desc: "With Endpoint",
+		},
+		{
+			desc:                "With EndpointSlice",
+			enableEndpointSlice: true,
+		},
 	}
 
-	backend := ingConfig.Upstreams[0].Backends[0]
-	if got, want := backend.Port, "80"; got != want {
-		t.Errorf("backend.Port = %v, want %v", got, want)
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+			f.enableEndpointSlice = tt.enableEndpointSlice
+
+			svc, eps, ess := newDefaultBackend()
+
+			bs1, be1, bes1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+			bs1.Spec.Ports[0] = v1.ServicePort{
+				TargetPort: intstr.FromString("80"),
+				Protocol:   v1.ProtocolTCP,
+			}
+			ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
+
+			f.svcStore = append(f.svcStore, svc, bs1)
+			f.epStore = append(f.epStore, eps, be1)
+			f.epSliceStore = append(f.epSliceStore, ess...)
+			f.epSliceStore = append(f.epSliceStore, bes1)
+			f.ingStore = append(f.ingStore, ing1)
+
+			f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+
+			f.prepare()
+			f.run(getKey(svc, t))
+
+			fm := f.lbc.nghttpx.(*fakeManager)
+			ingConfig := fm.ingConfig
+
+			if got, want := len(ingConfig.Upstreams), 2; got != want {
+				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+			}
+
+			backend := ingConfig.Upstreams[0].Backends[0]
+			if got, want := backend.Port, "80"; got != want {
+				t.Errorf("backend.Port = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
@@ -680,9 +845,9 @@ func TestSyncNumericTargetPort(t *testing.T) {
 func TestSyncEmptyTargetPort(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps := newDefaultBackend()
+	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
 	bs1.Spec.Ports[0] = v1.ServicePort{
 		Port:       80,
 		TargetPort: intstr.FromString(""),
@@ -717,12 +882,12 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 func TestSyncIngressClassAnnotation(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps := newDefaultBackend()
+	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
 	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
 
-	bs2, be2 := newBackend(metav1.NamespaceDefault, "beta", []string{"192.168.10.2"})
+	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "beta", []string{"192.168.10.2"})
 	ing2 := newIngress(bs2.Namespace, "beta-ing", bs2.Name, bs2.Spec.Ports[0].TargetPort.String())
 	ing2.Annotations[networking.AnnotationIngressClass] = "foo"
 
@@ -941,10 +1106,10 @@ func TestValidateIngressClass(t *testing.T) {
 func TestSyncIngressDefaultBackend(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps := newDefaultBackend()
+	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	bs2, be2 := newBackend(metav1.NamespaceDefault, "bravo", []string{"192.168.10.2"})
+	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "bravo", []string{"192.168.10.2"})
 	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
 	ing1.Spec.Backend = &networking.IngressBackend{
 		ServiceName: "bravo",
