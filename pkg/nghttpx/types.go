@@ -56,6 +56,8 @@ type IngressConfig struct {
 	// MrubyFileContent is the extra mruby script.  It is saved in the container disk space, and will be referenced by mruby-file from
 	// configuration file.
 	MrubyFile *ChecksumFile
+	// HealthzMruby is the mruby script to setup healthz endpoint.  It is only enabled when deferred shutdown period is configured.
+	HealthzMruby *ChecksumFile
 	// HealthPort is the port for health monitor endpoint.
 	HealthPort int
 	// APIPort is the port for API endpoint.

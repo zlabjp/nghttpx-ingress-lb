@@ -112,6 +112,7 @@ type LoadBalancerController struct {
 	proxyProto               bool
 	publishSvc               *types.NamespacedName
 	noDefaultBackendOverride bool
+	deferredShutdownPeriod  time.Duration
 
 	recorder record.EventRecorder
 
@@ -171,6 +172,8 @@ type Config struct {
 	ReloadBurst int
 	// NoDefaultBackendOverride, if set to true, ignores settings or rules in Ingress resource which override default backend service.
 	NoDefaultBackendOverride bool
+	// DeferredShutdownPeriod is a period before the controller starts shutting down when it receives shutdown signal.
+	DeferredShutdownPeriod time.Duration
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -202,6 +205,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		proxyProto:               config.ProxyProto,
 		publishSvc:               config.PublishSvc,
 		noDefaultBackendOverride: config.NoDefaultBackendOverride,
+		deferredShutdownPeriod:  config.DeferredShutdownPeriod,
 		recorder:                 eventBroadcaster.NewRecorder(scheme.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:                workqueue.New(),
 		reloadRateLimiter:        flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
@@ -996,7 +1000,32 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 
 	ingConfig.Upstreams = upstreams
 
+	if lbc.deferredShutdownPeriod != 0 {
+		ingConfig.HealthzMruby = nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, lbc.createHealthzMruby())
+	}
+
 	return ingConfig, nil
+}
+
+func (lbc *LoadBalancerController) createHealthzMruby() []byte {
+	var code int
+	if lbc.ShutdownCommenced() {
+		code = 503
+	} else {
+		code = 200
+	}
+
+	return []byte(fmt.Sprintf(`
+class App
+  def on_req(env)
+    resp = env.resp
+    resp.status = %v
+    resp.return ""
+  end
+end
+
+App.new
+`, code))
 }
 
 // createUpstream creates new nghttpx.Upstream for ing, host, path and backend.
@@ -1413,10 +1442,29 @@ func (lbc *LoadBalancerController) Stop() {
 		return
 	}
 
-	klog.Infof("Commencing shutting down")
-
 	lbc.shutdown = true
-	close(lbc.stopCh)
+
+	go func() {
+		if lbc.deferredShutdownPeriod != 0 {
+			klog.Infof("Deferred shutdown period is %v", lbc.deferredShutdownPeriod)
+
+			lbc.enqueue(syncKey)
+
+			<-time.After(lbc.deferredShutdownPeriod)
+		}
+
+		klog.Infof("Commencing shutting down")
+
+		close(lbc.stopCh)
+	}()
+}
+
+// ShutdownCommenced returns true if the controller is shutting down.  This includes deferred shutdown period.
+func (lbc *LoadBalancerController) ShutdownCommenced() bool {
+	lbc.stopLock.Lock()
+	defer lbc.stopLock.Unlock()
+
+	return lbc.shutdown
 }
 
 // Run starts the loadbalancer controller.

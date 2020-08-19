@@ -190,6 +190,10 @@ func deleteStaleMrubyAssets(ingConfig *IngressConfig) error {
 		keep[upstream.Mruby.Path] = true
 	}
 
+	if ingConfig.HealthzMruby != nil {
+		keep[ingConfig.HealthzMruby.Path] = true
+	}
+
 	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, mrubyDir), keep)
 }
 
