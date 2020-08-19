@@ -83,6 +83,7 @@ var (
 	reloadRate               = 1.0
 	reloadBurst              = 1
 	noDefaultBackendOverride = false
+	deferredShutdownPeriod   time.Duration
 	configOverrides          clientcmd.ConfigOverrides
 )
 
@@ -158,6 +159,9 @@ func main() {
 
 	rootCmd.Flags().BoolVar(&noDefaultBackendOverride, "no-default-backend-override", noDefaultBackendOverride,
 		`Ignore any settings or rules in Ingress resources which override default backend service.`)
+
+	rootCmd.Flags().DurationVar(&deferredShutdownPeriod, "deferred-shutdown-period", deferredShutdownPeriod,
+		`How long the controller waits before actually starting shutting down.  If nonzero value is given, additional health check endpoint is added to HTTP/HTTPS endpoint.  The health check request path is /nghttpx-healthz.  Normally, it returns 200 HTTP status code, but in this period, the endpoint returns 503.`)
 
 	if err := rootCmd.Execute(); err != nil {
 		klog.Exitf("Exiting due to command-line error: %v", err)
@@ -281,6 +285,8 @@ func run(cmd *cobra.Command, args []string) {
 		ReloadRate:               reloadRate,
 		ReloadBurst:              reloadBurst,
 		NoDefaultBackendOverride: noDefaultBackendOverride,
+		DeferredShutdownPeriod:   deferredShutdownPeriod,
+		HealthzPort:              healthzPort,
 	}
 
 	if err := generateDefaultNghttpxConfig(nghttpxConfDir, nghttpxHealthPort, nghttpxAPIPort); err != nil {
