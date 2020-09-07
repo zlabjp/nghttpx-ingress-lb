@@ -36,7 +36,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // Start starts a nghttpx process using nghttpx executable at path, and wait.
@@ -92,7 +92,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		return false, nil
 	}
 
-	if klog.V(3) {
+	if klog.V(3).Enabled() {
 		b, err := json.MarshalIndent(ingressCfg, "", "  ")
 		if err != nil {
 			fmt.Println("error:", err)
@@ -253,7 +253,7 @@ func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 		return fmt.Errorf("Error while reading API response body: %v", err)
 	}
 
-	if klog.V(3) {
+	if klog.V(3).Enabled() {
 		klog.Infof("API request returned response body: %v", string(respBody))
 	}
 

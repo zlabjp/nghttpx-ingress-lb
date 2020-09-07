@@ -37,7 +37,7 @@ import (
 
 	"github.com/pmezard/go-difflib/difflib"
 	"k8s.io/api/core/v1"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -84,7 +84,7 @@ func needsReload(filename string, newCfg []byte) (bool, error) {
 		return false, nil
 	}
 
-	if klog.V(2) {
+	if klog.V(2).Enabled() {
 		dData, err := diff(oldCfg, newCfg)
 		if err != nil {
 			klog.Errorf("error computing diff: %s", err)
