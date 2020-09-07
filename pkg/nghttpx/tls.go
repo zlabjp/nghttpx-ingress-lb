@@ -25,7 +25,11 @@ limitations under the License.
 package nghttpx
 
 import (
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"k8s.io/klog/v2"
 	"path/filepath"
 
 	"k8s.io/api/core/v1"
@@ -134,4 +138,41 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 // TLSCredPrefix returns prefix of TLS certificate/private key files.
 func TLSCredPrefix(secret *v1.Secret) string {
 	return fmt.Sprintf("%v_%v", secret.Namespace, secret.Name)
+}
+
+// VerifyCertificate verifies certPEM passed in PEM format.
+func VerifyCertificate(certPEM []byte) error {
+	certDER, err := readLeafCertificate(certPEM)
+	if err != nil {
+		return err
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return err
+	}
+
+	klog.V(4).Infof("Signature algorithm is %v", cert.SignatureAlgorithm)
+
+	switch cert.SignatureAlgorithm {
+	case x509.MD2WithRSA, x509.MD5WithRSA, x509.SHA1WithRSA, x509.DSAWithSHA1, x509.ECDSAWithSHA1:
+		return fmt.Errorf("unsupported signature algorithm: %v", cert.SignatureAlgorithm)
+	}
+
+	return nil
+}
+
+// readLeafCertificate returns the first certificate found in certPEM.
+func readLeafCertificate(certPEM []byte) ([]byte, error) {
+	for {
+		block, rest := pem.Decode(certPEM)
+		if block == nil {
+			return nil, errors.New("certificate not found")
+		}
+		if block.Type != "CERTIFICATE" {
+			certPEM = rest
+			continue
+		}
+		return block.Bytes, nil
+	}
 }
