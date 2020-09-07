@@ -1142,6 +1142,10 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 		return nil, err
 	}
 
+	if err := nghttpx.VerifyCertificate(cert); err != nil {
+		return nil, err
+	}
+
 	// OCSP response in TLS secret is optional feature.
 	ocspResp := secret.Data[lbc.ocspRespKey]
 
