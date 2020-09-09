@@ -79,11 +79,15 @@ func TestCreateTLSCred(t *testing.T) {
 // TestRemoveDuplicatePems tests RemoveDuplicatePems function.  We make sure that duplicates are removed from supplied input array.
 func TestRemoveDuplicatePems(t *testing.T) {
 	tests := []struct {
-		in  []*TLSCred
-		out []*TLSCred
+		desc string
+		in   []*TLSCred
+		out  []*TLSCred
 	}{
-		{},
 		{
+			desc: "Empty input",
+		},
+		{
+			desc: "Single entry",
 			in: []*TLSCred{
 				{Key: ChecksumFile{Path: "alpha"}},
 			},
@@ -92,6 +96,7 @@ func TestRemoveDuplicatePems(t *testing.T) {
 			},
 		},
 		{
+			desc: "Multiple entries and no duplicates",
 			in: []*TLSCred{
 				{Key: ChecksumFile{Path: "alpha"}}, {Key: ChecksumFile{Path: "bravo"}}, {Key: ChecksumFile{Path: "charlie"}}, {Key: ChecksumFile{Path: "delta"}},
 			},
@@ -100,6 +105,7 @@ func TestRemoveDuplicatePems(t *testing.T) {
 			},
 		},
 		{
+			desc: "Duplicates must be removed",
 			in: []*TLSCred{
 				{Key: ChecksumFile{Path: "alpha"}}, {Key: ChecksumFile{Path: "alpha"}}, {Key: ChecksumFile{Path: "bravo"}}, {Key: ChecksumFile{Path: "charlie"}},
 				{Key: ChecksumFile{Path: "charlie"}}, {Key: ChecksumFile{Path: "delta"}}, {Key: ChecksumFile{Path: "delta"}},
@@ -110,10 +116,12 @@ func TestRemoveDuplicatePems(t *testing.T) {
 		},
 	}
 
-	for i, tt := range tests {
-		if got, want := RemoveDuplicatePems(tt.in), tt.out; !reflect.DeepEqual(got, want) {
-			t.Errorf("#%v: RemoveDuplicatePems(%v) = %v, want %v", i, tt.in, got, want)
-		}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			if got, want := RemoveDuplicatePems(tt.in), tt.out; !reflect.DeepEqual(got, want) {
+				t.Errorf("RemoveDuplicatePems(%v) = %v, want %v", tt.in, got, want)
+			}
+		})
 	}
 }
 
