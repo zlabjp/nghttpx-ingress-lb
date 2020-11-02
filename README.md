@@ -569,8 +569,10 @@ I1226 09:31:32.305093       1 command.go:78] change in configuration detected. R
 - When no TLS is configured, ingress controller still listen on port 443 for cleartext HTTP.
 - TLS configuration is not bound to the specific service.  In general,
   all proxied services are accessible via TLS.
-- Ingress allows regular expression in
-  `.spec.rules[*].http.paths[*].path`, but nghttpx does not support it.
+- `.spec.rules[*].http.paths[*].pathType` is ignored and it is treated
+  as if `ImplementationSpecific` is specified.  Consult [nghttpx
+  manual](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-b)
+  to know the path matching rules.
 
 ## Building from source
 
