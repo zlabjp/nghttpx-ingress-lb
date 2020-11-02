@@ -47,7 +47,7 @@ RUN apt-get update && \
         /var/tmp/* && \
     rm /extra-mrbgem.patch /static.patch
 
-FROM gcr.io/distroless/cc-debian10@sha256:fdc2db094a9ceaaf7cc3458a5f8987c1b68396dbc27bfab3a594cbe911c705d1
+FROM gcr.io/distroless/cc-debian10@sha256:3b737b1c505bb093f53dd34401b0238d1fcfd22014e9b1fbba5e2a4c6f19de1f
 
 COPY --from=build /usr/local/bin/nghttpx /usr/local/bin/
 COPY image/var/log/nghttpx /var/log/nghttpx
