@@ -858,7 +858,13 @@ func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
 		return upstream
 	}
 
-	eps := lbc.getEndpoints(svc, &nghttpx.PortBackendConfig{})
+	if len(svc.Spec.Ports) == 0 {
+		klog.Warningf("Service %v/%v has no ports", svc.Namespace, svc.Name)
+		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
+		return upstream
+	}
+
+	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], &nghttpx.PortBackendConfig{})
 	if len(eps) == 0 {
 		klog.Warningf("service %v does not have any active endpoints", svcKey)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
@@ -1069,7 +1075,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 				}
 			}
 
-			eps := lbc.getEndpoints(svc, portBackendConfig)
+			eps := lbc.getEndpoints(svc, servicePort, portBackendConfig)
 			if len(eps) == 0 {
 				klog.Warningf("service %v does not have any active endpoints", svcKey)
 				break
@@ -1183,13 +1189,7 @@ func (lbc *LoadBalancerController) secretReferenced(s *v1.Secret) bool {
 
 // getEndpoints returns a list of UpstreamServer for a given service.  portBackendConfig is additional per-port configuration for backend,
 // which must not be nil.
-func (lbc *LoadBalancerController) getEndpoints(svc *v1.Service, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
-	if len(svc.Spec.Ports) == 0 {
-		klog.Warningf("Service %v/%v has no ports", svc.Namespace, svc.Name)
-		return nil
-	}
-
-	svcPort := &svc.Spec.Ports[0]
+func (lbc *LoadBalancerController) getEndpoints(svc *v1.Service, svcPort *v1.ServicePort, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
 	if svcPort.Protocol != "" && svcPort.Protocol != v1.ProtocolTCP {
 		klog.Infof("Service %v/%v has unsupported protocol %v", svc.Namespace, svc.Name, svcPort.Protocol)
 		return nil
@@ -1200,15 +1200,15 @@ func (lbc *LoadBalancerController) getEndpoints(svc *v1.Service, portBackendConf
 
 	switch {
 	case lbc.epLister != nil:
-		return lbc.getEndpointsFromEndpoints(svc, portBackendConfig)
+		return lbc.getEndpointsFromEndpoints(svc, svcPort, portBackendConfig)
 	case lbc.epSliceLister != nil:
-		return lbc.getEndpointsFromEndpointSlice(svc, portBackendConfig)
+		return lbc.getEndpointsFromEndpointSlice(svc, svcPort, portBackendConfig)
 	default:
 		panic("unreachable")
 	}
 }
 
-func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *v1.Service, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *v1.Service, svcPort *v1.ServicePort, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
 	ep, err := lbc.epLister.Endpoints(svc.Namespace).Get(svc.Name)
 	if err != nil {
 		klog.Warningf("unexpected error obtaining service endpoints: %v", err)
@@ -1230,7 +1230,7 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *v1.Service, po
 				Port: &port.Port,
 			}
 
-			targetPort, err := lbc.resolveTargetPort(svc, epPort)
+			targetPort, err := lbc.resolveTargetPort(svc, svcPort, epPort)
 			if err != nil {
 				klog.Warningf("unable to get target port for Service %v/%v: %v", svc.Namespace, svc.Name, err)
 				continue
@@ -1246,7 +1246,7 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *v1.Service, po
 	return upsServers
 }
 
-func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *v1.Service, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *v1.Service, svcPort *v1.ServicePort, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
 	ess, err := lbc.epSliceLister.EndpointSlices(svc.Namespace).List(newEndpointSliceSelector(svc))
 	if err != nil {
 		klog.Warningf("unexpected error obtaining EndpointSlice: %v", err)
@@ -1268,24 +1268,26 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *v1.Service
 			continue
 		}
 
-		epPort := &es.Ports[0]
+		for i := range es.Ports {
+			epPort := &es.Ports[i]
 
-		if epPort.Protocol != nil && *epPort.Protocol != v1.ProtocolTCP {
-			continue
-		}
+			if epPort.Protocol != nil && *epPort.Protocol != v1.ProtocolTCP {
+				continue
+			}
 
-		targetPort, err := lbc.resolveTargetPort(svc, epPort)
-		if err != nil {
-			klog.Warningf("EndpointSlice %v/%v has port but it does not match Service %v/%v: %v",
-				es.Namespace, es.Name, svc.Namespace, svc.Name, err)
-			continue
-		}
+			targetPort, err := lbc.resolveTargetPort(svc, svcPort, epPort)
+			if err != nil {
+				klog.Warningf("EndpointSlice %v/%v has port but it does not match Service %v/%v: %v",
+					es.Namespace, es.Name, svc.Namespace, svc.Name, err)
+				continue
+			}
 
-		for i := range es.Endpoints {
-			ep := &es.Endpoints[i]
-			// TODO We historically added all addresses in Endpoints code.  Not sure we should just pick one here instead.
-			for _, addr := range ep.Addresses {
-				upsServers = append(upsServers, lbc.createUpstreamServer(svc, addr, targetPort, portBackendConfig))
+			for i := range es.Endpoints {
+				ep := &es.Endpoints[i]
+				// TODO We historically added all addresses in Endpoints code.  Not sure we should just pick one here instead.
+				for _, addr := range ep.Addresses {
+					upsServers = append(upsServers, lbc.createUpstreamServer(svc, addr, targetPort, portBackendConfig))
+				}
 			}
 		}
 	}
@@ -1330,9 +1332,7 @@ func (lbc *LoadBalancerController) createUpstreamServer(svc *v1.Service, address
 
 // resolveTargetPort returns port number for one of service endpoint.  This function verifies that endpoint port given in epPort matches the
 // port defined in svc.
-func (lbc *LoadBalancerController) resolveTargetPort(svc *v1.Service, epPort *discovery.EndpointPort) (int32, error) {
-	svcPort := &svc.Spec.Ports[0]
-
+func (lbc *LoadBalancerController) resolveTargetPort(svc *v1.Service, svcPort *v1.ServicePort, epPort *discovery.EndpointPort) (int32, error) {
 	if epPort.Port == nil {
 		return 0, fmt.Errorf("EndpointPort has no port defined")
 	}
