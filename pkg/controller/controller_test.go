@@ -310,6 +310,10 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 				Ports: []v1.EndpointPort{
 					{
 						Protocol: v1.ProtocolTCP,
+						Port:     8081,
+					},
+					{
+						Protocol: v1.ProtocolTCP,
 						Port:     8080,
 					},
 				},
@@ -328,6 +332,9 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 			},
 			AddressType: "IPv4",
 			Ports: []discovery.EndpointPort{
+				{
+					Port: int32Ptr(8081),
+				},
 				{
 					Port: int32Ptr(8080),
 				},
@@ -351,6 +358,9 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 			AddressType: "IPv4",
 			Ports: []discovery.EndpointPort{
 				{
+					Port: int32Ptr(8081),
+				},
+				{
 					Port: int32Ptr(8080),
 				},
 			},
@@ -370,6 +380,9 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 			},
 			AddressType: "FQDN",
 			Ports: []discovery.EndpointPort{
+				{
+					Port: int32Ptr(8081),
+				},
 				{
 					Port: int32Ptr(8080),
 				},
@@ -416,6 +429,10 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 				Ports: []v1.EndpointPort{
 					{
 						Protocol: v1.ProtocolTCP,
+						Port:     81,
+					},
+					{
+						Protocol: v1.ProtocolTCP,
 						Port:     80,
 					},
 				},
@@ -442,6 +459,10 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 		},
 		AddressType: "IPv4",
 		Ports: []discovery.EndpointPort{
+			{
+				Protocol: &proto,
+				Port:     int32Ptr(81),
+			},
 			{
 				Protocol: &proto,
 				Port:     int32Ptr(80),
