@@ -1,0 +1,28 @@
+From da7959c2e8aee0efb0bd1c7b217eb896e30fa8ea Mon Sep 17 00:00:00 2001
+From: Tatsuhiro Tsujikawa <tatsuhiro.t@gmail.com>
+Date: Sun, 15 Nov 2020 11:18:32 +0900
+Subject: [PATCH] nghttpx: Deal with the case when h2 backend is retired before
+ it is initialized
+
+---
+ src/shrpx_http2_session.cc | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/shrpx_http2_session.cc b/src/shrpx_http2_session.cc
+index 6043a9db..2f9d2e50 100644
+--- a/src/shrpx_http2_session.cc
++++ b/src/shrpx_http2_session.cc
+@@ -2379,6 +2379,10 @@ void Http2Session::check_retire() {
+ 
+   ev_prepare_stop(conn_.loop, &prep_);
+ 
++  if (!session_) {
++    return;
++  }
++
+   auto last_stream_id = nghttp2_session_get_last_proc_stream_id(session_);
+   nghttp2_submit_goaway(session_, NGHTTP2_FLAG_NONE, last_stream_id,
+                         NGHTTP2_NO_ERROR, nullptr, 0);
+-- 
+2.25.1
+
