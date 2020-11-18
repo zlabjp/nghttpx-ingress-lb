@@ -304,8 +304,22 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 		Subsets: []v1.EndpointSubset{
 			{
 				Addresses: []v1.EndpointAddress{
-					{IP: "192.168.100.1"},
-					{IP: "192.168.100.2"},
+					{
+						IP: "192.168.100.1",
+						TargetRef: &v1.ObjectReference{
+							Kind:      "Pod",
+							Name:      defaultBackendName + "-pod-1",
+							Namespace: defaultBackendNamespace,
+						},
+					},
+					{
+						IP: "192.168.100.2",
+						TargetRef: &v1.ObjectReference{
+							Kind:      "Pod",
+							Name:      defaultBackendName + "-pod-2",
+							Namespace: defaultBackendNamespace,
+						},
+					},
 				},
 				Ports: []v1.EndpointPort{
 					{
@@ -344,6 +358,11 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 					Addresses: []string{
 						"192.168.100.1",
 					},
+					TargetRef: &v1.ObjectReference{
+						Kind:      "Pod",
+						Name:      defaultBackendName + "-pod-1",
+						Namespace: defaultBackendNamespace,
+					},
 				},
 			},
 		},
@@ -369,6 +388,11 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 					Addresses: []string{
 						"192.168.100.2",
 					},
+					TargetRef: &v1.ObjectReference{
+						Kind:      "Pod",
+						Name:      defaultBackendName + "-pod-2",
+						Namespace: defaultBackendNamespace,
+					},
 				},
 			},
 		},
@@ -391,6 +415,16 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 				{
 					Addresses: []string{
 						"192.168.100.3",
+					},
+				},
+				{
+					Addresses: []string{
+						"192.168.100.4",
+					},
+					TargetRef: &v1.ObjectReference{
+						Kind:      "Foo",
+						Name:      "something",
+						Namespace: defaultBackendNamespace,
 					},
 				},
 			},
@@ -441,8 +475,15 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 	}
 
 	var endpointAddrs []v1.EndpointAddress
-	for _, addr := range addrs {
-		endpointAddrs = append(endpointAddrs, v1.EndpointAddress{IP: addr})
+	for i, addr := range addrs {
+		endpointAddrs = append(endpointAddrs, v1.EndpointAddress{
+			IP: addr,
+			TargetRef: &v1.ObjectReference{
+				Kind:      "Pod",
+				Name:      fmt.Sprintf("%v-pod-%v", name, i+1),
+				Namespace: namespace,
+			},
+		})
 	}
 
 	eps.Subsets[0].Addresses = endpointAddrs
@@ -470,9 +511,14 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 		},
 	}
 
-	for _, addr := range addrs {
+	for i, addr := range addrs {
 		es.Endpoints = append(es.Endpoints, discovery.Endpoint{
 			Addresses: []string{addr},
+			TargetRef: &v1.ObjectReference{
+				Kind:      "Pod",
+				Name:      fmt.Sprintf("%v-pod-%v", name, i+1),
+				Namespace: namespace,
+			},
 		})
 	}
 
@@ -752,7 +798,7 @@ func TestSyncStringNamedPort(t *testing.T) {
 
 			svc, eps, ess := newDefaultBackend()
 
-			bs1, be1, bes1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+			bs1, be1, bes1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1", "192.168.10.2"})
 			bs1.Spec.Ports[0] = v1.ServicePort{
 				TargetPort: intstr.FromString("my-port"),
 				Protocol:   v1.ProtocolTCP,
@@ -780,14 +826,35 @@ func TestSyncStringNamedPort(t *testing.T) {
 				},
 			}
 
+			bp2 := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "alpha-pod-2",
+					Namespace: bs1.Namespace,
+					Labels:    bs1.Spec.Selector,
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Ports: []v1.ContainerPort{
+								{
+									Name:          "my-port",
+									ContainerPort: 81,
+									Protocol:      v1.ProtocolTCP,
+								},
+							},
+						},
+					},
+				},
+			}
+
 			f.svcStore = append(f.svcStore, svc, bs1)
 			f.epStore = append(f.epStore, eps, be1)
 			f.epSliceStore = append(f.epSliceStore, ess...)
 			f.epSliceStore = append(f.epSliceStore, bes1)
 			f.ingStore = append(f.ingStore, ing1)
-			f.podStore = append(f.podStore, bp1)
+			f.podStore = append(f.podStore, bp1, bp2)
 
-			f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bp1)
+			f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bp1, bp2)
 
 			f.prepare()
 			f.run(getKey(svc, t))
@@ -799,9 +866,15 @@ func TestSyncStringNamedPort(t *testing.T) {
 				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 			}
 
-			backend := ingConfig.Upstreams[0].Backends[0]
-			if got, want := backend.Port, "80"; got != want {
-				t.Errorf("backend.Port = %v, want %v", got, want)
+			if got, want := len(ingConfig.Upstreams[0].Backends), 2; got != want {
+				t.Errorf("len(ingConfig.Upstreams[0].Backends) = %v, want %v", got, want)
+			} else {
+				for i, port := range []string{"80", "81"} {
+					backend := ingConfig.Upstreams[0].Backends[i]
+					if got, want := backend.Port, port; got != want {
+						t.Errorf("backends[i].Port = %v, want %v", got, want)
+					}
+				}
 			}
 		})
 	}

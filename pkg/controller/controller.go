@@ -1230,14 +1230,21 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *v1.Service, sv
 				Port: &port.Port,
 			}
 
-			targetPort, err := lbc.resolveTargetPort(svc, svcPort, epPort)
-			if err != nil {
-				klog.Warningf("unable to get target port for Service %v/%v: %v", svc.Namespace, svc.Name, err)
-				continue
-			}
-
 			for i := range ss.Addresses {
-				upsServers = append(upsServers, lbc.createUpstreamServer(svc, ss.Addresses[i].IP, targetPort, portBackendConfig))
+				epAddr := &ss.Addresses[i]
+				ref := epAddr.TargetRef
+				if ref == nil || ref.Kind != "Pod" {
+					continue
+				}
+
+				targetPort, err := lbc.resolveTargetPort(svcPort, epPort, ref)
+				if err != nil {
+					klog.Warningf("unable to get target port from Pod %v/%v for ServicePort %v and EndpointPort %v: %v",
+						ref.Namespace, ref.Name, svcPort, epPort, err)
+					continue
+				}
+
+				upsServers = append(upsServers, lbc.createUpstreamServer(svc, epAddr.IP, targetPort, portBackendConfig))
 			}
 		}
 	}
@@ -1275,15 +1282,20 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *v1.Service
 				continue
 			}
 
-			targetPort, err := lbc.resolveTargetPort(svc, svcPort, epPort)
-			if err != nil {
-				klog.Warningf("EndpointSlice %v/%v has port but it does not match Service %v/%v: %v",
-					es.Namespace, es.Name, svc.Namespace, svc.Name, err)
-				continue
-			}
-
 			for i := range es.Endpoints {
 				ep := &es.Endpoints[i]
+				ref := ep.TargetRef
+				if ref == nil || ref.Kind != "Pod" {
+					continue
+				}
+
+				targetPort, err := lbc.resolveTargetPort(svcPort, epPort, ref)
+				if err != nil {
+					klog.Warningf("unable to get target port from Pod %v/%v for ServicePort %v and EndpointPort %v: %v",
+						ref.Namespace, ref.Name, svcPort, epPort, err)
+					continue
+				}
+
 				// TODO We historically added all addresses in Endpoints code.  Not sure we should just pick one here instead.
 				for _, addr := range ep.Addresses {
 					upsServers = append(upsServers, lbc.createUpstreamServer(svc, addr, targetPort, portBackendConfig))
@@ -1330,9 +1342,9 @@ func (lbc *LoadBalancerController) createUpstreamServer(svc *v1.Service, address
 	return ups
 }
 
-// resolveTargetPort returns port number for one of service endpoint.  This function verifies that endpoint port given in epPort matches the
-// port defined in svc.
-func (lbc *LoadBalancerController) resolveTargetPort(svc *v1.Service, svcPort *v1.ServicePort, epPort *discovery.EndpointPort) (int32, error) {
+// resolveTargetPort returns endpoint port.  This function verifies that endpoint port given in epPort matches the svcPort.  If svcPort is
+// not a number, a port is looked up by referencing Pod denoted by ref.
+func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, epPort *discovery.EndpointPort, ref *v1.ObjectReference) (int32, error) {
 	if epPort.Port == nil {
 		return 0, fmt.Errorf("EndpointPort has no port defined")
 	}
@@ -1355,7 +1367,7 @@ func (lbc *LoadBalancerController) resolveTargetPort(svc *v1.Service, svcPort *v
 
 			port, err := strconv.Atoi(svcPort.TargetPort.StrVal)
 			if err != nil {
-				port, err := lbc.getNamedPortFromPod(svc, svcPort)
+				port, err := lbc.getNamedPortFromPod(ref, svcPort)
 				if err != nil {
 					return 0, fmt.Errorf("could not find named port %v in Pod spec: %v", svcPort.TargetPort.String(), err)
 				}
@@ -1374,18 +1386,13 @@ func (lbc *LoadBalancerController) resolveTargetPort(svc *v1.Service, svcPort *v
 	return 0, fmt.Errorf("no matching port found")
 }
 
-// getNamedPortFromPod returns port number from Pod sharing the same port name with servicePort.
-func (lbc *LoadBalancerController) getNamedPortFromPod(svc *v1.Service, servicePort *v1.ServicePort) (int32, error) {
-	pods, err := lbc.podLister.Pods(svc.Namespace).List(labels.Set(svc.Spec.Selector).AsSelector())
+// getNamedPortFromPod returns port number from Pod denoted by ref which shares the same port name with servicePort.
+func (lbc *LoadBalancerController) getNamedPortFromPod(ref *v1.ObjectReference, servicePort *v1.ServicePort) (int32, error) {
+	pod, err := lbc.podLister.Pods(ref.Namespace).Get(ref.Name)
 	if err != nil {
-		return 0, fmt.Errorf("Could not get Pods %v/%v: %v", svc.Namespace, svc.Name, err)
+		return 0, fmt.Errorf("Could not get Pods %v/%v: %v", ref.Namespace, ref.Name, err)
 	}
 
-	if len(pods) == 0 {
-		return 0, fmt.Errorf("No Pods available for Service %v/%v", svc.Namespace, svc.Name)
-	}
-
-	pod := pods[0]
 	port, err := podFindPort(pod, servicePort)
 	if err != nil {
 		return 0, fmt.Errorf("Failed to find port %v from Pod %v/%v: %v", servicePort.TargetPort.String(), pod.Namespace, pod.Name, err)
