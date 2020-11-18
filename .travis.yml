@@ -15,7 +15,7 @@ script:
 after_success:
 - echo "$DOCKER_PASSWORD" | docker login -u="$DOCKER_USERNAME" --password-stdin
 - if [ ! -z "$TRAVIS_TAG" ]; then docker tag zlabjp/nghttpx-ingress-controller zlabjp/nghttpx-ingress-controller:"$TRAVIS_TAG" && docker push zlabjp/nghttpx-ingress-controller:"$TRAVIS_TAG"; fi
-- if [ "$TRAVIS_BRANCH" = "master" ]; then docker push zlabjp/nghttpx-ingress-controller; fi
+- if [ "$TRAVIS_BRANCH" = "master" ] && [ "$TRAVIS_PULL_REQUEST" = "false" ]; then docker push zlabjp/nghttpx-ingress-controller; fi
 env:
   global:
   - secure: bA+K/DQ1EBirbMASj4JAkkr5qabKkBfRCrReWWcYyi2BcZgayKdvb5Y0wsYphwvR7P69Q97Qwb0I9SHazhLfMPaNJdvuHp46H9cZWdl9eZZhTtuJfS+YCLcpeyPgcY9bXX8dVniAQQjR9CLbdJj2gMmhbZAOdhSoVWsm8RmpbHgytH/9ixirVD3JhLl6C6gGJD9Yxe0fSJpM43at5seWW0rMuPoHXpNwGOJb883bVPm/tCYqO76eF/ejFJUhVUopUTOhPGm5/ignvEMep9p/bzYlNF3CPCPdV9Ad/k317ujKsuPdNbYi/oNP7CSVsPK8Y1hh2Gc8DisJM9HdfA2gU8cTDt+pV9G5HZEORuqAZFQBphNeeQEMYlpV+pFfW7WqiRpaGL+k8L4oBLV4M3gj//erXcAp2NFK8G2fSBkaMUVr0qbalzuzEn/+tcSKeBvK1Im3kMNE3zkHoCzUXLlYJZG+w+YRL/jZ5sw9zzRvqZRL8ZI/25BNIHINBDpqds7KAZdjEpxV8kqP/6bEM7LB32J0Pl3uXh0jIT1r+4/3+nfckejWq3jtFfrVF8S3+8VSLrMgdJCglDqgOKvbIe1llJQnTqZ+EfxKHAGAvaT3Q7GbpX1WXI9cXz55Ptj3qSXcHheZBsB1SwJB5xTbyEedpltr53IAKMDxgZ/RQ72GLEQ=
