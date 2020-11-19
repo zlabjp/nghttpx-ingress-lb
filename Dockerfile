@@ -48,7 +48,7 @@ RUN apt-get update && \
         /var/tmp/* && \
     rm /extra-mrbgem.patch /static.patch /0001-nghttpx-Deal-with-the-case-when-h2-backend-is-retire.patch
 
-FROM gcr.io/distroless/cc-debian10@sha256:3b737b1c505bb093f53dd34401b0238d1fcfd22014e9b1fbba5e2a4c6f19de1f
+FROM gcr.io/distroless/cc-debian10@sha256:b08f449377c84226d56d1c92bf89390f44488eacdfc8585c2db9873f378a5aa7
 
 COPY --from=build /usr/local/bin/nghttpx /usr/local/bin/
 COPY image/var/log/nghttpx /var/log/nghttpx
