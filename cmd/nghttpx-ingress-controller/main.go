@@ -75,7 +75,7 @@ var (
 	kubeconfig = flags.String("kubeconfig", "", `Path to kubeconfig file which overrides in-cluster configuration.`)
 
 	resyncPeriod = flags.Duration("sync-period", 30*time.Second,
-		`Resync resources this often.`)
+		`(deprecated) Resync resources this often.`)
 
 	watchNamespace = flags.String("watch-namespace", metav1.NamespaceAll,
 		`Namespace to watch for Ingress. Default is to watch all namespaces`)
@@ -232,7 +232,6 @@ func main() {
 	}
 
 	controllerConfig := controller.Config{
-		ResyncPeriod:            *resyncPeriod,
 		DefaultBackendService:   defaultSvcKey,
 		WatchNamespace:          *watchNamespace,
 		NghttpxConfigMap:        nghttpxConfigMapKey,

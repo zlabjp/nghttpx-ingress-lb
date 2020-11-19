@@ -128,8 +128,6 @@ type LoadBalancerController struct {
 }
 
 type Config struct {
-	// ResyncPeriod is the duration that Ingress resources are forcibly processed.
-	ResyncPeriod time.Duration
 	// DefaultBackendService is the default backend service name.
 	DefaultBackendService types.NamespacedName
 	// WatchNamespace is the namespace to watch for Ingress resource updates.
@@ -202,7 +200,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
 	}
 
-	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, config.ResyncPeriod, informers.WithNamespace(config.WatchNamespace))
+	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace))
 
 	{
 		f := watchNSInformers.Networking().V1beta1().Ingresses()

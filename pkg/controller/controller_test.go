@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
 	"k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
@@ -81,7 +80,6 @@ func newFixture(t *testing.T) *fixture {
 }
 
 const (
-	defaultResyncPeriod           = 30 * time.Second
 	defaultBackendName            = "default-http-backend"
 	defaultBackendNamespace       = "kube-system"
 	defaultIngNamespace           = metav1.NamespaceAll
@@ -130,7 +128,6 @@ var (
 func (f *fixture) prepare() {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
 	config := Config{
-		ResyncPeriod:           defaultResyncPeriod,
 		DefaultBackendService:  types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
 		WatchNamespace:         defaultIngNamespace,
 		NghttpxConfigMap:       &types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
