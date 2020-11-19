@@ -125,6 +125,10 @@ var (
 
 	endpointSlices = flags.Bool("endpoint-slices", false, `Get endpoints from EndpointSlice resource instead of Endpoints resource`)
 
+	reloadRate = flags.Float64("reload-rate", 1.0, `Rate (QPS) of reloading nghttpx configuration to deal with frequent backend updates in a single batch`)
+
+	reloadBurst = flags.Int("reload-burst", 1, `Reload burst that can exceed reload-rate`)
+
 	configOverrides clientcmd.ConfigOverrides
 )
 
@@ -252,6 +256,8 @@ func main() {
 		ProxyProto:              *proxyProto,
 		PublishSvc:              publishSvcKey,
 		EnableEndpointSlice:     *endpointSlices,
+		ReloadRate:              *reloadRate,
+		ReloadBurst:             *reloadBurst,
 	}
 
 	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {

@@ -139,6 +139,8 @@ func (f *fixture) prepare() {
 		IngressClassController: defaultIngressClassController,
 		EnableIngressClass:     f.enableIngressClass,
 		EnableEndpointSlice:    f.enableEndpointSlice,
+		ReloadRate:             1.0,
+		ReloadBurst:            1,
 	}
 	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo)
 }

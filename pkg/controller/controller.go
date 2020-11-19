@@ -167,6 +167,10 @@ type Config struct {
 	PublishSvc *types.NamespacedName
 	// EnableEndpointSlice tells controller to use EndpointSlices instead of Endpoints.
 	EnableEndpointSlice bool
+	// ReloadRate is a rate (QPS) of reloading nghttpx configuration.
+	ReloadRate float64
+	// ReloadBurst is the number of reload burst that can exceed ReloadRate.
+	ReloadBurst int
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -199,7 +203,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		publishSvc:              config.PublishSvc,
 		recorder:                eventBroadcaster.NewRecorder(scheme.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:               workqueue.New(),
-		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(1.0, 1),
+		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
 	}
 
 	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, config.ResyncPeriod, informers.WithNamespace(config.WatchNamespace))
