@@ -45,5 +45,5 @@ jobs:
       uses: docker/build-push-action@v2
       with:
         context: .
-        push: ${{ github.ref == 'refs/tags/master' }}
+        push: true
         tags: zlabjp/nghttpx-ingress-controller:${{ steps.tag.outputs.name }}
