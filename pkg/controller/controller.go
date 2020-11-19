@@ -64,8 +64,6 @@ import (
 )
 
 const (
-	// Minimum resync period for resources other than Ingress
-	minDepResyncPeriod = 2 * time.Minute
 	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
 	// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
 	syncKey = "ingress"
