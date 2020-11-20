@@ -142,20 +142,20 @@ func (f *fixture) prepare() {
 	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo)
 }
 
-func (f *fixture) run(ingKey string) {
+func (f *fixture) run() {
 	f.setupStore()
 
-	if err := f.lbc.sync(ingKey); err != nil {
-		f.t.Errorf("Failed to sync %v: %v", ingKey, err)
+	if err := f.lbc.sync(syncKey); err != nil {
+		f.t.Errorf("Failed to sync: %v", err)
 	}
 
 	f.verifyActions()
 }
 
-func (f *fixture) runShouldFail(ingKey string) {
+func (f *fixture) runShouldFail() {
 	f.setupStore()
 
-	if err := f.lbc.sync(ingKey); err == nil {
+	if err := f.lbc.sync(syncKey); err == nil {
 		f.t.Errorf("sync should fail")
 	}
 
@@ -620,7 +620,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 			f.objects = append(f.objects, cm, svc, eps)
 
 			f.prepare()
-			f.run(getKey(svc, t))
+			f.run()
 
 			fm := f.lbc.nghttpx.(*fakeManager)
 			ingConfig := fm.ingConfig
@@ -676,7 +676,7 @@ func TestSyncDefaultTLSSecretNotFound(t *testing.T) {
 		Namespace: "kube-system",
 		Name:      "default-tls",
 	}
-	f.runShouldFail(getKey(svc, t))
+	f.runShouldFail()
 }
 
 // TestSyncDefaultSecret verifies that default TLS secret is loaded.
@@ -699,7 +699,7 @@ func TestSyncDefaultSecret(t *testing.T) {
 		Namespace: tlsSecret.Namespace,
 		Name:      tlsSecret.Name,
 	}
-	f.run(getKey(svc, t))
+	f.run()
 
 	fm := f.lbc.nghttpx.(*fakeManager)
 	ingConfig := fm.ingConfig
@@ -751,7 +751,7 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 		Namespace: tlsSecret.Namespace,
 		Name:      tlsSecret.Name,
 	}
-	f.run(getKey(svc, t))
+	f.run()
 
 	fm := f.lbc.nghttpx.(*fakeManager)
 	ingConfig := fm.ingConfig
@@ -856,7 +856,7 @@ func TestSyncStringNamedPort(t *testing.T) {
 			f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bp1, bp2)
 
 			f.prepare()
-			f.run(getKey(svc, t))
+			f.run()
 
 			fm := f.lbc.nghttpx.(*fakeManager)
 			ingConfig := fm.ingConfig
@@ -917,7 +917,7 @@ func TestSyncNumericTargetPort(t *testing.T) {
 			f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
 
 			f.prepare()
-			f.run(getKey(svc, t))
+			f.run()
 
 			fm := f.lbc.nghttpx.(*fakeManager)
 			ingConfig := fm.ingConfig
@@ -955,7 +955,7 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
 
 	f.prepare()
-	f.run(getKey(svc, t))
+	f.run()
 
 	fm := f.lbc.nghttpx.(*fakeManager)
 	ingConfig := fm.ingConfig
@@ -991,7 +991,7 @@ func TestSyncIngressClassAnnotation(t *testing.T) {
 	f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bs2, be2, ing2)
 
 	f.prepare()
-	f.run(getKey(svc, t))
+	f.run()
 
 	fm := f.lbc.nghttpx.(*fakeManager)
 	ingConfig := fm.ingConfig
@@ -1216,7 +1216,7 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bs2, be2)
 
 	f.prepare()
-	f.run(getKey(svc, t))
+	f.run()
 
 	fm := f.lbc.nghttpx.(*fakeManager)
 	ingConfig := fm.ingConfig
@@ -1298,7 +1298,7 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 
 			f.prepare()
 			f.lbc.noDefaultBackendOverride = true
-			f.run(syncKey)
+			f.run()
 
 			fm := f.lbc.nghttpx.(*fakeManager)
 			ingConfig := fm.ingConfig
