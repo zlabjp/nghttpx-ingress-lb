@@ -30,7 +30,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -402,10 +401,6 @@ func (lbc *LoadBalancerController) addEndpointsNotification(obj interface{}) {
 }
 
 func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interface{}) {
-	if reflect.DeepEqual(old, cur) {
-		return
-	}
-
 	oldEp := old.(*v1.Endpoints)
 	curEp := cur.(*v1.Endpoints)
 	if !lbc.endpointsReferenced(oldEp) && !lbc.endpointsReferenced(curEp) {
@@ -451,10 +446,6 @@ func (lbc *LoadBalancerController) addEndpointSliceNotification(obj interface{})
 }
 
 func (lbc *LoadBalancerController) updateEndpointSliceNotification(old, cur interface{}) {
-	if reflect.DeepEqual(old, cur) {
-		return
-	}
-
 	oldES := old.(*discovery.EndpointSlice)
 	curES := cur.(*discovery.EndpointSlice)
 	if !lbc.endpointSliceReferenced(oldES) && !lbc.endpointSliceReferenced(curES) {
@@ -505,10 +496,6 @@ func (lbc *LoadBalancerController) addServiceNotification(obj interface{}) {
 }
 
 func (lbc *LoadBalancerController) updateServiceNotification(old, cur interface{}) {
-	if reflect.DeepEqual(old, cur) {
-		return
-	}
-
 	oldSvc := old.(*v1.Service)
 	curSvc := cur.(*v1.Service)
 	if !lbc.serviceReferenced(namespacedName(oldSvc)) && !lbc.serviceReferenced(namespacedName(curSvc)) {
@@ -590,10 +577,6 @@ func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
 }
 
 func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}) {
-	if reflect.DeepEqual(old, cur) {
-		return
-	}
-
 	oldS := old.(*v1.Secret)
 	curS := cur.(*v1.Secret)
 	if !lbc.secretReferenced(oldS) && !lbc.secretReferenced(curS) {
@@ -635,10 +618,6 @@ func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 }
 
 func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interface{}) {
-	if reflect.DeepEqual(old, cur) {
-		return
-	}
-
 	curC := cur.(*v1.ConfigMap)
 	if lbc.ngxConfigMap == nil || curC.Namespace != lbc.ngxConfigMap.Namespace || curC.Name != lbc.ngxConfigMap.Name {
 		return
@@ -679,10 +658,6 @@ func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
 }
 
 func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
-	if reflect.DeepEqual(old, cur) {
-		return
-	}
-
 	oldPod := old.(*v1.Pod)
 	curPod := cur.(*v1.Pod)
 	if !lbc.podReferenced(oldPod) && !lbc.podReferenced(curPod) {
