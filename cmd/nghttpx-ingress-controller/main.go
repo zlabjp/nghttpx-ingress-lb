@@ -129,6 +129,8 @@ var (
 
 	reloadBurst = flags.Int("reload-burst", 1, `Reload burst that can exceed reload-rate`)
 
+	noDefaultBackendOverride = flags.Bool("no-default-backend-override", false, `Ignore any settings or rules in Ingress resources which override default backend service`)
+
 	configOverrides clientcmd.ConfigOverrides
 )
 
@@ -236,27 +238,28 @@ func main() {
 	}
 
 	controllerConfig := controller.Config{
-		DefaultBackendService:   defaultSvcKey,
-		WatchNamespace:          *watchNamespace,
-		NghttpxConfigMap:        nghttpxConfigMapKey,
-		NghttpxHealthPort:       *nghttpxHealthPort,
-		NghttpxAPIPort:          *nghttpxAPIPort,
-		NghttpxConfDir:          *nghttpxConfDir,
-		NghttpxExecPath:         *nghttpxExecPath,
-		NghttpxHTTPPort:         *nghttpxHTTPPort,
-		NghttpxHTTPSPort:        *nghttpxHTTPSPort,
-		DefaultTLSSecret:        defaultTLSSecretKey,
-		IngressClass:            *ingressClass,
-		IngressClassController:  *ingressClassController,
-		EnableIngressClass:      checkIngressClassAvailability(discoveryClient),
-		AllowInternalIP:         *allowInternalIP,
-		OCSPRespKey:             *ocspRespKey,
-		FetchOCSPRespFromSecret: *fetchOCSPRespFromSecret,
-		ProxyProto:              *proxyProto,
-		PublishSvc:              publishSvcKey,
-		EnableEndpointSlice:     *endpointSlices,
-		ReloadRate:              *reloadRate,
-		ReloadBurst:             *reloadBurst,
+		DefaultBackendService:    defaultSvcKey,
+		WatchNamespace:           *watchNamespace,
+		NghttpxConfigMap:         nghttpxConfigMapKey,
+		NghttpxHealthPort:        *nghttpxHealthPort,
+		NghttpxAPIPort:           *nghttpxAPIPort,
+		NghttpxConfDir:           *nghttpxConfDir,
+		NghttpxExecPath:          *nghttpxExecPath,
+		NghttpxHTTPPort:          *nghttpxHTTPPort,
+		NghttpxHTTPSPort:         *nghttpxHTTPSPort,
+		DefaultTLSSecret:         defaultTLSSecretKey,
+		IngressClass:             *ingressClass,
+		IngressClassController:   *ingressClassController,
+		EnableIngressClass:       checkIngressClassAvailability(discoveryClient),
+		AllowInternalIP:          *allowInternalIP,
+		OCSPRespKey:              *ocspRespKey,
+		FetchOCSPRespFromSecret:  *fetchOCSPRespFromSecret,
+		ProxyProto:               *proxyProto,
+		PublishSvc:               publishSvcKey,
+		EnableEndpointSlice:      *endpointSlices,
+		ReloadRate:               *reloadRate,
+		ReloadBurst:              *reloadBurst,
+		NoDefaultBackendOverride: *noDefaultBackendOverride,
 	}
 
 	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {

@@ -1238,6 +1238,82 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	}
 }
 
+// TestSyncIngressNoDefaultBackendOverride verifies that any settings or rules which override default backend are ignored.
+func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
+	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "bravo", []string{"192.168.10.2"})
+
+	tests := []struct {
+		desc     string
+		ing      *networking.Ingress
+		wantName string
+	}{
+		{
+			desc: ".Spec.Backend must be ignored",
+			ing: func() *networking.Ingress {
+				ing := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
+				ing.Spec.Backend = &networking.IngressBackend{
+					ServiceName: bs2.Name,
+					ServicePort: bs2.Spec.Ports[0].TargetPort,
+				}
+				return ing
+			}(),
+		},
+		{
+			desc: "Any rules which override default backend must be ignored",
+			ing: func() *networking.Ingress {
+				ing := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
+				ing.Spec.Rules = append(ing.Spec.Rules,
+					networking.IngressRule{
+						IngressRuleValue: networking.IngressRuleValue{
+							HTTP: &networking.HTTPIngressRuleValue{
+								Paths: []networking.HTTPIngressPath{
+									{
+										Path: "/",
+										Backend: networking.IngressBackend{
+											ServiceName: bs2.Name,
+											ServicePort: bs2.Spec.Ports[0].TargetPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				)
+				return ing
+			}(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+
+			svc, eps, ess := newDefaultBackend()
+
+			f.svcStore = append(f.svcStore, svc, bs1.DeepCopyObject().(*v1.Service), bs2.DeepCopyObject().(*v1.Service))
+			f.epStore = append(f.epStore, eps, be1.DeepCopyObject().(*v1.Endpoints), be2.DeepCopyObject().(*v1.Endpoints))
+			f.epSliceStore = append(f.epSliceStore, ess...)
+			f.ingStore = append(f.ingStore, tt.ing)
+
+			f.prepare()
+			f.lbc.noDefaultBackendOverride = true
+			f.run(syncKey)
+
+			fm := f.lbc.nghttpx.(*fakeManager)
+			ingConfig := fm.ingConfig
+
+			if got, want := len(ingConfig.Upstreams), 2; got != want {
+				t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+			}
+
+			if got, want := ingConfig.Upstreams[1].Name, f.lbc.defaultSvc.String(); got != want {
+				t.Errorf("ingConfig.Upstreams[1].Name = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
 // newIngPod creates Ingress controller pod.
 func newIngPod(name, nodeName string) *v1.Pod {
 	return &v1.Pod{
