@@ -73,44 +73,45 @@ const (
 // LoadBalancerController watches the kubernetes api and adds/removes services
 // from the loadbalancer
 type LoadBalancerController struct {
-	clientset               clientset.Interface
-	ingInformer             cache.SharedIndexInformer
-	ingClassInformer        cache.SharedIndexInformer
-	epInformer              cache.SharedIndexInformer
-	epSliceInformer         cache.SharedIndexInformer
-	svcInformer             cache.SharedIndexInformer
-	secretInformer          cache.SharedIndexInformer
-	cmInformer              cache.SharedIndexInformer
-	podInformer             cache.SharedIndexInformer
-	nodeInformer            cache.SharedIndexInformer
-	ingLister               listersnetworking.IngressLister
-	ingClassLister          listersnetworking.IngressClassLister
-	svcLister               listerscore.ServiceLister
-	epLister                listerscore.EndpointsLister
-	epSliceLister           listersdiscovery.EndpointSliceLister
-	secretLister            listerscore.SecretLister
-	cmLister                listerscore.ConfigMapLister
-	podLister               listerscore.PodLister
-	nodeLister              listerscore.NodeLister
-	nghttpx                 nghttpx.Interface
-	podInfo                 *types.NamespacedName
-	defaultSvc              types.NamespacedName
-	ngxConfigMap            *types.NamespacedName
-	nghttpxHealthPort       int
-	nghttpxAPIPort          int
-	nghttpxConfDir          string
-	nghttpxExecPath         string
-	nghttpxHTTPPort         int
-	nghttpxHTTPSPort        int
-	defaultTLSSecret        *types.NamespacedName
-	watchNamespace          string
-	ingressClass            string
-	ingressClassController  string
-	allowInternalIP         bool
-	ocspRespKey             string
-	fetchOCSPRespFromSecret bool
-	proxyProto              bool
-	publishSvc              *types.NamespacedName
+	clientset                clientset.Interface
+	ingInformer              cache.SharedIndexInformer
+	ingClassInformer         cache.SharedIndexInformer
+	epInformer               cache.SharedIndexInformer
+	epSliceInformer          cache.SharedIndexInformer
+	svcInformer              cache.SharedIndexInformer
+	secretInformer           cache.SharedIndexInformer
+	cmInformer               cache.SharedIndexInformer
+	podInformer              cache.SharedIndexInformer
+	nodeInformer             cache.SharedIndexInformer
+	ingLister                listersnetworking.IngressLister
+	ingClassLister           listersnetworking.IngressClassLister
+	svcLister                listerscore.ServiceLister
+	epLister                 listerscore.EndpointsLister
+	epSliceLister            listersdiscovery.EndpointSliceLister
+	secretLister             listerscore.SecretLister
+	cmLister                 listerscore.ConfigMapLister
+	podLister                listerscore.PodLister
+	nodeLister               listerscore.NodeLister
+	nghttpx                  nghttpx.Interface
+	podInfo                  *types.NamespacedName
+	defaultSvc               types.NamespacedName
+	ngxConfigMap             *types.NamespacedName
+	nghttpxHealthPort        int
+	nghttpxAPIPort           int
+	nghttpxConfDir           string
+	nghttpxExecPath          string
+	nghttpxHTTPPort          int
+	nghttpxHTTPSPort         int
+	defaultTLSSecret         *types.NamespacedName
+	watchNamespace           string
+	ingressClass             string
+	ingressClassController   string
+	allowInternalIP          bool
+	ocspRespKey              string
+	fetchOCSPRespFromSecret  bool
+	proxyProto               bool
+	publishSvc               *types.NamespacedName
+	noDefaultBackendOverride bool
 
 	recorder record.EventRecorder
 
@@ -168,6 +169,8 @@ type Config struct {
 	ReloadRate float64
 	// ReloadBurst is the number of reload burst that can exceed ReloadRate.
 	ReloadBurst int
+	// NoDefaultBackendOverride, if set to true, ignores settings or rules in Ingress resource which override default backend service.
+	NoDefaultBackendOverride bool
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
@@ -177,30 +180,31 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: clientset.CoreV1().Events(config.WatchNamespace)})
 
 	lbc := LoadBalancerController{
-		clientset:               clientset,
-		stopCh:                  make(chan struct{}),
-		podInfo:                 runtimeInfo,
-		nghttpx:                 manager,
-		ngxConfigMap:            config.NghttpxConfigMap,
-		nghttpxHealthPort:       config.NghttpxHealthPort,
-		nghttpxAPIPort:          config.NghttpxAPIPort,
-		nghttpxConfDir:          config.NghttpxConfDir,
-		nghttpxExecPath:         config.NghttpxExecPath,
-		nghttpxHTTPPort:         config.NghttpxHTTPPort,
-		nghttpxHTTPSPort:        config.NghttpxHTTPSPort,
-		defaultSvc:              config.DefaultBackendService,
-		defaultTLSSecret:        config.DefaultTLSSecret,
-		watchNamespace:          config.WatchNamespace,
-		ingressClass:            config.IngressClass,
-		ingressClassController:  config.IngressClassController,
-		allowInternalIP:         config.AllowInternalIP,
-		ocspRespKey:             config.OCSPRespKey,
-		fetchOCSPRespFromSecret: config.FetchOCSPRespFromSecret,
-		proxyProto:              config.ProxyProto,
-		publishSvc:              config.PublishSvc,
-		recorder:                eventBroadcaster.NewRecorder(scheme.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
-		syncQueue:               workqueue.New(),
-		reloadRateLimiter:       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
+		clientset:                clientset,
+		stopCh:                   make(chan struct{}),
+		podInfo:                  runtimeInfo,
+		nghttpx:                  manager,
+		ngxConfigMap:             config.NghttpxConfigMap,
+		nghttpxHealthPort:        config.NghttpxHealthPort,
+		nghttpxAPIPort:           config.NghttpxAPIPort,
+		nghttpxConfDir:           config.NghttpxConfDir,
+		nghttpxExecPath:          config.NghttpxExecPath,
+		nghttpxHTTPPort:          config.NghttpxHTTPPort,
+		nghttpxHTTPSPort:         config.NghttpxHTTPSPort,
+		defaultSvc:               config.DefaultBackendService,
+		defaultTLSSecret:         config.DefaultTLSSecret,
+		watchNamespace:           config.WatchNamespace,
+		ingressClass:             config.IngressClass,
+		ingressClassController:   config.IngressClassController,
+		allowInternalIP:          config.AllowInternalIP,
+		ocspRespKey:              config.OCSPRespKey,
+		fetchOCSPRespFromSecret:  config.FetchOCSPRespFromSecret,
+		proxyProto:               config.ProxyProto,
+		publishSvc:               config.PublishSvc,
+		noDefaultBackendOverride: config.NoDefaultBackendOverride,
+		recorder:                 eventBroadcaster.NewRecorder(scheme.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
+		syncQueue:                workqueue.New(),
+		reloadRateLimiter:        flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
 	}
 
 	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace))
@@ -545,7 +549,7 @@ func (lbc *LoadBalancerController) serviceReferenced(svc types.NamespacedName) b
 		if !lbc.validateIngressClass(ing) {
 			continue
 		}
-		if ing.Spec.Backend != nil && svc.Name == ing.Spec.Backend.ServiceName {
+		if !lbc.noDefaultBackendOverride && ing.Spec.Backend != nil && svc.Name == ing.Spec.Backend.ServiceName {
 			klog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", svc.Namespace, svc.Name, ing.Namespace, ing.Name)
 			return true
 		}
@@ -706,7 +710,7 @@ func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
 		if !lbc.validateIngressClass(ing) {
 			continue
 		}
-		if ing.Spec.Backend != nil {
+		if !lbc.noDefaultBackendOverride && ing.Spec.Backend != nil {
 			if svc, err := lbc.svcLister.Services(pod.Namespace).Get(ing.Spec.Backend.ServiceName); err == nil {
 				if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
 					klog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
@@ -897,7 +901,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 		defaultPortBackendConfig, backendConfig := ingressAnnotation(ing.Annotations).getBackendConfig()
 		defaultPathConfig, pathConfig := ingressAnnotation(ing.Annotations).getPathConfig()
 
-		if ing.Spec.Backend != nil {
+		if !lbc.noDefaultBackendOverride && ing.Spec.Backend != nil {
 			// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress resource
 			// specifies this.  But specification does not any rules how to deal with it.  Just use the one we meet last.
 			if ups, err := lbc.createUpstream(ing, "", "/", ing.Spec.Backend, false, defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
@@ -916,6 +920,12 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
+
+				if lbc.noDefaultBackendOverride && (rule.Host == "" && (path.Path == "" || path.Path == "/")) {
+					klog.Warningf("Ignore rule in Ingress %v/%v which overrides default backend", ing.Namespace, ing.Name)
+					continue
+				}
+
 				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, &path.Backend, requireTLS, defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
 					klog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 					continue
