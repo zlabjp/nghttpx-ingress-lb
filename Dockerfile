@@ -19,7 +19,7 @@
 
 FROM debian:buster as build
 
-COPY extra-mrbgem.patch static.patch 0001-nghttpx-Deal-with-the-case-when-h2-backend-is-retire.patch /
+COPY extra-mrbgem.patch static.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
@@ -30,7 +30,6 @@ RUN apt-get update && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     patch -p1 < /static.patch && \
-    patch -p1 < /0001-nghttpx-Deal-with-the-case-when-h2-backend-is-retire.patch && \
     git submodule update --init && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
@@ -46,7 +45,7 @@ RUN apt-get update && \
         /var/log/* \
         /tmp/* \
         /var/tmp/* && \
-    rm /extra-mrbgem.patch /static.patch /0001-nghttpx-Deal-with-the-case-when-h2-backend-is-retire.patch
+    rm /extra-mrbgem.patch /static.patch
 
 FROM gcr.io/distroless/cc-debian10@sha256:b08f449377c84226d56d1c92bf89390f44488eacdfc8585c2db9873f378a5aa7
 
