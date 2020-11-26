@@ -1008,7 +1008,8 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 	} else if !strings.HasPrefix(path, "/") {
 		return nil, fmt.Errorf("Host %v has Path which does not start /: %v", host, path)
 	} else {
-		normalizedPath = path
+		// nghttpx requires ':' to be percent-encoded.  Otherwise, ':' is recognized as pattern separator.
+		normalizedPath = strings.ReplaceAll(path, ":", "%3A")
 	}
 	pc := nghttpx.ResolvePathConfig(host, normalizedPath, defaultPathConfig, pathConfig)
 	// The format of upsName is similar to backend option syntax of nghttpx.
