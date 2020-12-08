@@ -28,11 +28,12 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
-	networking "k8s.io/api/networking/v1beta1"
+	networking "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -66,15 +67,13 @@ type fixture struct {
 
 	actions []core.Action
 
-	enableIngressClass  bool
 	enableEndpointSlice bool
 }
 
 func newFixture(t *testing.T) *fixture {
 	return &fixture{
-		t:                  t,
-		objects:            []runtime.Object{},
-		enableIngressClass: true,
+		t:       t,
+		objects: []runtime.Object{},
 	}
 }
 
@@ -84,7 +83,6 @@ const (
 	defaultIngNamespace           = metav1.NamespaceAll
 	defaultConfigMapName          = "ing-config"
 	defaultConfigMapNamespace     = "kube-system"
-	defaultIngressClass           = "nghttpx"
 	defaultIngressClassController = "zlab.co.jp/nghttpx"
 	defaultConfDir                = "conf"
 
@@ -131,9 +129,7 @@ func (f *fixture) prepare() {
 		WatchNamespace:         defaultIngNamespace,
 		NghttpxConfigMap:       &types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
 		NghttpxConfDir:         defaultConfDir,
-		IngressClass:           defaultIngressClass,
 		IngressClassController: defaultIngressClassController,
-		EnableIngressClass:     f.enableIngressClass,
 		EnableEndpointSlice:    f.enableEndpointSlice,
 		ReloadRate:             1.0,
 		ReloadBurst:            1,
@@ -532,14 +528,23 @@ func newIngressTLS(namespace, name, svcName, svcPort, tlsSecretName string) *net
 	return ing
 }
 
+func serviceBackendPort(svcPort string) networking.ServiceBackendPort {
+	if n, err := strconv.ParseInt(svcPort, 10, 32); err != nil {
+		return networking.ServiceBackendPort{
+			Name: svcPort,
+		}
+	} else {
+		return networking.ServiceBackendPort{
+			Number: int32(n),
+		}
+	}
+}
+
 func newIngress(namespace, name, svcName, svcPort string) *networking.Ingress {
 	return &networking.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			Annotations: map[string]string{
-				networking.AnnotationIngressClass: defaultIngressClass,
-			},
 		},
 		Spec: networking.IngressSpec{
 			Rules: []networking.IngressRule{
@@ -551,8 +556,10 @@ func newIngress(namespace, name, svcName, svcPort string) *networking.Ingress {
 								{
 									Path: "/",
 									Backend: networking.IngressBackend{
-										ServiceName: svcName,
-										ServicePort: intstr.FromString(svcPort),
+										Service: &networking.IngressServiceBackend{
+											Name: svcName,
+											Port: serviceBackendPort(svcPort),
+										},
 									},
 								},
 							},
@@ -1038,53 +1045,16 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 	}
 }
 
-// TestSyncIngressClassAnnotation validates that Ingress resource bearing deprecated "kubernetes.io/ingress.class" annotation with the value
-// "foo" is not processed.
-func TestSyncIngressClassAnnotation(t *testing.T) {
-	f := newFixture(t)
-
-	svc, eps, _ := newDefaultBackend()
-
-	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
-
-	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "beta", []string{"192.168.10.2"})
-	ing2 := newIngress(bs2.Namespace, "beta-ing", bs2.Name, bs2.Spec.Ports[0].TargetPort.String())
-	ing2.Annotations[networking.AnnotationIngressClass] = "foo"
-
-	f.svcStore = append(f.svcStore, svc, bs1, bs2)
-	f.epStore = append(f.epStore, eps, be1, be2)
-	f.ingStore = append(f.ingStore, ing1, ing2)
-
-	f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bs2, be2, ing2)
-
-	f.prepare()
-	f.run()
-
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
-
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	}
-
-	backend := ingConfig.Upstreams[0].Backends[0]
-	if got, want := backend.Address, "192.168.10.1"; got != want {
-		t.Errorf("backend.Address = %v, want %v", got, want)
-	}
-}
-
 // TestValidateIngressClass verifies validateIngressClass.
 func TestValidateIngressClass(t *testing.T) {
 	tests := []struct {
-		desc               string
-		ing                networking.Ingress
-		ingClass           *networking.IngressClass
-		enableIngressClass bool
-		want               bool
+		desc     string
+		ing      networking.Ingress
+		ingClass *networking.IngressClass
+		want     bool
 	}{
 		{
-			desc: "IngressClass is disabled and no deprecated annotation",
+			desc: "no IngressClass",
 			ing: networking.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
@@ -1092,55 +1062,6 @@ func TestValidateIngressClass(t *testing.T) {
 				},
 			},
 			want: true,
-		},
-		{
-			desc: "IngressClass is disabled and deprecated annotation has this controller",
-			ing: networking.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-					Annotations: map[string]string{
-						networking.AnnotationIngressClass: defaultIngressClass,
-					},
-				},
-			},
-			want: true,
-		},
-		{
-			desc: "IngressClass is disabled and deprecated annotation does not have this controller",
-			ing: networking.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-					Annotations: map[string]string{
-						networking.AnnotationIngressClass: "other",
-					},
-				},
-			},
-		},
-		{
-			desc: "IngressClass is disabled and deprecated annotation has empty string",
-			ing: networking.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-					Annotations: map[string]string{
-						networking.AnnotationIngressClass: "",
-					},
-				},
-			},
-			want: true,
-		},
-		{
-			desc: "no IngressClass and no deprecated annotation",
-			ing: networking.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-				},
-			},
-			enableIngressClass: true,
-			want:               true,
 		},
 		{
 			desc: "IngressClass targets this controller",
@@ -1161,8 +1082,7 @@ func TestValidateIngressClass(t *testing.T) {
 					Controller: defaultIngressClassController,
 				},
 			},
-			enableIngressClass: true,
-			want:               true,
+			want: true,
 		},
 		{
 			desc: "IngressClass does not target this controller",
@@ -1183,7 +1103,6 @@ func TestValidateIngressClass(t *testing.T) {
 					Controller: "example.com/ingress",
 				},
 			},
-			enableIngressClass: true,
 		},
 		{
 			desc: "The specified IngressClass is not found",
@@ -1196,7 +1115,6 @@ func TestValidateIngressClass(t *testing.T) {
 					IngressClassName: stringPtr("bar"),
 				},
 			},
-			enableIngressClass: true,
 		},
 		{
 			desc: "IngressClass which targets this controller is marked default",
@@ -1210,15 +1128,14 @@ func TestValidateIngressClass(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
 					Annotations: map[string]string{
-						networking.AnnotationIsDefaultIngressClass: "true",
+						annotationIsDefaultIngressClass: "true",
 					},
 				},
 				Spec: networking.IngressClassSpec{
 					Controller: defaultIngressClassController,
 				},
 			},
-			enableIngressClass: true,
-			want:               true,
+			want: true,
 		},
 		{
 			desc: "IngressClass which does not target this controller is marked default",
@@ -1232,14 +1149,13 @@ func TestValidateIngressClass(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
 					Annotations: map[string]string{
-						networking.AnnotationIsDefaultIngressClass: "true",
+						annotationIsDefaultIngressClass: "true",
 					},
 				},
 				Spec: networking.IngressClassSpec{
 					Controller: "example.com/ingress",
 				},
 			},
-			enableIngressClass: true,
 		},
 	}
 
@@ -1247,7 +1163,6 @@ func TestValidateIngressClass(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
 
-			f.enableIngressClass = tt.enableIngressClass
 			f.ingStore = append(f.ingStore, &tt.ing)
 			if tt.ingClass != nil {
 				f.ingClassStore = append(f.ingClassStore, tt.ingClass)
@@ -1272,9 +1187,11 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
 	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "bravo", []string{"192.168.10.2"})
 	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
-	ing1.Spec.Backend = &networking.IngressBackend{
-		ServiceName: "bravo",
-		ServicePort: bs2.Spec.Ports[0].TargetPort,
+	ing1.Spec.DefaultBackend = &networking.IngressBackend{
+		Service: &networking.IngressServiceBackend{
+			Name: "bravo",
+			Port: serviceBackendPort(bs2.Spec.Ports[0].TargetPort.String()),
+		},
 	}
 
 	f.svcStore = append(f.svcStore, svc, bs1, bs2)
@@ -1320,9 +1237,11 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 			desc: ".Spec.Backend must be ignored",
 			ing: func() *networking.Ingress {
 				ing := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String())
-				ing.Spec.Backend = &networking.IngressBackend{
-					ServiceName: bs2.Name,
-					ServicePort: bs2.Spec.Ports[0].TargetPort,
+				ing.Spec.DefaultBackend = &networking.IngressBackend{
+					Service: &networking.IngressServiceBackend{
+						Name: bs2.Name,
+						Port: serviceBackendPort(bs2.Spec.Ports[0].TargetPort.String()),
+					},
 				}
 				return ing
 			}(),
@@ -1339,8 +1258,10 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 									{
 										Path: "/",
 										Backend: networking.IngressBackend{
-											ServiceName: bs2.Name,
-											ServicePort: bs2.Spec.Ports[0].TargetPort,
+											Service: &networking.IngressServiceBackend{
+												Name: bs2.Name,
+												Port: serviceBackendPort(bs2.Spec.Ports[0].TargetPort.String()),
+											},
 										},
 									},
 								},
@@ -1468,7 +1389,8 @@ func TestUpdateIngressStatus(t *testing.T) {
 
 	ing1 := newIngress(metav1.NamespaceDefault, "delta-ing", "delta", "80")
 	ing3 := newIngress(metav1.NamespaceDefault, "foxtrot-ing", "foxtrot", "80")
-	ing3.Annotations[networking.AnnotationIngressClass] = "not-nghttpx"
+	ing3.Spec.IngressClassName = stringPtr("not-nghttpx")
+	ing3.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}}
 	ing4 := newIngress(metav1.NamespaceDefault, "golf-ing", "golf", "80")
 	ing4.Status.LoadBalancer.Ingress = lbIngs
 	ing2 := newIngress(metav1.NamespaceDefault, "echo-ing", "echo", "80")
@@ -1491,17 +1413,24 @@ func TestUpdateIngressStatus(t *testing.T) {
 		t.Fatalf("f.lbc.updateIngressStatus(lbIngs) returned unexpected error %v", err)
 	}
 
-	if updatedIng, err := f.clientset.NetworkingV1beta1().Ingresses(ing1.Namespace).Get(context.TODO(), ing1.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.clientset.NetworkingV1().Ingresses(ing1.Namespace).Get(context.TODO(), ing1.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
 	} else {
 		if got, want := updatedIng.Status.LoadBalancer.Ingress, lbIngs; !reflect.DeepEqual(got, want) {
 			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
 		}
 	}
-	if updatedIng, err := f.clientset.NetworkingV1beta1().Ingresses(ing2.Namespace).Get(context.TODO(), ing2.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.clientset.NetworkingV1().Ingresses(ing2.Namespace).Get(context.TODO(), ing2.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing2.Namespace, ing2.Name, err)
 	} else {
 		if got, want := updatedIng.Status.LoadBalancer.Ingress, lbIngs; !reflect.DeepEqual(got, want) {
+			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
+		}
+	}
+	if updatedIng, err := f.clientset.NetworkingV1().Ingresses(ing3.Namespace).Get(context.TODO(), ing3.Name, metav1.GetOptions{}); err != nil {
+		t.Errorf("Could not get Ingress %v/%v: %v", ing2.Namespace, ing2.Name, err)
+	} else {
+		if got, want := updatedIng.Status.LoadBalancer.Ingress, ing3.Status.LoadBalancer.Ingress; !reflect.DeepEqual(got, want) {
 			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
 		}
 	}
@@ -1523,7 +1452,7 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 	ing2.Status.LoadBalancer.Ingress = lbIngs
 
 	ing3 := newIngress(metav1.NamespaceDefault, "foxtrot-ing", "foxtrot", "80")
-	ing3.Annotations[networking.AnnotationIngressClass] = "not-nghttpx"
+	ing3.Spec.IngressClassName = stringPtr("not-nghttpx")
 	ing3.Status.LoadBalancer.Ingress = lbIngs
 
 	ing4 := newIngress(metav1.NamespaceDefault, "golf-ing", "golf", "80")
@@ -1544,7 +1473,7 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		t.Fatalf("f.lbc.removeAddressFromLoadBalancerIngress() returned unexpected error %v", err)
 	}
 
-	if updatedIng, err := f.lbc.clientset.NetworkingV1beta1().Ingresses(ing1.Namespace).Get(context.TODO(), ing1.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing1.Namespace).Get(context.TODO(), ing1.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
 	} else {
 		ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
@@ -1553,11 +1482,19 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		}
 	}
 
-	if updatedIng, err := f.lbc.clientset.NetworkingV1beta1().Ingresses(ing4.Namespace).Get(context.TODO(), ing4.Name, metav1.GetOptions{}); err != nil {
+	if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing4.Namespace).Get(context.TODO(), ing4.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("Could not get Ingress %v/%v: %v", ing4.Namespace, ing4.Name, err)
 	} else {
 		ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
 		if got, want := updatedIng.Status.LoadBalancer.Ingress, ans; !reflect.DeepEqual(got, want) {
+			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
+		}
+	}
+
+	if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing3.Namespace).Get(context.TODO(), ing3.Name, metav1.GetOptions{}); err != nil {
+		t.Errorf("Could not get Ingress %v/%v: %v", ing3.Namespace, ing3.Name, err)
+	} else {
+		if got, want := updatedIng.Status.LoadBalancer.Ingress, ing3.Status.LoadBalancer.Ingress; !reflect.DeepEqual(got, want) {
 			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
 		}
 	}
