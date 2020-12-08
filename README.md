@@ -36,16 +36,18 @@ $ kubectl create -f examples/default/rc-default.yaml
 
 ## Ingress class
 
-This controller supports the now deprecated
-`kubernetes.io/ingress.class` Ingress annotation.  By default, the
-controller processes "nghttpx" class.  It also processes the Ingress
-object which has no Ingress class annotation, or its value is empty.
-
-It also supports IngressClass resource if controller detects that API
-server supports it.  For backward compatibility, the deprecated
-annotation takes precedence over IngressClass resource.  The default
+This controller supports IngressClass resource.  The default
 IngressClass controller name is "zlab.co.jp/nghttpx".  It supports
 `ingressclass.kubernetes.io/is-default-class` annotation.
+
+This controller no longer supports the deprecated
+`kubernetes.io/ingress.class` annotation.
+
+## networking.k8s.io/v1 Ingress
+
+This controller only recognizes Service backend.  It ignores pathType
+and behaves as if `ImplementationSpecific` is specified.  Hosts in
+.spec.tls are also ignored.
 
 ## HTTP
 
@@ -114,20 +116,19 @@ Referencing this secret in an Ingress will tell the Ingress controller
 to secure the channel from the client to the load balancer using TLS:
 
 ```yaml
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: no-rules-map
 spec:
   tls:
   - secretName: testsecret
-  backend:
-    serviceName: s1
-    servicePort: 80
+  defaultBackend:
+    service:
+      name: s1
+      port:
+        number: 80
 ```
-
-For k8s v1.13 or earlier, use `extensions/v1beta1` instead of
-`networking.k8s.io/v1beta1`.
 
 If TLS is configured for a service, and it is accessed via cleartext
 HTTP, those requests are redirected to HTTPS URI.  If
@@ -257,12 +258,14 @@ nghttpx-ingress-controller understands
 `.metadata.annotations` to configure the particular backend.  Its
 value is a serialized YAML or JSON dictionary.  The configuration is
 done per service port
-(`.spec.rules[*].http.paths[*].backend.servicePort`).  The first key
+(`.spec.rules[*].http.paths[*].backend.service.port`).  The first key
 under the root dictionary is the name of service name
-(`.spec.rules[*].http.paths[*].backend.serviceName`).  Its value is
+(`.spec.rules[*].http.paths[*].backend.service.name`).  Its value is
 the JSON dictionary, and its keys are service port
-(`.spec.rules[*].http.paths[*].backend.servicePort`).  The final value
-is the JSON dictionary, and can contain the following key value pairs:
+(`.spec.rules[*].http.paths[*].backend.service.port.name` or
+`.spec.rules[*].http.paths[*].backend.service.port.number` if
+`.port.name` is not specified).  The final value is the JSON
+dictionary, and can contain the following key value pairs:
 
 * `proto`: Specify the application protocol used for this service
   port.  The value is of type string, and it should be either `h2`, or
@@ -297,7 +300,7 @@ The following example specifies HTTP/2 as backend connection for
 service "greeter", and service port "50051":
 
 ```yaml
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: greeter
@@ -308,15 +311,18 @@ spec:
   - http:
       paths:
       - path: /helloworld.Greeter/
+        pathType: ImplementationSpecific
         backend:
-          serviceName: greeter
-          servicePort: 50051
+          service:
+            name: greeter
+            port:
+              number: 50051
 ```
 
 Or in YAML:
 
 ```yaml
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: greeter
@@ -330,9 +336,12 @@ spec:
   - http:
       paths:
       - path: /helloworld.Greeter/
+        pathType: ImplementationSpecific
         backend:
-          serviceName: greeter
-          servicePort: 50051
+          service:
+            name: greeter
+            port:
+              number: 50051
 ```
 
 The controller also understands
@@ -423,7 +432,7 @@ is the dictionary and can contain the following key value pairs:
 Here is an example to rewrite request path to "/foo" from "/pub/foo" using mruby:
 
 ```yaml
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: greeter
@@ -444,9 +453,12 @@ spec:
     http:
       paths:
       - path: /pub/foo
+        pathType: ImplementationSpecific
         backend:
-          serviceName: bar
-          servicePort: 80
+          service
+            name: bar
+            port:
+              number: 80
 ```
 
 The controller also understands

@@ -39,19 +39,18 @@ import (
 	"k8s.io/api/core/v1"
 	clientv1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
-	networking "k8s.io/api/networking/v1beta1"
+	networking "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	listerscore "k8s.io/client-go/listers/core/v1"
 	listersdiscovery "k8s.io/client-go/listers/discovery/v1beta1"
-	listersnetworking "k8s.io/client-go/listers/networking/v1beta1"
+	listersnetworking "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
@@ -68,6 +67,8 @@ const (
 	syncKey = "ingress"
 
 	noResyncPeriod = 0
+
+	annotationIsDefaultIngressClass = "ingressclass.kubernetes.io/is-default-class"
 )
 
 // LoadBalancerController watches the kubernetes api and adds/removes services
@@ -104,7 +105,6 @@ type LoadBalancerController struct {
 	nghttpxHTTPSPort         int
 	defaultTLSSecret         *types.NamespacedName
 	watchNamespace           string
-	ingressClass             string
 	ingressClassController   string
 	allowInternalIP          bool
 	ocspRespKey              string
@@ -149,13 +149,8 @@ type Config struct {
 	NghttpxHTTPSPort int
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret *types.NamespacedName
-	// IngressClass is the Ingress class this controller is responsible for.  It is the value of the deprecated
-	// "kubernetes.io/ingress.class" annotation.
-	IngressClass string
 	// IngressClassController is the name of IngressClass controller for this controller.
-	IngressClassController string
-	// EnableIngressClass enables IngressClass support which has been added since Kubernetes v1.18.
-	EnableIngressClass      bool
+	IngressClassController  string
 	AllowInternalIP         bool
 	OCSPRespKey             string
 	FetchOCSPRespFromSecret bool
@@ -198,7 +193,6 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		defaultSvc:               config.DefaultBackendService,
 		defaultTLSSecret:         config.DefaultTLSSecret,
 		watchNamespace:           config.WatchNamespace,
-		ingressClass:             config.IngressClass,
 		ingressClassController:   config.IngressClassController,
 		allowInternalIP:          config.AllowInternalIP,
 		ocspRespKey:              config.OCSPRespKey,
@@ -216,7 +210,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace))
 
 	{
-		f := watchNSInformers.Networking().V1beta1().Ingresses()
+		f := watchNSInformers.Networking().V1().Ingresses()
 		lbc.ingLister = f.Lister()
 		lbc.ingInformer = f.Informer()
 		lbc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -295,8 +289,8 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		lbc.nodeInformer = f.Informer()
 	}
 
-	if config.EnableIngressClass {
-		f := allNSInformers.Networking().V1beta1().IngressClasses()
+	{
+		f := allNSInformers.Networking().V1().IngressClasses()
 		lbc.ingClassLister = f.Lister()
 		lbc.ingClassInformer = f.Informer()
 		lbc.ingClassInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -555,9 +549,11 @@ func (lbc *LoadBalancerController) serviceReferenced(svc types.NamespacedName) b
 		if !lbc.validateIngressClass(ing) {
 			continue
 		}
-		if !lbc.noDefaultBackendOverride && ing.Spec.Backend != nil && svc.Name == ing.Spec.Backend.ServiceName {
-			klog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", svc.Namespace, svc.Name, ing.Namespace, ing.Name)
-			return true
+		if !lbc.noDefaultBackendOverride {
+			if isb := getDefaultBackendService(ing); isb != nil && svc.Name == isb.Name {
+				klog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", svc.Namespace, svc.Name, ing.Namespace, ing.Name)
+				return true
+			}
 		}
 		for i := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
@@ -566,7 +562,7 @@ func (lbc *LoadBalancerController) serviceReferenced(svc types.NamespacedName) b
 			}
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
-				if svc.Name == path.Backend.ServiceName {
+				if isb := path.Backend.Service; isb != nil && svc.Name == isb.Name {
 					klog.V(4).Infof("Service %v/%v is referenced by Ingress %v/%v", svc.Namespace, svc.Name, ing.Namespace, ing.Name)
 					return true
 				}
@@ -574,6 +570,13 @@ func (lbc *LoadBalancerController) serviceReferenced(svc types.NamespacedName) b
 		}
 	}
 	return false
+}
+
+func getDefaultBackendService(ing *networking.Ingress) *networking.IngressServiceBackend {
+	if ing.Spec.DefaultBackend == nil {
+		return nil
+	}
+	return ing.Spec.DefaultBackend.Service
 }
 
 func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
@@ -716,12 +719,14 @@ func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
 		if !lbc.validateIngressClass(ing) {
 			continue
 		}
-		if !lbc.noDefaultBackendOverride && ing.Spec.Backend != nil {
-			if svc, err := lbc.svcLister.Services(pod.Namespace).Get(ing.Spec.Backend.ServiceName); err == nil {
-				if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
-					klog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
-						pod.Namespace, pod.Name, ing.Namespace, ing.Name, svc.Namespace, svc.Name)
-					return true
+		if !lbc.noDefaultBackendOverride {
+			if isb := getDefaultBackendService(ing); isb != nil {
+				if svc, err := lbc.svcLister.Services(pod.Namespace).Get(isb.Name); err == nil {
+					if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
+						klog.V(4).Infof("Pod %v/%v is referenced by Ingress %v/%v through Service %v/%v",
+							pod.Namespace, pod.Name, ing.Namespace, ing.Name, svc.Namespace, svc.Name)
+						return true
+					}
 				}
 			}
 		}
@@ -732,7 +737,11 @@ func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
 			}
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
-				svc, err := lbc.svcLister.Services(pod.Namespace).Get(path.Backend.ServiceName)
+				isb := path.Backend.Service
+				if isb == nil {
+					continue
+				}
+				svc, err := lbc.svcLister.Services(pod.Namespace).Get(isb.Name)
 				if err != nil {
 					continue
 				}
@@ -908,13 +917,17 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 		defaultPortBackendConfig, backendConfig := ingressAnnotation(ing.Annotations).getBackendConfig()
 		defaultPathConfig, pathConfig := ingressAnnotation(ing.Annotations).getPathConfig()
 
-		if !lbc.noDefaultBackendOverride && ing.Spec.Backend != nil {
-			// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress resource
-			// specifies this.  But specification does not any rules how to deal with it.  Just use the one we meet last.
-			if ups, err := lbc.createUpstream(ing, "", "/", ing.Spec.Backend, false, defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
-				klog.Errorf("Could not create default backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
-			} else {
-				defaultUpstream = ups
+		if !lbc.noDefaultBackendOverride {
+			if isb := getDefaultBackendService(ing); isb != nil {
+				// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress
+				// resource specifies this.  But specification does not any rules how to deal with it.  Just use the one we
+				// meet last.
+				if ups, err := lbc.createUpstream(ing, "", "/", isb, false,
+					defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
+					klog.Errorf("Could not create default backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
+				} else {
+					defaultUpstream = ups
+				}
 			}
 		}
 
@@ -933,7 +946,14 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 					continue
 				}
 
-				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, &path.Backend, requireTLS, defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
+				isb := path.Backend.Service
+				if isb == nil {
+					klog.Warningf("No Service is set for path")
+					continue
+				}
+
+				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, isb, requireTLS,
+					defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
 					klog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 					continue
 				} else {
@@ -1031,8 +1051,8 @@ App.new
 `, code))
 }
 
-// createUpstream creates new nghttpx.Upstream for ing, host, path and backend.
-func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host, path string, backend *networking.IngressBackend,
+// createUpstream creates new nghttpx.Upstream for ing, host, path and isb.
+func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host, path string, isb *networking.IngressServiceBackend,
 	requireTLS bool, defaultPathConfig *nghttpx.PathConfig, pathConfig map[string]*nghttpx.PathConfig, defaultPortBackendConfig *nghttpx.PortBackendConfig, backendConfig map[string]map[string]*nghttpx.PortBackendConfig) (*nghttpx.Upstream, error) {
 	var normalizedPath string
 	switch {
@@ -1044,9 +1064,15 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 		// nghttpx requires ':' to be percent-encoded.  Otherwise, ':' is recognized as pattern separator.
 		normalizedPath = strings.ReplaceAll(path, ":", "%3A")
 	}
+	var portStr string
+	if isb.Port.Name != "" {
+		portStr = isb.Port.Name
+	} else {
+		portStr = strconv.FormatInt(int64(isb.Port.Number), 10)
+	}
 	pc := nghttpx.ResolvePathConfig(host, normalizedPath, defaultPathConfig, pathConfig)
 	// The format of upsName is similar to backend option syntax of nghttpx.
-	upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, backend.ServiceName, backend.ServicePort.String(), host, normalizedPath)
+	upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, isb.Name, portStr, host, normalizedPath)
 	ups := &nghttpx.Upstream{
 		Name:                 upsName,
 		Host:                 host,
@@ -1066,8 +1092,8 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 
 	klog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
 
-	svcKey := fmt.Sprintf("%v/%v", ing.Namespace, backend.ServiceName)
-	svc, err := lbc.svcLister.Services(ing.Namespace).Get(backend.ServiceName)
+	svcKey := fmt.Sprintf("%v/%v", ing.Namespace, isb.Name)
+	svc, err := lbc.svcLister.Services(ing.Namespace).Get(isb.Name)
 	if errors.IsNotFound(err) {
 		return nil, fmt.Errorf("service %v not found", svcKey)
 	}
@@ -1077,32 +1103,43 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 	}
 
 	klog.V(3).Infof("obtaining port information for service %v", svcKey)
-	bp := backend.ServicePort.String()
 
-	svcBackendConfig := backendConfig[backend.ServiceName]
+	svcBackendConfig := backendConfig[isb.Name]
 
 	for i := range svc.Spec.Ports {
 		servicePort := &svc.Spec.Ports[i]
 		// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use
 		// servicePort.Port.  servicePort.TargetPort could be a string.  This is really messy.
-		if strconv.Itoa(int(servicePort.Port)) == bp || servicePort.TargetPort.String() == bp || servicePort.Name == bp {
-			portBackendConfig, ok := svcBackendConfig[bp]
-			if !ok {
-				portBackendConfig = &nghttpx.PortBackendConfig{}
-				if defaultPortBackendConfig != nil {
-					nghttpx.ApplyDefaultPortBackendConfig(portBackendConfig, defaultPortBackendConfig)
-				}
-			}
 
-			eps := lbc.getEndpoints(svc, servicePort, portBackendConfig)
-			if len(eps) == 0 {
-				klog.Warningf("service %v does not have any active endpoints", svcKey)
-				break
+		var key string
+		if isb.Port.Name != "" {
+			if isb.Port.Name == servicePort.Name {
+				key = isb.Port.Name
 			}
+		} else if isb.Port.Number == servicePort.Port {
+			key = strconv.FormatInt(int64(isb.Port.Number), 10)
+		}
 
-			ups.Backends = append(ups.Backends, eps...)
+		if key == "" {
+			continue
+		}
+
+		portBackendConfig, ok := svcBackendConfig[key]
+		if !ok {
+			portBackendConfig = &nghttpx.PortBackendConfig{}
+			if defaultPortBackendConfig != nil {
+				nghttpx.ApplyDefaultPortBackendConfig(portBackendConfig, defaultPortBackendConfig)
+			}
+		}
+
+		eps := lbc.getEndpoints(svc, servicePort, portBackendConfig)
+		if len(eps) == 0 {
+			klog.Warningf("service %v does not have any active endpoints", svcKey)
 			break
 		}
+
+		ups.Backends = append(ups.Backends, eps...)
+		break
 	}
 
 	if len(ups.Backends) == 0 {
@@ -1387,37 +1424,22 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, ep
 		return 0, fmt.Errorf("EndpointPort has no port defined")
 	}
 
-	if svcPort.TargetPort.String() == "" {
+	if svcPort.TargetPort.StrVal == "" {
 		if *epPort.Port == svcPort.Port {
 			return *epPort.Port, nil
 		}
 	} else {
-		switch svcPort.TargetPort.Type {
-		case intstr.Int:
-			if *epPort.Port == svcPort.TargetPort.IntVal {
-				return *epPort.Port, nil
-			}
-		case intstr.String:
-			// TODO Is this necessary?
-			if svcPort.TargetPort.StrVal == "" {
-				break
-			}
-
-			port, err := strconv.ParseUint(svcPort.TargetPort.StrVal, 10, 16)
+		port, err := strconv.ParseUint(svcPort.TargetPort.StrVal, 10, 16)
+		if err != nil {
+			port, err := lbc.getNamedPortFromPod(ref, svcPort)
 			if err != nil {
-				port, err := lbc.getNamedPortFromPod(ref, svcPort)
-				if err != nil {
-					return 0, fmt.Errorf("could not find named port %v in Pod spec: %v", svcPort.TargetPort.String(), err)
-				}
-				if *epPort.Port == port {
-					return *epPort.Port, nil
-				}
-				break
+				return 0, fmt.Errorf("could not find named port %v in Pod spec: %v", svcPort.TargetPort.String(), err)
 			}
-
-			if *epPort.Port == int32(port) {
+			if *epPort.Port == port {
 				return *epPort.Port, nil
 			}
+		} else if *epPort.Port == int32(port) {
+			return *epPort.Port, nil
 		}
 	}
 
@@ -1482,6 +1504,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	go lbc.cmInformer.Run(ctrlCtx.Done())
 	go lbc.podInformer.Run(ctrlCtx.Done())
 	go lbc.nodeInformer.Run(ctrlCtx.Done())
+	go lbc.ingClassInformer.Run(ctrlCtx.Done())
 
 	hasSynced := []cache.InformerSynced{
 		lbc.ingInformer.HasSynced,
@@ -1490,12 +1513,9 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		lbc.cmInformer.HasSynced,
 		lbc.podInformer.HasSynced,
 		lbc.nodeInformer.HasSynced,
+		lbc.ingClassInformer.HasSynced,
 	}
 
-	if lbc.ingClassInformer != nil {
-		go lbc.ingClassInformer.Run(ctrlCtx.Done())
-		hasSynced = append(hasSynced, lbc.ingClassInformer.HasSynced)
-	}
 	if lbc.epInformer != nil {
 		go lbc.epInformer.Run(ctrlCtx.Done())
 		hasSynced = append(hasSynced, lbc.epInformer.HasSynced)
@@ -1550,25 +1570,8 @@ func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) 
 	}
 }
 
-// validateIngressClass checks whether this controller should process ing or not.  If ing has deprecated "kubernetes.io/ingress.class"
-// annotation, its value should be empty or lbc.ingressClass.  If the annotation is not present, check ing.Spec.IngressClassName.  The
-// deprecated annotation takes precedence over the field for backward compatibility.
+// validateIngressClass checks whether this controller should process ing or not.
 func (lbc *LoadBalancerController) validateIngressClass(ing *networking.Ingress) bool {
-	if _, ok := ing.Annotations[networking.AnnotationIngressClass]; ok {
-		switch cls := ingressAnnotation(ing.Annotations).getIngressClass(); cls {
-		case "", lbc.ingressClass:
-			return true
-		default:
-			klog.V(4).Infof("Skip Ingress %v/%v which has Ingress class %v", ing.Namespace, ing.Name, cls)
-			return false
-		}
-	}
-
-	if lbc.ingClassLister == nil {
-		// If there is no IngressClass support and no deprecated annotation, process the Ingress.
-		return true
-	}
-
 	if ing.Spec.IngressClassName != nil {
 		ingClass, err := lbc.ingClassLister.Get(*ing.Spec.IngressClassName)
 		if err != nil {
@@ -1592,7 +1595,7 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *networking.Ingress)
 	}
 
 	for _, ingClass := range ingClasses {
-		if ingClass.Annotations[networking.AnnotationIsDefaultIngressClass] == "true" {
+		if ingClass.Annotations[annotationIsDefaultIngressClass] == "true" {
 			if ingClass.Spec.Controller != lbc.ingressClassController {
 				klog.V(4).Infof("Skip Ingress %v/%v because it defaults to IngressClass %v controller %v", ing.Namespace, ing.Name,
 					ingClass.Name, ingClass.Spec.Controller)
@@ -1692,7 +1695,7 @@ func (lbc *LoadBalancerController) updateIngressStatus(ctx context.Context, lbIn
 		newIng := ing.DeepCopy()
 		newIng.Status.LoadBalancer.Ingress = lbIngs
 
-		if _, err := lbc.clientset.NetworkingV1beta1().Ingresses(ing.Namespace).UpdateStatus(context.TODO(), newIng, metav1.UpdateOptions{}); err != nil {
+		if _, err := lbc.clientset.NetworkingV1().Ingresses(ing.Namespace).UpdateStatus(context.TODO(), newIng, metav1.UpdateOptions{}); err != nil {
 			klog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
 		}
 	}
@@ -1826,7 +1829,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 			newIng := ing.DeepCopy()
 			newIng.Status.LoadBalancer.Ingress = lbIngs
 
-			if _, err := lbc.clientset.NetworkingV1beta1().Ingresses(newIng.Namespace).UpdateStatus(context.TODO(), newIng, metav1.UpdateOptions{}); err != nil {
+			if _, err := lbc.clientset.NetworkingV1().Ingresses(newIng.Namespace).UpdateStatus(context.TODO(), newIng, metav1.UpdateOptions{}); err != nil {
 				return err
 			}
 			return nil

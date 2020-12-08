@@ -1,5 +1,5 @@
 # An Ingress with 2 hosts and 3 endpoints
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: echomap
@@ -9,17 +9,26 @@ spec:
     http:
       paths:
       - path: /foo
+        pathType: ImplementationSpecific
         backend:
-          serviceName: echoheaders-x
-          servicePort: 80
+          service:
+            name: echoheaders-x
+            port:
+              number: 80
   - host: bar.baz.com
     http:
       paths:
       - path: /bar
+        pathType: ImplementationSpecific
         backend:
-          serviceName: echoheaders-y
-          servicePort: 80
+          service:
+            name: echoheaders-y
+            port:
+              number: 80
       - path: /foo
+        pathType: ImplementationSpecific
         backend:
-          serviceName: echoheaders-x
-          servicePort: 80
+          service:
+            name: echoheaders-x
+            port:
+              number: 80
