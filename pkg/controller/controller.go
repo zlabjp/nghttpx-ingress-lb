@@ -1270,6 +1270,9 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *v1.Service
 
 			for i := range es.Endpoints {
 				ep := &es.Endpoints[i]
+				if ep.Conditions.Ready != nil && *ep.Conditions.Ready == false {
+					continue
+				}
 				ref := ep.TargetRef
 				if ref == nil || ref.Kind != "Pod" {
 					continue
