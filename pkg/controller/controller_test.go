@@ -1548,6 +1548,6 @@ func TestGetLoadBalancerIngressFromService(t *testing.T) {
 	got := f.lbc.getLoadBalancerIngressFromService(svc)
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("f.lbc.getLoadBalancerIngressFromService(...) = %q, want %q", got, want)
+		t.Errorf("f.lbc.getLoadBalancerIngressFromService(...) = %#v, want %#v", got, want)
 	}
 }
