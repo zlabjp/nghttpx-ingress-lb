@@ -62,7 +62,7 @@ func uniqLoadBalancerIngress(a []v1.LoadBalancerIngress) []v1.LoadBalancerIngres
 	}
 	p := 0
 	for i := 1; i < len(a); i++ {
-		if a[p] == a[i] {
+		if a[p].IP == a[i].IP && a[p].Hostname == a[i].Hostname {
 			continue
 		}
 		p++

@@ -1609,7 +1609,7 @@ func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []v1.LoadBalancerI
 			continue
 		}
 
-		klog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %q", ing.Namespace, ing.Name, lbIngs)
+		klog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %#v", ing.Namespace, ing.Name, lbIngs)
 
 		newIng := ing.DeepCopy()
 		newIng.Status.LoadBalancer.Ingress = lbIngs
