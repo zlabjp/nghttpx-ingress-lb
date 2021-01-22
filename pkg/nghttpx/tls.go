@@ -25,6 +25,7 @@ limitations under the License.
 package nghttpx
 
 import (
+	"bytes"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -175,4 +176,22 @@ func readLeafCertificate(certPEM []byte) ([]byte, error) {
 		}
 		return block.Bytes, nil
 	}
+}
+
+// NormalizePEM reads series of PEM encoded data and re-encode them in PEM format to remove anomalies.
+func NormalizePEM(data []byte) ([]byte, error) {
+	var dst bytes.Buffer
+	for {
+		p, rest := pem.Decode(data)
+		if p == nil {
+			break
+		}
+
+		data = rest
+
+		if err := pem.Encode(&dst, p); err != nil {
+			return nil, err
+		}
+	}
+	return dst.Bytes(), nil
 }
