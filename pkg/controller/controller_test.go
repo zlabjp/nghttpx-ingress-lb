@@ -775,6 +775,83 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	}
 }
 
+// TestSyncNormalizePEM verifies that badly formatted PEM in TLS secret is normalized.
+func TestSyncNormalizePEM(t *testing.T) {
+	const (
+		badlyFormattedTLSKey = `-----BEGIN EC PRIVATE KEY-----
+
+MHcCAQEEIIR3RHN766OwG5SPYdCDHaolfkVS0bpqTHVUj1Tkw++CoAoGCCqGSM49
+  AwEHoUQDQgAE5qxIb/FFAeAdsOVqAeAlKnXwHwTL+mxRAr2QZ63A7SdYgqOB+pz3
+Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
+
+-----END EC PRIVATE KEY-----
+`
+		badlyFormattedTLSCrt = `
+-----BEGIN CERTIFICATE-----
+  MIICCDCCAa2gAwIBAgIUDRVDeW3iI7AYMWugEE0LU9mxM54wCgYIKoZIzj0EAwIw
+  WTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGElu
+  dGVybmV0IFdpZGdpdHMgUHR5IEx0ZDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTE5
+  MTAwOTAxNTA1MFoXDTI5MTAwNjAxNTA1MFowWTELMAkGA1UEBhMCQVUxEzARBgNV
+  BAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0
+  ZDESMBAGA1UEAwwJbG9jYWxob3N0MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE
+  5qxIb/FFAeAdsOVqAeAlKnXwHwTL+mxRAr2QZ63A7SdYgqOB+pz3Qu6PQqBCMaMh
+  3xbmq1M9OwKwW/NwU0GW76NTMFEwHQYDVR0OBBYEFCXLwcdXXbjMX4BipAWB3B/k
+  8iUvMB8GA1UdIwQYMBaAFCXLwcdXXbjMX4BipAWB3B/k8iUvMA8GA1UdEwEB/wQF
+  MAMBAf8wCgYIKoZIzj0EAwIDSQAwRgIhAMxuNNoDOpZ8XjA/VaFg1kSaqnyKRLVZ
+  N7YC0GGs9cugAiEAyE3qpDKBvSoRSAaOwQvba22Wo3qI/mhioHdt7Xm4jkI=
+-----END CERTIFICATE-----
+`
+	)
+
+	f := newFixture(t)
+
+	dCrt := []byte(badlyFormattedTLSCrt)
+	dKey := []byte(badlyFormattedTLSKey)
+	tlsSecret := newTLSSecret(metav1.NamespaceDefault, "tls", dCrt, dKey)
+	svc, eps, _ := newDefaultBackend()
+
+	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	ing1 := newIngressTLS(metav1.NamespaceDefault, "alpha-ing", bs1.Name, bs1.Spec.Ports[0].TargetPort.String(), tlsSecret.Name)
+
+	f.secretStore = append(f.secretStore, tlsSecret)
+	f.ingStore = append(f.ingStore, ing1)
+	f.svcStore = append(f.svcStore, svc, bs1)
+	f.epStore = append(f.epStore, eps, be1)
+
+	f.objects = append(f.objects, tlsSecret, svc, eps, bs1, be1, ing1)
+
+	f.prepare()
+	f.run()
+
+	fm := f.lbc.nghttpx.(*fakeManager)
+	ingConfig := fm.ingConfig
+
+	if ingConfig.DefaultTLSCred == nil {
+		t.Fatal("ingConfig.DefaultTLSCred should not be nil")
+	}
+
+	tlsCred := ingConfig.DefaultTLSCred
+	if got, want := string(tlsCred.Cert.Content), tlsCrt; got != want {
+		t.Errorf("tlsCred.Cert.Content = %v, want %v", got, want)
+	}
+	if got, want := string(tlsCred.Key.Content), tlsKey; got != want {
+		t.Errorf("tlsCred.Key.Content = %v, want %v", got, want)
+	}
+
+	if got, want := len(ingConfig.SubTLSCred), 0; got != want {
+		t.Errorf("len(ingConfig.SubTLSCred) = %v, want %v", got, want)
+	}
+
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	}
+
+	upstream := ingConfig.Upstreams[0]
+	if got, want := upstream.RedirectIfNotTLS, true; got != want {
+		t.Errorf("upstream.RedirectIfNotTLS = %v, want %v", got, want)
+	}
+}
+
 // TestSyncStringNamedPort verifies that if service target port is a named port, it is looked up from Pod spec.
 func TestSyncStringNamedPort(t *testing.T) {
 	tests := []struct {

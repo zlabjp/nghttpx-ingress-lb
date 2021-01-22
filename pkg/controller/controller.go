@@ -1130,6 +1130,18 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 		return nil, fmt.Errorf("Secret %v/%v has no private key", secret.Namespace, secret.Name)
 	}
 
+	var err error
+
+	cert, err = nghttpx.NormalizePEM(cert)
+	if err != nil {
+		return nil, fmt.Errorf("Could not normalize certificate in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+	}
+
+	key, err = nghttpx.NormalizePEM(key)
+	if err != nil {
+		return nil, fmt.Errorf("Could not normalize private key in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+	}
+
 	if _, err := tls.X509KeyPair(cert, key); err != nil {
 		return nil, err
 	}
