@@ -104,7 +104,7 @@ kind: Secret
 metadata:
   name: testsecret
   namespace: default
-type: Opaque
+type: kubernetes.io/tls
 ```
 
 You can create this kind of secret using `kubectl create secret tls`
