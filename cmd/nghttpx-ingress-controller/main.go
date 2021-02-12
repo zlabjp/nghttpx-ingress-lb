@@ -74,9 +74,6 @@ var (
 
 	kubeconfig = flags.String("kubeconfig", "", `Path to kubeconfig file which overrides in-cluster configuration.`)
 
-	resyncPeriod = flags.Duration("sync-period", 30*time.Second,
-		`(deprecated) Resync resources this often.`)
-
 	watchNamespace = flags.String("watch-namespace", metav1.NamespaceAll,
 		`Namespace to watch for Ingress. Default is to watch all namespaces`)
 
@@ -142,7 +139,9 @@ func main() {
 
 	clientcmd.BindOverrideFlags(&configOverrides, flags, clientcmd.RecommendedConfigOverrideFlags(""))
 
-	flags.Parse(os.Args)
+	if err := flags.Parse(os.Args); err != nil {
+		klog.Exitf("Unable to parse flags: %v", err)
+	}
 
 	klog.Infof("Using build: %v - %v", gitRepo, version)
 

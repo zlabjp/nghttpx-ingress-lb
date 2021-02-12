@@ -26,7 +26,6 @@ package nghttpx
 
 import (
 	"bytes"
-	"regexp"
 	"text/template"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,8 +33,6 @@ import (
 )
 
 var (
-	camelRegexp = regexp.MustCompile("[0-9A-Za-z]+")
-
 	funcMap = template.FuncMap{
 		"empty": func(input interface{}) bool {
 			check, ok := input.(string)

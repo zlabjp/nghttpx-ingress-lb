@@ -121,7 +121,7 @@ func normalizePathKey(src map[string]*nghttpx.PathConfig) map[string]*nghttpx.Pa
 
 	dst := make(map[string]*nghttpx.PathConfig)
 	for k, v := range src {
-		if strings.Index(k, "/") == -1 {
+		if !strings.Contains(k, "/") {
 			dst[k+"/"] = v
 		} else {
 			dst[k] = v

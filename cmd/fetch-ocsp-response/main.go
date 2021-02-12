@@ -19,7 +19,10 @@ var (
 )
 
 func main() {
-	flags.Parse(os.Args)
+	if err := flags.Parse(os.Args); err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to parse flags: %v\n", err)
+		os.Exit(255)
+	}
 
 	if len(flags.Args()) < 2 {
 		fmt.Fprintf(os.Stderr, "Too few arguments\n")
