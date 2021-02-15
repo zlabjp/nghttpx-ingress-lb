@@ -41,7 +41,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
-	"k8s.io/client-go/tools/cache"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -164,34 +163,52 @@ func (f *fixture) runShouldFail() {
 
 func (f *fixture) setupStore() {
 	for _, ing := range f.ingStore {
-		f.lbc.ingInformer.GetIndexer().Add(ing)
+		if err := f.lbc.ingInformer.GetIndexer().Add(ing); err != nil {
+			panic(err)
+		}
 	}
 	for _, ingClass := range f.ingClassStore {
-		f.lbc.ingClassInformer.GetIndexer().Add(ingClass)
+		if err := f.lbc.ingClassInformer.GetIndexer().Add(ingClass); err != nil {
+			panic(err)
+		}
 	}
 	if f.enableEndpointSlice {
 		for _, es := range f.epSliceStore {
-			f.lbc.epSliceInformer.GetIndexer().Add(es)
+			if err := f.lbc.epSliceInformer.GetIndexer().Add(es); err != nil {
+				panic(err)
+			}
 		}
 	} else {
 		for _, ep := range f.epStore {
-			f.lbc.epInformer.GetIndexer().Add(ep)
+			if err := f.lbc.epInformer.GetIndexer().Add(ep); err != nil {
+				panic(err)
+			}
 		}
 	}
 	for _, svc := range f.svcStore {
-		f.lbc.svcInformer.GetIndexer().Add(svc)
+		if err := f.lbc.svcInformer.GetIndexer().Add(svc); err != nil {
+			panic(err)
+		}
 	}
 	for _, secret := range f.secretStore {
-		f.lbc.secretInformer.GetIndexer().Add(secret)
+		if err := f.lbc.secretInformer.GetIndexer().Add(secret); err != nil {
+			panic(err)
+		}
 	}
 	for _, cm := range f.cmStore {
-		f.lbc.cmInformer.GetIndexer().Add(cm)
+		if err := f.lbc.cmInformer.GetIndexer().Add(cm); err != nil {
+			panic(err)
+		}
 	}
 	for _, pod := range f.podStore {
-		f.lbc.podInformer.GetIndexer().Add(pod)
+		if err := f.lbc.podInformer.GetIndexer().Add(pod); err != nil {
+			panic(err)
+		}
 	}
 	for _, node := range f.nodeStore {
-		f.lbc.nodeInformer.GetIndexer().Add(node)
+		if err := f.lbc.nodeInformer.GetIndexer().Add(node); err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -210,16 +227,6 @@ func (f *fixture) verifyActions() {
 	if len(f.actions) > len(actions) {
 		f.t.Errorf("%v additional expected actions: %+v", len(f.actions)-len(actions), f.actions[len(actions):])
 	}
-}
-
-// expectGetCMAction adds expectation that Get for cm should occur.
-func (f *fixture) expectGetCMAction(cm *v1.ConfigMap) {
-	f.actions = append(f.actions, core.NewGetAction(schema.GroupVersionResource{Resource: "configmaps"}, cm.Namespace, cm.Name))
-}
-
-// expectGetIngAction adds an expectation that get for ing should occur.
-func (f *fixture) expectGetIngAction(ing *networking.Ingress) {
-	f.actions = append(f.actions, core.NewGetAction(schema.GroupVersionResource{Resource: "ingresses"}, ing.Namespace, ing.Name))
 }
 
 // expectUpdateIngAction adds an expectation that update for ing should occur.
@@ -258,13 +265,6 @@ func stringPtr(s string) *string {
 
 func int32Ptr(n int32) *int32 {
 	return &n
-}
-
-// keyPair contains certificate key, and cert, and their name.
-type keyPair struct {
-	name string
-	cert []byte
-	key  []byte
 }
 
 // newEmptyConfigMap returns empty ConfigMap.
@@ -574,15 +574,6 @@ func newTLSSecret(namespace, name string, tlsCrt, tlsKey []byte) *v1.Secret {
 			v1.TLSCertKey:       tlsCrt,
 			v1.TLSPrivateKeyKey: tlsKey,
 		},
-	}
-}
-
-func getKey(obj runtime.Object, t *testing.T) string {
-	if key, err := cache.MetaNamespaceKeyFunc(obj); err != nil {
-		t.Fatalf("Could not get key for %+v: %v", obj, err)
-		return ""
-	} else {
-		return key
 	}
 }
 
