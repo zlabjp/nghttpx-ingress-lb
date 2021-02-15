@@ -53,10 +53,6 @@ import (
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
 
-func init() {
-	klog.InitFlags(flag.CommandLine)
-}
-
 var (
 	// value overwritten during build. This can be used to resolve issues.
 	version = ""
@@ -91,6 +87,9 @@ var (
 )
 
 func main() {
+	klog.InitFlags(flag.CommandLine)
+	defer klog.Flush()
+
 	// We use math/rand to choose interval of resync
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -161,7 +160,7 @@ func main() {
 		`Ignore any settings or rules in Ingress resources which override default backend service.`)
 
 	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+		klog.Exitf("Exiting due to command-line error: %v", err)
 	}
 }
 
