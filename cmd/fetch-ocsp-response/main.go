@@ -10,26 +10,25 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/spf13/pflag"
+	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ocsp"
 )
 
-var (
-	flags = pflag.NewFlagSet("", pflag.ExitOnError)
-)
-
 func main() {
-	if err := flags.Parse(os.Args); err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to parse flags: %v\n", err)
-		os.Exit(255)
+	rootCmd := &cobra.Command{
+		Use:                   "fetch-ocsp-response <CERTIFICATE>",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		Run:                   run,
 	}
 
-	if len(flags.Args()) < 2 {
-		fmt.Fprintf(os.Stderr, "Too few arguments\n")
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(255)
 	}
+}
 
-	certs, err := loadCertificates(flags.Args()[1])
+func run(cmd *cobra.Command, args []string) {
+	certs, err := loadCertificates(args[0])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to load certificate: %v\n", err)
 		os.Exit(255)

@@ -37,7 +37,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/spf13/pflag"
+	"github.com/spf13/cobra"
 	networking "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -62,87 +62,110 @@ var (
 	version = ""
 	gitRepo = ""
 
-	flags = pflag.NewFlagSet("", pflag.ExitOnError)
-
-	defaultSvc = flags.String("default-backend-service", "",
-		`(Required) Service used to serve a 404 page for the default backend. Takes the form
-    namespace/name. The controller uses the first node port of this Service for
-    the default backend.`)
-
-	ngxConfigMap = flags.String("nghttpx-configmap", "",
-		`Namespace/name of the ConfigMap that contains the custom nghttpx configuration to use.  Takes the form namespace/name.`)
-
-	kubeconfig = flags.String("kubeconfig", "", `Path to kubeconfig file which overrides in-cluster configuration.`)
-
-	watchNamespace = flags.String("watch-namespace", metav1.NamespaceAll,
-		`Namespace to watch for Ingress. Default is to watch all namespaces`)
-
-	healthzPort = flags.Int("healthz-port", 11249, "port for healthz endpoint.")
-
-	nghttpxHealthPort = flags.Int("nghttpx-health-port", 10901, "port for nghttpx health monitor endpoint.")
-
-	nghttpxAPIPort = flags.Int("nghttpx-api-port", 10902, "port for nghttpx API endpoint.")
-
-	profiling = flags.Bool("profiling", true, `Enable profiling via web interface host:port/debug/pprof/`)
-
-	allowInternalIP = flags.Bool("allow-internal-ip", false, `Allow to use address of type NodeInternalIP when fetching
-                external IP address. This is the workaround for the cluster configuration where NodeExternalIP or
-                NodeLegacyHostIP is not assigned or cannot be used.`)
-
-	defaultTLSSecret = flags.String("default-tls-secret", "",
-		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.`)
-
-	ingressClass = flags.String("ingress-class", "nghttpx",
-		`Ingress class which this controller is responsible for.  This is the value of the deprecated "kubernetes.io/ingress.class" annotation.  For Kubernetes v1.18 or later, use ingress-class-controller flag and IngressClass resource.`)
-
-	ingressClassController = flags.String("ingress-class-controller", "zlab.co.jp/nghttpx",
-		`The name of IngressClass controller for this controller.  This is the value specified in IngressClass.spec.controller.  Only works with Kubernetes v1.18 or later `)
-
-	nghttpxConfDir = flags.String("nghttpx-conf-dir", "/etc/nghttpx",
-		`Path to the directory which contains nghttpx configuration files.  The controller reads and writes these configuration files.`)
-
-	nghttpxExecPath = flags.String("nghttpx-exec-path", "/usr/local/bin/nghttpx",
-		`Path to the nghttpx executable.`)
-
-	nghttpxHTTPPort = flags.Int("nghttpx-http-port", 80,
-		`Port to listen to for HTTP (non-TLS) requests.  Specifying 0 disables HTTP port.`)
-
-	nghttpxHTTPSPort = flags.Int("nghttpx-https-port", 443,
-		`Port to listen to for HTTPS (TLS) requests.  Specifying 0 disables HTTPS port.`)
-
-	fetchOCSPRespFromSecret = flags.Bool("fetch-ocsp-resp-from-secret", false,
-		`Fetch OCSP response from TLS secret.`)
-
-	proxyProto = flags.Bool("proxy-proto", false,
-		`Enable proxyproto for all public-facing frontends (api and health frontends are ignored)`)
-
-	ocspRespKey = flags.String("ocsp-resp-key", "tls.ocsp-resp", `A key for OCSP response in TLS secret.`)
-
-	publishSvc = flags.String("publish-service", "", `Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
-
-	endpointSlices = flags.Bool("endpoint-slices", false, `Get endpoints from EndpointSlice resource instead of Endpoints resource`)
-
-	reloadRate = flags.Float64("reload-rate", 1.0, `Rate (QPS) of reloading nghttpx configuration to deal with frequent backend updates in a single batch`)
-
-	reloadBurst = flags.Int("reload-burst", 1, `Reload burst that can exceed reload-rate`)
-
-	noDefaultBackendOverride = flags.Bool("no-default-backend-override", false, `Ignore any settings or rules in Ingress resources which override default backend service`)
-
-	configOverrides clientcmd.ConfigOverrides
+	// Command-line flags
+	defaultSvc               string
+	ngxConfigMap             string
+	kubeconfig               string
+	watchNamespace           = metav1.NamespaceAll
+	healthzPort              = 11249
+	nghttpxHealthPort        = 10901
+	nghttpxAPIPort           = 10902
+	profiling                = true
+	allowInternalIP          = false
+	defaultTLSSecret         string
+	ingressClass             = "nghttpx"
+	ingressClassController   = "zlab.co.jp/nghttpx"
+	nghttpxConfDir           = "/etc/nghttpx"
+	nghttpxExecPath          = "/usr/local/bin/nghttpx"
+	nghttpxHTTPPort          = 80
+	nghttpxHTTPSPort         = 443
+	fetchOCSPRespFromSecret  = false
+	proxyProto               = false
+	ocspRespKey              = "tls.ocsp-resp"
+	publishSvc               string
+	endpointSlices           = false
+	reloadRate               = 1.0
+	reloadBurst              = 1
+	noDefaultBackendOverride = false
+	configOverrides          clientcmd.ConfigOverrides
 )
 
 func main() {
 	// We use math/rand to choose interval of resync
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	flags.AddGoFlagSet(flag.CommandLine)
-
-	clientcmd.BindOverrideFlags(&configOverrides, flags, clientcmd.RecommendedConfigOverrideFlags(""))
-
-	if err := flags.Parse(os.Args); err != nil {
-		klog.Exitf("Unable to parse flags: %v", err)
+	rootCmd := &cobra.Command{
+		Use: "nghttpx-ingress-controller",
+		Run: run,
 	}
 
+	rootCmd.Flags().AddGoFlagSet(flag.CommandLine)
+	clientcmd.BindOverrideFlags(&configOverrides, rootCmd.Flags(), clientcmd.RecommendedConfigOverrideFlags(""))
+
+	rootCmd.Flags().StringVar(&defaultSvc, "default-backend-service", defaultSvc,
+		`(Required) Service used to serve a 404 page for the default backend. Takes the form namespace/name. The controller uses the first node port of this Service for the default backend.`)
+
+	rootCmd.Flags().StringVar(&ngxConfigMap, "nghttpx-configmap", ngxConfigMap,
+		`Namespace/name of the ConfigMap that contains the custom nghttpx configuration to use.  Takes the form namespace/name.`)
+
+	rootCmd.Flags().StringVar(&kubeconfig, "kubeconfig", kubeconfig, `Path to kubeconfig file which overrides in-cluster configuration.`)
+
+	rootCmd.Flags().StringVar(&watchNamespace, "watch-namespace", watchNamespace, `Namespace to watch for Ingress. Default is to watch all namespaces`)
+
+	rootCmd.Flags().IntVar(&healthzPort, "healthz-port", healthzPort, "port for healthz endpoint.")
+
+	rootCmd.Flags().IntVar(&nghttpxHealthPort, "nghttpx-health-port", nghttpxHealthPort, "port for nghttpx health monitor endpoint.")
+
+	rootCmd.Flags().IntVar(&nghttpxAPIPort, "nghttpx-api-port", nghttpxAPIPort, "port for nghttpx API endpoint.")
+
+	rootCmd.Flags().BoolVar(&profiling, "profiling", profiling, `Enable profiling via web interface host:port/debug/pprof/`)
+
+	rootCmd.Flags().BoolVar(&allowInternalIP, "allow-internal-ip", allowInternalIP,
+		`Allow to use address of type NodeInternalIP when fetching external IP address. This is the workaround for the cluster configuration where NodeExternalIP or NodeLegacyHostIP is not assigned or cannot be used.`)
+
+	rootCmd.Flags().StringVar(&defaultTLSSecret, "default-tls-secret", defaultTLSSecret,
+		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.`)
+
+	rootCmd.Flags().StringVar(&ingressClass, "ingress-class", ingressClass,
+		`Ingress class which this controller is responsible for.  This is the value of the deprecated "kubernetes.io/ingress.class" annotation.  For Kubernetes v1.18 or later, use ingress-class-controller flag and IngressClass resource.`)
+
+	rootCmd.Flags().StringVar(&ingressClassController, "ingress-class-controller", ingressClassController,
+		`The name of IngressClass controller for this controller.  This is the value specified in IngressClass.spec.controller.  Only works with Kubernetes v1.18 or later `)
+
+	rootCmd.Flags().StringVar(&nghttpxConfDir, "nghttpx-conf-dir", nghttpxConfDir,
+		`Path to the directory which contains nghttpx configuration files.  The controller reads and writes these configuration files.`)
+
+	rootCmd.Flags().StringVar(&nghttpxExecPath, "nghttpx-exec-path", nghttpxExecPath, `Path to the nghttpx executable.`)
+
+	rootCmd.Flags().IntVar(&nghttpxHTTPPort, "nghttpx-http-port", nghttpxHTTPPort, `Port to listen to for HTTP (non-TLS) requests.  Specifying 0 disables HTTP port.`)
+
+	rootCmd.Flags().IntVar(&nghttpxHTTPSPort, "nghttpx-https-port", nghttpxHTTPSPort, `Port to listen to for HTTPS (TLS) requests.  Specifying 0 disables HTTPS port.`)
+
+	rootCmd.Flags().BoolVar(&fetchOCSPRespFromSecret, "fetch-ocsp-resp-from-secret", fetchOCSPRespFromSecret, `Fetch OCSP response from TLS secret.`)
+
+	rootCmd.Flags().BoolVar(&proxyProto, "proxy-proto", proxyProto, `Enable proxyproto for all public-facing frontends (api and health frontends are ignored)`)
+
+	rootCmd.Flags().StringVar(&ocspRespKey, "ocsp-resp-key", ocspRespKey, `A key for OCSP response in TLS secret.`)
+
+	rootCmd.Flags().StringVar(&publishSvc, "publish-service", publishSvc,
+		`Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
+
+	rootCmd.Flags().BoolVar(&endpointSlices, "endpoint-slices", endpointSlices, `Get endpoints from EndpointSlice resource instead of Endpoints resource`)
+
+	rootCmd.Flags().Float64Var(&reloadRate, "reload-rate", reloadRate,
+		`Rate (QPS) of reloading nghttpx configuration to deal with frequent backend updates in a single batch`)
+
+	rootCmd.Flags().IntVar(&reloadBurst, "reload-burst", reloadBurst, `Reload burst that can exceed reload-rate`)
+
+	rootCmd.Flags().BoolVar(&noDefaultBackendOverride, "no-default-backend-override", noDefaultBackendOverride,
+		`Ignore any settings or rules in Ingress resources which override default backend service`)
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func run(cmd *cobra.Command, args []string) {
 	klog.Infof("Using build: %v - %v", gitRepo, version)
 
 	var (
@@ -152,11 +175,11 @@ func main() {
 		publishSvcKey       *types.NamespacedName
 	)
 
-	if *defaultSvc == "" {
+	if defaultSvc == "" {
 		klog.Exitf("default-backend-service cannot be empty")
 	}
-	if ns, name, err := cache.SplitMetaNamespaceKey(*defaultSvc); err != nil {
-		klog.Exitf("default-backend-service: invalid Service identifier %v: %v", *defaultSvc, err)
+	if ns, name, err := cache.SplitMetaNamespaceKey(defaultSvc); err != nil {
+		klog.Exitf("default-backend-service: invalid Service identifier %v: %v", defaultSvc, err)
 	} else {
 		defaultSvcKey = types.NamespacedName{
 			Namespace: ns,
@@ -164,9 +187,9 @@ func main() {
 		}
 	}
 
-	if *publishSvc != "" {
-		if ns, name, err := cache.SplitMetaNamespaceKey(*publishSvc); err != nil {
-			klog.Exitf("publish-service: invalid Service identifier %v: %v", *publishSvc, err)
+	if publishSvc != "" {
+		if ns, name, err := cache.SplitMetaNamespaceKey(publishSvc); err != nil {
+			klog.Exitf("publish-service: invalid Service identifier %v: %v", publishSvc, err)
 		} else {
 			publishSvcKey = &types.NamespacedName{
 				Namespace: ns,
@@ -175,9 +198,9 @@ func main() {
 		}
 	}
 
-	if *ngxConfigMap != "" {
-		if ns, name, err := cache.SplitMetaNamespaceKey(*ngxConfigMap); err != nil {
-			klog.Exitf("nghttpx-configmap: invalid ConfigMap identifier %v: %v", *ngxConfigMap, err)
+	if ngxConfigMap != "" {
+		if ns, name, err := cache.SplitMetaNamespaceKey(ngxConfigMap); err != nil {
+			klog.Exitf("nghttpx-configmap: invalid ConfigMap identifier %v: %v", ngxConfigMap, err)
 		} else {
 			nghttpxConfigMapKey = &types.NamespacedName{
 				Namespace: ns,
@@ -186,9 +209,9 @@ func main() {
 		}
 	}
 
-	if *defaultTLSSecret != "" {
-		if ns, name, err := cache.SplitMetaNamespaceKey(*defaultTLSSecret); err != nil {
-			klog.Exitf("default-tls-secret: invalid Secret identifier %v: %v", *defaultTLSSecret, err)
+	if defaultTLSSecret != "" {
+		if ns, name, err := cache.SplitMetaNamespaceKey(defaultTLSSecret); err != nil {
+			klog.Exitf("default-tls-secret: invalid Secret identifier %v: %v", defaultTLSSecret, err)
 		} else {
 			defaultTLSSecretKey = &types.NamespacedName{
 				Namespace: ns,
@@ -202,11 +225,11 @@ func main() {
 		config *rest.Config
 	)
 
-	if *kubeconfig == "" {
+	if kubeconfig == "" {
 		config, err = rest.InClusterConfig()
 	} else {
 		loadingRules := clientcmd.ClientConfigLoadingRules{
-			ExplicitPath: *kubeconfig,
+			ExplicitPath: kubeconfig,
 		}
 		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(&loadingRules, &configOverrides).ClientConfig()
 	}
@@ -238,34 +261,34 @@ func main() {
 
 	controllerConfig := controller.Config{
 		DefaultBackendService:    defaultSvcKey,
-		WatchNamespace:           *watchNamespace,
+		WatchNamespace:           watchNamespace,
 		NghttpxConfigMap:         nghttpxConfigMapKey,
-		NghttpxHealthPort:        *nghttpxHealthPort,
-		NghttpxAPIPort:           *nghttpxAPIPort,
-		NghttpxConfDir:           *nghttpxConfDir,
-		NghttpxExecPath:          *nghttpxExecPath,
-		NghttpxHTTPPort:          *nghttpxHTTPPort,
-		NghttpxHTTPSPort:         *nghttpxHTTPSPort,
+		NghttpxHealthPort:        nghttpxHealthPort,
+		NghttpxAPIPort:           nghttpxAPIPort,
+		NghttpxConfDir:           nghttpxConfDir,
+		NghttpxExecPath:          nghttpxExecPath,
+		NghttpxHTTPPort:          nghttpxHTTPPort,
+		NghttpxHTTPSPort:         nghttpxHTTPSPort,
 		DefaultTLSSecret:         defaultTLSSecretKey,
-		IngressClass:             *ingressClass,
-		IngressClassController:   *ingressClassController,
+		IngressClass:             ingressClass,
+		IngressClassController:   ingressClassController,
 		EnableIngressClass:       checkIngressClassAvailability(discoveryClient),
-		AllowInternalIP:          *allowInternalIP,
-		OCSPRespKey:              *ocspRespKey,
-		FetchOCSPRespFromSecret:  *fetchOCSPRespFromSecret,
-		ProxyProto:               *proxyProto,
+		AllowInternalIP:          allowInternalIP,
+		OCSPRespKey:              ocspRespKey,
+		FetchOCSPRespFromSecret:  fetchOCSPRespFromSecret,
+		ProxyProto:               proxyProto,
 		PublishSvc:               publishSvcKey,
-		EnableEndpointSlice:      *endpointSlices,
-		ReloadRate:               *reloadRate,
-		ReloadBurst:              *reloadBurst,
-		NoDefaultBackendOverride: *noDefaultBackendOverride,
+		EnableEndpointSlice:      endpointSlices,
+		ReloadRate:               reloadRate,
+		ReloadBurst:              reloadBurst,
+		NoDefaultBackendOverride: noDefaultBackendOverride,
 	}
 
-	if err := generateDefaultNghttpxConfig(*nghttpxConfDir, *nghttpxHealthPort, *nghttpxAPIPort); err != nil {
+	if err := generateDefaultNghttpxConfig(nghttpxConfDir, nghttpxHealthPort, nghttpxAPIPort); err != nil {
 		klog.Exit(err)
 	}
 
-	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(*nghttpxAPIPort), &controllerConfig, runtimePodInfo)
+	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(nghttpxAPIPort), &controllerConfig, runtimePodInfo)
 
 	go registerHandlers(lbc)
 	go handleSigterm(lbc)
@@ -308,7 +331,7 @@ func (hc healthzChecker) Check(_ *http.Request) error {
 
 func registerHandlers(lbc *controller.LoadBalancerController) {
 	mux := http.NewServeMux()
-	healthz.InstallHandler(mux, newHealthzChecker(*nghttpxHealthPort))
+	healthz.InstallHandler(mux, newHealthzChecker(nghttpxHealthPort))
 
 	http.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -319,14 +342,14 @@ func registerHandlers(lbc *controller.LoadBalancerController) {
 		lbc.Stop()
 	})
 
-	if *profiling {
+	if profiling {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	}
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%v", *healthzPort),
+		Addr:    fmt.Sprintf(":%v", healthzPort),
 		Handler: mux,
 	}
 	klog.Exit(server.ListenAndServe())
