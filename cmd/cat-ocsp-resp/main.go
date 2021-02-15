@@ -6,25 +6,24 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/pflag"
-)
-
-var (
-	flags = pflag.NewFlagSet("", pflag.ExitOnError)
+	"github.com/spf13/cobra"
 )
 
 func main() {
-	if err := flags.Parse(os.Args); err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to parse flags: %v\n", err)
-		os.Exit(255)
+	rootCmd := &cobra.Command{
+		Use:                   "cat-ocsp-resp <CERTIFICATE>",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		Run:                   run,
 	}
 
-	if len(flags.Args()) < 2 {
-		fmt.Fprintf(os.Stderr, "Too few arguments\n")
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(255)
 	}
+}
 
-	path := flags.Args()[1]
+func run(cmd *cobra.Command, args []string) {
+	path := args[0]
 
 	if !strings.HasSuffix(path, ".crt") {
 		fmt.Fprintf(os.Stderr, ".crt suffix not found\n")
