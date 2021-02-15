@@ -103,34 +103,34 @@ func main() {
 	clientcmd.BindOverrideFlags(&configOverrides, rootCmd.Flags(), clientcmd.RecommendedConfigOverrideFlags(""))
 
 	rootCmd.Flags().StringVar(&defaultSvc, "default-backend-service", defaultSvc,
-		`(Required) Service used to serve a 404 page for the default backend. Takes the form namespace/name. The controller uses the first node port of this Service for the default backend.`)
+		`(Required) Service used to serve a 404 page for the default backend.  Takes the form namespace/name.  The controller uses the first node port of this Service for the default backend.`)
 
 	rootCmd.Flags().StringVar(&ngxConfigMap, "nghttpx-configmap", ngxConfigMap,
 		`Namespace/name of the ConfigMap that contains the custom nghttpx configuration to use.  Takes the form namespace/name.`)
 
 	rootCmd.Flags().StringVar(&kubeconfig, "kubeconfig", kubeconfig, `Path to kubeconfig file which overrides in-cluster configuration.`)
 
-	rootCmd.Flags().StringVar(&watchNamespace, "watch-namespace", watchNamespace, `Namespace to watch for Ingress. Default is to watch all namespaces`)
+	rootCmd.Flags().StringVar(&watchNamespace, "watch-namespace", watchNamespace, `Namespace to watch for Ingress.  Default is to watch all namespaces.`)
 
-	rootCmd.Flags().IntVar(&healthzPort, "healthz-port", healthzPort, "port for healthz endpoint.")
+	rootCmd.Flags().IntVar(&healthzPort, "healthz-port", healthzPort, "Port for healthz endpoint.")
 
-	rootCmd.Flags().IntVar(&nghttpxHealthPort, "nghttpx-health-port", nghttpxHealthPort, "port for nghttpx health monitor endpoint.")
+	rootCmd.Flags().IntVar(&nghttpxHealthPort, "nghttpx-health-port", nghttpxHealthPort, "Port for nghttpx health monitor endpoint.")
 
-	rootCmd.Flags().IntVar(&nghttpxAPIPort, "nghttpx-api-port", nghttpxAPIPort, "port for nghttpx API endpoint.")
+	rootCmd.Flags().IntVar(&nghttpxAPIPort, "nghttpx-api-port", nghttpxAPIPort, "Port for nghttpx API endpoint.")
 
-	rootCmd.Flags().BoolVar(&profiling, "profiling", profiling, `Enable profiling via web interface host:port/debug/pprof/`)
+	rootCmd.Flags().BoolVar(&profiling, "profiling", profiling, `Enable profiling at the health port.  It exposes /debug/pprof/ endpoint.`)
 
 	rootCmd.Flags().BoolVar(&allowInternalIP, "allow-internal-ip", allowInternalIP,
-		`Allow to use address of type NodeInternalIP when fetching external IP address. This is the workaround for the cluster configuration where NodeExternalIP or NodeLegacyHostIP is not assigned or cannot be used.`)
+		`Allow to use address of type NodeInternalIP when fetching external IP address.  This is the workaround for the cluster configuration where NodeExternalIP or NodeLegacyHostIP is not assigned or cannot be used.`)
 
 	rootCmd.Flags().StringVar(&defaultTLSSecret, "default-tls-secret", defaultTLSSecret,
-		`Optional, name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.`)
+		`Name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.`)
 
 	rootCmd.Flags().StringVar(&ingressClass, "ingress-class", ingressClass,
 		`Ingress class which this controller is responsible for.  This is the value of the deprecated "kubernetes.io/ingress.class" annotation.  For Kubernetes v1.18 or later, use ingress-class-controller flag and IngressClass resource.`)
 
 	rootCmd.Flags().StringVar(&ingressClassController, "ingress-class-controller", ingressClassController,
-		`The name of IngressClass controller for this controller.  This is the value specified in IngressClass.spec.controller.  Only works with Kubernetes v1.18 or later `)
+		`The name of IngressClass controller for this controller.  This is the value specified in IngressClass.spec.controller.  Only works with Kubernetes v1.18 or later.`)
 
 	rootCmd.Flags().StringVar(&nghttpxConfDir, "nghttpx-conf-dir", nghttpxConfDir,
 		`Path to the directory which contains nghttpx configuration files.  The controller reads and writes these configuration files.`)
@@ -143,22 +143,22 @@ func main() {
 
 	rootCmd.Flags().BoolVar(&fetchOCSPRespFromSecret, "fetch-ocsp-resp-from-secret", fetchOCSPRespFromSecret, `Fetch OCSP response from TLS secret.`)
 
-	rootCmd.Flags().BoolVar(&proxyProto, "proxy-proto", proxyProto, `Enable proxyproto for all public-facing frontends (api and health frontends are ignored)`)
+	rootCmd.Flags().BoolVar(&proxyProto, "proxy-proto", proxyProto, `Enable proxyproto for all public-facing frontends (api and health frontends are ignored).`)
 
 	rootCmd.Flags().StringVar(&ocspRespKey, "ocsp-resp-key", ocspRespKey, `A key for OCSP response in TLS secret.`)
 
 	rootCmd.Flags().StringVar(&publishSvc, "publish-service", publishSvc,
 		`Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
 
-	rootCmd.Flags().BoolVar(&endpointSlices, "endpoint-slices", endpointSlices, `Get endpoints from EndpointSlice resource instead of Endpoints resource`)
+	rootCmd.Flags().BoolVar(&endpointSlices, "endpoint-slices", endpointSlices, `Get endpoints from EndpointSlice resource instead of Endpoints resource.`)
 
 	rootCmd.Flags().Float64Var(&reloadRate, "reload-rate", reloadRate,
-		`Rate (QPS) of reloading nghttpx configuration to deal with frequent backend updates in a single batch`)
+		`Rate (QPS) of reloading nghttpx configuration to deal with frequent backend updates in a single batch.`)
 
-	rootCmd.Flags().IntVar(&reloadBurst, "reload-burst", reloadBurst, `Reload burst that can exceed reload-rate`)
+	rootCmd.Flags().IntVar(&reloadBurst, "reload-burst", reloadBurst, `Reload burst that can exceed reload-rate.`)
 
 	rootCmd.Flags().BoolVar(&noDefaultBackendOverride, "no-default-backend-override", noDefaultBackendOverride,
-		`Ignore any settings or rules in Ingress resources which override default backend service`)
+		`Ignore any settings or rules in Ingress resources which override default backend service.`)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
