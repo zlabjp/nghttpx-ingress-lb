@@ -473,16 +473,16 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 		},
 	}
 
-	var endpointAddrs []v1.EndpointAddress
+	endpointAddrs := make([]v1.EndpointAddress, len(addrs))
 	for i, addr := range addrs {
-		endpointAddrs = append(endpointAddrs, v1.EndpointAddress{
+		endpointAddrs[i] = v1.EndpointAddress{
 			IP: addr,
 			TargetRef: &v1.ObjectReference{
 				Kind:      "Pod",
 				Name:      fmt.Sprintf("%v-pod-%v", name, i+1),
 				Namespace: namespace,
 			},
-		})
+		}
 	}
 
 	eps.Subsets[0].Addresses = endpointAddrs

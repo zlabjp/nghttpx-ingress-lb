@@ -331,7 +331,7 @@ func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
@@ -341,7 +341,7 @@ func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cu
 		return
 	}
 	klog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
@@ -362,19 +362,19 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Ingress %v/%v deleted", ing.Namespace, ing.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) addIngressClassNotification(obj interface{}) {
 	ingClass := obj.(*networking.IngressClass)
 	klog.V(4).Infof("IngressClass %v added", ingClass.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updateIngressClassNotification(old interface{}, cur interface{}) {
 	ingClass := cur.(*networking.IngressClass)
 	klog.V(4).Infof("IngressClass %v updated", ingClass.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deleteIngressClassNotification(obj interface{}) {
@@ -392,7 +392,7 @@ func (lbc *LoadBalancerController) deleteIngressClassNotification(obj interface{
 		}
 	}
 	klog.V(4).Infof("IngressClass %v deleted", ingClass.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) addEndpointsNotification(obj interface{}) {
@@ -401,7 +401,7 @@ func (lbc *LoadBalancerController) addEndpointsNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Endpoints %v/%v added", ep.Namespace, ep.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interface{}) {
@@ -411,7 +411,7 @@ func (lbc *LoadBalancerController) updateEndpointsNotification(old, cur interfac
 		return
 	}
 	klog.V(4).Infof("Endpoints %v/%v updated", curEp.Namespace, curEp.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) {
@@ -432,7 +432,7 @@ func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) 
 		return
 	}
 	klog.V(4).Infof("Endpoints %v/%v deleted", ep.Namespace, ep.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 // endpointsReferenced returns true if we are interested in ep.
@@ -446,7 +446,7 @@ func (lbc *LoadBalancerController) addEndpointSliceNotification(obj interface{})
 		return
 	}
 	klog.V(4).Infof("EndpointSlice %v/%v added", es.Namespace, es.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updateEndpointSliceNotification(old, cur interface{}) {
@@ -456,7 +456,7 @@ func (lbc *LoadBalancerController) updateEndpointSliceNotification(old, cur inte
 		return
 	}
 	klog.V(4).Infof("EndpointSlice %v/%v updated", curES.Namespace, curES.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deleteEndpointSliceNotification(obj interface{}) {
@@ -477,7 +477,7 @@ func (lbc *LoadBalancerController) deleteEndpointSliceNotification(obj interface
 		return
 	}
 	klog.V(4).Infof("EndpointSlice %v/%v deleted", es.Namespace, es.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 // endpointSliceReferenced returns true if we are interested in es.
@@ -496,7 +496,7 @@ func (lbc *LoadBalancerController) addServiceNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Service %v/%v added", svc.Namespace, svc.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updateServiceNotification(old, cur interface{}) {
@@ -506,7 +506,7 @@ func (lbc *LoadBalancerController) updateServiceNotification(old, cur interface{
 		return
 	}
 	klog.V(4).Infof("Service %v/%v updated", curSvc.Namespace, curSvc.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deleteServiceNotification(obj interface{}) {
@@ -527,7 +527,7 @@ func (lbc *LoadBalancerController) deleteServiceNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Service %v/%v deleted", svc.Namespace, svc.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func namespacedName(obj metav1.Object) types.NamespacedName {
@@ -577,7 +577,7 @@ func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
 	}
 
 	klog.V(4).Infof("Secret %v/%v added", s.Namespace, s.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}) {
@@ -588,7 +588,7 @@ func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}
 	}
 
 	klog.V(4).Infof("Secret %v/%v updated", curS.Namespace, curS.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
@@ -609,7 +609,7 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
@@ -618,7 +618,7 @@ func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("ConfigMap %v/%v added", c.Namespace, c.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interface{}) {
@@ -628,7 +628,7 @@ func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interfac
 	}
 	// updates to configuration configmaps can trigger an update
 	klog.V(4).Infof("ConfigMap %v/%v updated", curC.Namespace, curC.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) {
@@ -649,7 +649,7 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 		return
 	}
 	klog.V(4).Infof("ConfigMap %v/%v deleted", c.Namespace, c.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
@@ -658,7 +658,7 @@ func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Pod %v/%v added", pod.Namespace, pod.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
@@ -668,7 +668,7 @@ func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
 		return
 	}
 	klog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
@@ -689,7 +689,7 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Pod %v/%v deleted", pod.Namespace, pod.Name)
-	lbc.enqueue(syncKey)
+	lbc.enqueue()
 }
 
 // podReferenced returns true if we are interested in pod.
@@ -742,8 +742,8 @@ func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
 	return false
 }
 
-func (lbc *LoadBalancerController) enqueue(key string) {
-	lbc.syncQueue.Add(key)
+func (lbc *LoadBalancerController) enqueue() {
+	lbc.syncQueue.Add(syncKey)
 }
 
 func (lbc *LoadBalancerController) worker() {
@@ -1097,7 +1097,11 @@ func (lbc *LoadBalancerController) getTLSCredFromSecret(key *types.NamespacedNam
 
 // getTLSCredFromIngress returns list of nghttpx.TLSCred obtained from Ingress resource.
 func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *networking.Ingress) ([]*nghttpx.TLSCred, error) {
-	var pems []*nghttpx.TLSCred
+	if len(ing.Spec.TLS) == 0 {
+		return nil, nil
+	}
+
+	pems := make([]*nghttpx.TLSCred, len(ing.Spec.TLS))
 
 	for i := range ing.Spec.TLS {
 		tls := &ing.Spec.TLS[i]
@@ -1113,7 +1117,7 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *networking.Ingress
 			return nil, err
 		}
 
-		pems = append(pems, tlsCred)
+		pems[i] = tlsCred
 	}
 
 	return pems, nil
@@ -1644,7 +1648,11 @@ func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Select
 		return nil, fmt.Errorf("Could not list Pods with label %v", selector)
 	}
 
-	var lbIngs []v1.LoadBalancerIngress
+	if len(pods) == 0 {
+		return nil, nil
+	}
+
+	lbIngs := make([]v1.LoadBalancerIngress, 0, len(pods))
 
 	for _, pod := range pods {
 		externalIP, err := lbc.getPodAddress(pod)
