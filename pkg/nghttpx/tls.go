@@ -41,7 +41,7 @@ const (
 	tlsDir = "tls"
 )
 
-//CreateTLSKeyPath returns TLS private key file path.
+// CreateTLSKeyPath returns TLS private key file path.
 func CreateTLSKeyPath(dir, name string) string {
 	return filepath.Join(dir, tlsDir, fmt.Sprintf("%v.key", name))
 }

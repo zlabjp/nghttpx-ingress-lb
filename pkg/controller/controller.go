@@ -1003,11 +1003,12 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host, path string, backend *networking.IngressBackend,
 	requireTLS bool, defaultPathConfig *nghttpx.PathConfig, pathConfig map[string]*nghttpx.PathConfig, defaultPortBackendConfig *nghttpx.PortBackendConfig, backendConfig map[string]map[string]*nghttpx.PortBackendConfig) (*nghttpx.Upstream, error) {
 	var normalizedPath string
-	if path == "" {
+	switch {
+	case path == "":
 		normalizedPath = "/"
-	} else if !strings.HasPrefix(path, "/") {
+	case !strings.HasPrefix(path, "/"):
 		return nil, fmt.Errorf("Host %v has Path which does not start /: %v", host, path)
-	} else {
+	default:
 		// nghttpx requires ':' to be percent-encoded.  Otherwise, ':' is recognized as pattern separator.
 		normalizedPath = strings.ReplaceAll(path, ":", "%3A")
 	}

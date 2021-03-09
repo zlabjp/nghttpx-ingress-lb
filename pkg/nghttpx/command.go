@@ -312,14 +312,17 @@ func (ngx *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
 	klog.Infof("Waiting for nghttpx to finish reloading configuration")
 
 	if err := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
-		if newConfRev, err := ngx.getNghttpxConfigRevision(); err != nil {
+		newConfRev, err := ngx.getNghttpxConfigRevision()
+		if err != nil {
 			klog.Error(err)
 			return false, nil
-		} else if newConfRev == oldConfRev {
-			return false, nil
-		} else {
-			return true, nil
 		}
+
+		if newConfRev == oldConfRev {
+			return false, nil
+		}
+
+		return true, nil
 	}); err != nil {
 		return fmt.Errorf("Could not get new nghttpx configRevision: %v", err)
 	}
