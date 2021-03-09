@@ -1370,7 +1370,7 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, ep
 				break
 			}
 
-			port, err := strconv.Atoi(svcPort.TargetPort.StrVal)
+			port, err := strconv.ParseUint(svcPort.TargetPort.StrVal, 10, 16)
 			if err != nil {
 				port, err := lbc.getNamedPortFromPod(ref, svcPort)
 				if err != nil {
