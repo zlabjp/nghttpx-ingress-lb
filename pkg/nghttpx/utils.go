@@ -244,7 +244,7 @@ func WriteFile(path string, content []byte) error {
 	}
 	tempFile.Close()
 
-	if err := ioutil.WriteFile(tempFile.Name(), content, 0644); err != nil {
+	if err := ioutil.WriteFile(tempFile.Name(), content, 0600); err != nil {
 		os.Remove(tempFile.Name())
 		return err
 	}
