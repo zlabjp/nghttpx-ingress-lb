@@ -34,6 +34,8 @@ push: container
 .PHONY: clean
 clean:
 	rm -f nghttpx-ingress-controller
+	rm -f fetch-ocsp-response
+	rm -f cat-ocsp-resp
 
 .PHONY: vet
 vet:
