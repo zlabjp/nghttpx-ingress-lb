@@ -14,7 +14,7 @@ export GO111MODULE=on
 all: push
 
 .PHONY: controller
-controller: clean
+controller:
 	CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo -ldflags \
 		"-w -X main.version=${VERSION} -X main.gitRepo=${REPO_INFO}" \
 		github.com/zlabjp/nghttpx-ingress-lb/cmd/nghttpx-ingress-controller/...
