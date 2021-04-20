@@ -143,4 +143,3 @@ spec:
         - /nghttpx-ingress-controller
         - --default-backend-service=default/default-http-backend
         - --healthz-port=11249
-        - --logtostderr

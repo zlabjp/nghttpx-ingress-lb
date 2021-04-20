@@ -49,4 +49,3 @@ spec:
         - /nghttpx-ingress-controller
         - --default-backend-service=$(POD_NAMESPACE)/default-http-backend
         - --healthz-port=11249
-        - --logtostderr

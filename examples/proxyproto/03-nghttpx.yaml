@@ -62,5 +62,4 @@ spec:
         - --default-backend-service=$(POD_NAMESPACE)/default-http-backend
         - --nghttpx-configmap=$(POD_NAMESPACE)/nghttpx-ingress-lb-config
         - --healthz-port=11249
-        - --logtostderr
         - --proxy-proto=true
