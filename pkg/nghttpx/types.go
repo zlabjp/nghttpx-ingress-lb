@@ -56,6 +56,8 @@ type IngressConfig struct {
 	// MrubyFileContent is the extra mruby script.  It is saved in the container disk space, and will be referenced by mruby-file from
 	// configuration file.
 	MrubyFile *ChecksumFile
+	// HealthzMruby is the mruby script to setup healthz endpoint.  It is only enabled when deferred shutdown period is configured.
+	HealthzMruby *ChecksumFile
 	// HealthPort is the port for health monitor endpoint.
 	HealthPort int
 	// APIPort is the port for API endpoint.
@@ -70,6 +72,9 @@ type IngressConfig struct {
 	FetchOCSPRespFromSecret bool
 	// ProxyProto toggles the use of PROXY protocol for all public-facing frontends.
 	ProxyProto bool
+	// HealthzPort is the port of backend for mruby script healthz endpoint.  mruby script returns response, therefore this backend is
+	// not used, but nghttpx needs functional backend for this purpose.
+	HealthzPort int
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.
