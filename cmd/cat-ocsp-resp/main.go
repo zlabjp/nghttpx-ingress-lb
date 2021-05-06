@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -32,7 +31,7 @@ func run(cmd *cobra.Command, args []string) {
 
 	path = path[0:len(path)-len(".crt")] + ".ocsp-resp"
 
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to read file %v: %v\n", path, err)
 		os.Exit(255)

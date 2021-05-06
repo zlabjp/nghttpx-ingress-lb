@@ -29,7 +29,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -74,7 +74,7 @@ func needsReload(filename string, newCfg []byte) (bool, error) {
 		return false, err
 	}
 
-	oldCfg, err := ioutil.ReadAll(in)
+	oldCfg, err := io.ReadAll(in)
 	in.Close()
 	if err != nil {
 		return false, err
@@ -238,13 +238,13 @@ func ResolvePathConfig(host, path string, defaultPathConfig *PathConfig, pathCon
 
 func WriteFile(path string, content []byte) error {
 	dir := filepath.Dir(path)
-	tempFile, err := ioutil.TempFile(dir, "nghttpx")
+	tempFile, err := os.CreateTemp(dir, "nghttpx")
 	if err != nil {
 		return err
 	}
 	tempFile.Close()
 
-	if err := ioutil.WriteFile(tempFile.Name(), content, 0600); err != nil {
+	if err := os.WriteFile(tempFile.Name(), content, 0600); err != nil {
 		os.Remove(tempFile.Name())
 		return err
 	}

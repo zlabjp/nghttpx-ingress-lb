@@ -27,7 +27,7 @@ package nghttpx
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -199,7 +199,7 @@ func deleteStaleMrubyAssets(ingConfig *IngressConfig) error {
 
 // deleteAssetFiles deletes files under dir but keeps files if they are included in keep.
 func deleteAssetFiles(dir string, keep map[string]bool) error {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 		return fmt.Errorf("backendconfig API endpoint returned unsuccessful status code %v", resp.StatusCode)
 	}
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("Error while reading API response body: %v", err)
 	}

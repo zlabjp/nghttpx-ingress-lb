@@ -6,7 +6,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 
@@ -96,7 +96,7 @@ func getOCSPResponse(cert, issuer *x509.Certificate) ([]byte, error) {
 
 	defer resp.Body.Close()
 
-	respData, err := ioutil.ReadAll(resp.Body)
+	respData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, newTemporaryError(err.Error())
 	}
@@ -111,7 +111,7 @@ func getOCSPResponse(cert, issuer *x509.Certificate) ([]byte, error) {
 // loadCertificates loads certificates from path.  The file must be PEM encoded.  The file must contain the leaf certificate first.  It can
 // contain issuer certificate.
 func loadCertificates(path string) ([]*x509.Certificate, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
