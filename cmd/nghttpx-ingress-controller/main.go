@@ -26,6 +26,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -369,6 +370,9 @@ func handleSigterm(lbc *controller.LoadBalancerController) {
 	lbc.Stop()
 }
 
+//go:embed default.tmpl
+var defaultTmpl string
+
 // generateDefaultNghttpxConfig generates default configuration file for nghttpx.
 func generateDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nghttpxAPIPort int) error {
 	if err := nghttpx.MkdirAll(nghttpxConfDir); err != nil {
@@ -376,7 +380,7 @@ func generateDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nght
 	}
 
 	var buf bytes.Buffer
-	t := template.Must(template.New("default.tmpl").ParseFiles("./default.tmpl"))
+	t := template.Must(template.New("default.tmpl").Parse(defaultTmpl))
 	if err := t.Execute(&buf, map[string]interface{}{
 		"HealthPort": nghttpxHealthPort,
 		"APIPort":    nghttpxAPIPort,

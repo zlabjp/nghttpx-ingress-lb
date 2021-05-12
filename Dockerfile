@@ -52,7 +52,7 @@ FROM gcr.io/distroless/cc-debian10@sha256:b08f449377c84226d56d1c92bf89390f44488e
 
 COPY --from=build /usr/local/bin/nghttpx /usr/local/bin/
 COPY image/var/log/nghttpx /var/log/nghttpx
-COPY nghttpx-ingress-controller fetch-ocsp-response cat-ocsp-resp nghttpx.tmpl nghttpx-backend.tmpl default.tmpl /
+COPY nghttpx-ingress-controller fetch-ocsp-response cat-ocsp-resp /
 
 WORKDIR /
 

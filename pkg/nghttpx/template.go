@@ -26,6 +26,7 @@ package nghttpx
 
 import (
 	"bytes"
+	_ "embed"
 	"text/template"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,9 +49,16 @@ var (
 	}
 )
 
+var (
+	//go:embed nghttpx.tmpl
+	nghttpxTmpl string
+	//go:embed nghttpx-backend.tmpl
+	nghttpxBackendTmpl string
+)
+
 func (ngx *Manager) loadTemplate() {
-	ngx.template = template.Must(template.New("nghttpx.tmpl").Funcs(funcMap).ParseFiles("./nghttpx.tmpl"))
-	ngx.backendTemplate = template.Must(template.New("nghttpx-backend.tmpl").Funcs(funcMap).ParseFiles("./nghttpx-backend.tmpl"))
+	ngx.template = template.Must(template.New("nghttpx.tmpl").Funcs(funcMap).Parse(nghttpxTmpl))
+	ngx.backendTemplate = template.Must(template.New("nghttpx-backend.tmpl").Funcs(funcMap).Parse(nghttpxBackendTmpl))
 }
 
 const (
