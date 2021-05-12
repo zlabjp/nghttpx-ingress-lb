@@ -248,11 +248,7 @@ func WriteFile(path string, content []byte) error {
 		os.Remove(tempFile.Name())
 		return err
 	}
-	if err := os.Rename(tempFile.Name(), path); err != nil {
-		return err
-	}
-
-	return nil
+	return os.Rename(tempFile.Name(), path)
 }
 
 // Checksum calculates and returns checksum of b in hex string.
@@ -279,10 +275,7 @@ func NghttpxMrubyRbPath(dir string) string {
 
 // MkdirAll creates directory given as path.
 func MkdirAll(path string) error {
-	if err := os.MkdirAll(path, os.ModeDir); err != nil {
-		return err
-	}
-	return nil
+	return os.MkdirAll(path, os.ModeDir)
 }
 
 // nghttpxDuration serializes d in nghttpx DURATION format.  Currently, it formats d in milliseconds if it has fraction of a second.
