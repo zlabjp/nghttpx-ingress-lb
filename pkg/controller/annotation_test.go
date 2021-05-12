@@ -113,7 +113,7 @@ func TestGetPathConfig(t *testing.T) {
 			desc:             "Without default config",
 			annotationConfig: `{"example.com/alpha": {"readTimeout": "120s"}}`,
 			wantConfig: map[string]*nghttpx.PathConfig{
-				"example.com/alpha": &nghttpx.PathConfig{
+				"example.com/alpha": {
 					ReadTimeout: &d120,
 				},
 			},
@@ -126,7 +126,7 @@ func TestGetPathConfig(t *testing.T) {
 				Mruby: &rb,
 			},
 			wantConfig: map[string]*nghttpx.PathConfig{
-				"example.com/alpha": &nghttpx.PathConfig{
+				"example.com/alpha": {
 					ReadTimeout: &d120,
 					Mruby:       &rb,
 				},
@@ -139,7 +139,7 @@ example.com/alpha:
   readTimeout: 120s
 `,
 			wantConfig: map[string]*nghttpx.PathConfig{
-				"example.com/alpha": &nghttpx.PathConfig{
+				"example.com/alpha": {
 					ReadTimeout: &d120,
 				},
 			},
@@ -148,7 +148,7 @@ example.com/alpha:
 			desc:             "JSON format",
 			annotationConfig: `{"example.com": {"readTimeout": "120s"}}`,
 			wantConfig: map[string]*nghttpx.PathConfig{
-				"example.com/": &nghttpx.PathConfig{
+				"example.com/": {
 					ReadTimeout: &d120,
 				},
 			},
