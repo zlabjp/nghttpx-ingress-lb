@@ -103,25 +103,31 @@ type Upstream struct {
 type Affinity string
 
 const (
-	AffinityNone   Affinity = "none"
-	AffinityIP     Affinity = "ip"
+	// AffinityNone indicates no session affinity.
+	AffinityNone Affinity = "none"
+	// AffinityIP indicates client IP address based session affinity.
+	AffinityIP Affinity = "ip"
+	// AffinityCookie indicates cookie based session affinity.
 	AffinityCookie Affinity = "cookie"
 )
 
 type AffinityCookieSecure string
 
 const (
+	// AffinityCookieSecureAuto indicates that secure attribute is set based on underlying protocol.
 	AffinityCookieSecureAuto AffinityCookieSecure = "auto"
-	AffinityCookieSecureYes  AffinityCookieSecure = "yes"
-	AffinityCookieSecureNo   AffinityCookieSecure = "no"
+	// AffinityCookieSecureYes indicates that secure attribute is set.
+	AffinityCookieSecureYes AffinityCookieSecure = "yes"
+	// AffinityCookieSecureNo indicates that secure attribute is not set.
+	AffinityCookieSecureNo AffinityCookieSecure = "no"
 )
 
 type Protocol string
 
 const (
-	// HTTP/2 protocol
+	// ProtocolH2 indicates HTTP/2 protocol.
 	ProtocolH2 Protocol = "h2"
-	// HTTP/1.1 protocol
+	// ProtocolH1 indicates HTTP/1.1 protocol.
 	ProtocolH1 Protocol = "http/1.1"
 )
 
@@ -145,7 +151,8 @@ type UpstreamServer struct {
 	Weight               uint32
 }
 
-// TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte string.
+// TLSCred stores TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte
+// string.
 type TLSCred struct {
 	Key      ChecksumFile
 	Cert     ChecksumFile
@@ -162,7 +169,7 @@ func NewDefaultServer() UpstreamServer {
 	}
 }
 
-// backend configuration obtained from ingress annotation, specified per service port
+// PortBackendConfig is a backend configuration obtained from ingress annotation, specified per service port
 type PortBackendConfig struct {
 	// backend application protocol.  At the moment, this should be either ProtocolH2 or ProtocolH1.
 	Proto *Protocol `json:"proto,omitempty"`
