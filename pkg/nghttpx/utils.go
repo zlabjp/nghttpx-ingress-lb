@@ -53,7 +53,7 @@ func ReadConfig(ingConfig *IngressConfig, config *v1.ConfigMap) {
 	if mrubyFileContent, ok := config.Data[NghttpxMrubyFileContentKey]; ok {
 		b := []byte(mrubyFileContent)
 		ingConfig.MrubyFile = &ChecksumFile{
-			Path:     NghttpxMrubyRbPath(ingConfig.ConfDir),
+			Path:     MrubyRbPath(ingConfig.ConfDir),
 			Content:  b,
 			Checksum: Checksum(b),
 		}
@@ -258,18 +258,18 @@ func Checksum(b []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// NghttpxConfigPath returns the path to nghttpx configuration file.
-func NghttpxConfigPath(dir string) string {
+// ConfigPath returns the path to nghttpx configuration file.
+func ConfigPath(dir string) string {
 	return filepath.Join(dir, "nghttpx.conf")
 }
 
-// NghttpxBackendConfigPath returns the path to nghttpx backend configuration file.
-func NghttpxBackendConfigPath(dir string) string {
+// BackendConfigPath returns the path to nghttpx backend configuration file.
+func BackendConfigPath(dir string) string {
 	return filepath.Join(dir, "nghttpx-backend.conf")
 }
 
-// NghttpxMrubyRbPath returns the path to nghttpx mruby.rb file.
-func NghttpxMrubyRbPath(dir string) string {
+// MrubyRbPath returns the path to nghttpx mruby.rb file.
+func MrubyRbPath(dir string) string {
 	return filepath.Join(dir, "mruby.rb")
 }
 

@@ -1486,7 +1486,7 @@ func (lbc *LoadBalancerController) Run() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		lbc.nghttpx.Start(lbc.nghttpxExecPath, nghttpx.NghttpxConfigPath(lbc.nghttpxConfDir), lbc.stopCh)
+		lbc.nghttpx.Start(lbc.nghttpxExecPath, nghttpx.ConfigPath(lbc.nghttpxConfDir), lbc.stopCh)
 	}()
 
 	go lbc.ingInformer.Run(lbc.stopCh)

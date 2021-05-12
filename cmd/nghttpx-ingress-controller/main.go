@@ -384,7 +384,7 @@ func generateDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nght
 		return fmt.Errorf("Could not create default configuration file for nghttpx: %v", err)
 	}
 
-	if err := nghttpx.WriteFile(nghttpx.NghttpxConfigPath(nghttpxConfDir), buf.Bytes()); err != nil {
+	if err := nghttpx.WriteFile(nghttpx.ConfigPath(nghttpxConfDir), buf.Bytes()); err != nil {
 		return fmt.Errorf("Could not create default configuration file for nghttpx: %v", err)
 	}
 

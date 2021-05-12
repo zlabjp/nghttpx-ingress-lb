@@ -641,7 +641,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 				t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
 			}
 			if got, want := fm.ingConfig.MrubyFile, (&nghttpx.ChecksumFile{
-				Path:     nghttpx.NghttpxMrubyRbPath(defaultConfDir),
+				Path:     nghttpx.MrubyRbPath(defaultConfDir),
 				Content:  []byte(mrubyContent),
 				Checksum: nghttpx.Checksum([]byte(mrubyContent)),
 			}); !reflect.DeepEqual(got, want) {

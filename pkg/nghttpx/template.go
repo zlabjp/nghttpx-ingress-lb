@@ -80,8 +80,8 @@ func (ngx *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error
 }
 
 func (ngx *Manager) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backendConfig []byte) (int, error) {
-	configPath := NghttpxConfigPath(ingConfig.ConfDir)
-	backendConfigPath := NghttpxBackendConfigPath(ingConfig.ConfDir)
+	configPath := ConfigPath(ingConfig.ConfDir)
+	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
 
 	if err := MkdirAll(ingConfig.ConfDir); err != nil {
 		return configNotChanged, err

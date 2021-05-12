@@ -224,7 +224,7 @@ func deleteAssetFiles(dir string, keep map[string]bool) error {
 func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 	klog.Infof("Issuing API request %v", ngx.backendconfigURI)
 
-	backendConfigPath := NghttpxBackendConfigPath(ingConfig.ConfDir)
+	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
 
 	in, err := os.Open(backendConfigPath)
 	if err != nil {
