@@ -19,18 +19,17 @@
 
 FROM debian:buster as build
 
-COPY extra-mrbgem.patch static.patch 0001-nghttpx-Remove-trailing-white-space-after-method-log.patch /
+COPY extra-mrbgem.patch static.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         git g++ make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev libssl-dev bison patch && \
-    git clone --depth 1 -b v1.43.0 https://github.com/nghttp2/nghttp2.git && \
+    git clone --depth 1 -b v1.44.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     patch -p1 < /static.patch && \
-    patch -p1 < /0001-nghttpx-Remove-trailing-white-space-after-method-log.patch && \
     git submodule update --init && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed && \
@@ -46,7 +45,7 @@ RUN apt-get update && \
         /var/log/* \
         /tmp/* \
         /var/tmp/* && \
-    rm /extra-mrbgem.patch /static.patch /0001-nghttpx-Remove-trailing-white-space-after-method-log.patch
+    rm /extra-mrbgem.patch /static.patch
 
 FROM gcr.io/distroless/cc-debian10@sha256:b08f449377c84226d56d1c92bf89390f44488eacdfc8585c2db9873f378a5aa7
 
