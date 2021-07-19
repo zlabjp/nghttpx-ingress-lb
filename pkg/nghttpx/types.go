@@ -25,6 +25,7 @@ limitations under the License.
 package nghttpx
 
 import (
+	"context"
 	"runtime"
 	"strconv"
 
@@ -33,9 +34,9 @@ import (
 
 // Interface is the API to update underlying load balancer.
 type Interface interface {
-	// Start starts a nghttpx process using executable at path with configuration file at confPath, and wait.  If stopCh becomes
-	// readable, kill nghttpx process, and return.
-	Start(path, confPath string, stopCh <-chan struct{})
+	// Start starts a nghttpx process using executable at path with configuration file at confPath, and wait.  If ctx is finished, kill
+	// nghttpx process, and return.
+	Start(ctx context.Context, path, confPath string)
 	// CheckAndReload checks whether the nghttpx configuration changed, and if so, make nghttpx reload its configuration.  If reloading
 	// is required, and it successfully issues reloading, returns true.  If there is no need to reloading, it returns false.  On error,
 	// it returns false, and non-nil error.

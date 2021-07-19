@@ -25,6 +25,7 @@ limitations under the License.
 package nghttpx
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,7 +41,7 @@ import (
 )
 
 // Start starts a nghttpx process using nghttpx executable at path, and wait.
-func (ngx *Manager) Start(path, confPath string, stopCh <-chan struct{}) {
+func (ngx *Manager) Start(ctx context.Context, path, confPath string) {
 	klog.Infof("Starting nghttpx process: %v --conf %v", path, confPath)
 	ngx.cmd = exec.Command(path, "--conf", confPath)
 	ngx.cmd.Stdout = os.Stdout
@@ -50,23 +51,25 @@ func (ngx *Manager) Start(path, confPath string, stopCh <-chan struct{}) {
 		return
 	}
 
-	waitDoneCh := make(chan struct{})
+	waitCtx, cancel := context.WithCancel(context.Background())
+
 	go func() {
 		if err := ngx.cmd.Wait(); err != nil {
 			klog.Errorf("nghttpx didn't complete successfully: %v", err)
 		}
-		close(waitDoneCh)
+		cancel()
 	}()
 
 	select {
-	case <-waitDoneCh:
+	case <-waitCtx.Done():
 		klog.Infof("nghttpx exited")
-	case <-stopCh:
+	case <-ctx.Done():
 		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", ngx.cmd.Process.Pid)
 		if err := ngx.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
 			klog.Errorf("Could not send signal to nghttpx process (PID %v): %v", ngx.cmd.Process.Pid, err)
+			cancel()
 		}
-		<-waitDoneCh
+		<-waitCtx.Done()
 		klog.Infof("nghttpx exited")
 	}
 }

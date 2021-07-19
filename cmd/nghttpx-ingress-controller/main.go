@@ -26,6 +26,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -296,10 +297,13 @@ func run(cmd *cobra.Command, args []string) {
 
 	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(nghttpxAPIPort), &controllerConfig, runtimePodInfo)
 
-	go registerHandlers(lbc)
-	go handleSigterm(lbc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	lbc.Run()
+	go registerHandlers(cancel)
+	go handleSigterm(cancel)
+
+	lbc.Run(ctx)
 }
 
 // healthzChecker implements healthz.HealthzChecker interface.
@@ -335,7 +339,7 @@ func (hc healthzChecker) Check(_ *http.Request) error {
 	return nil
 }
 
-func registerHandlers(lbc *controller.LoadBalancerController) {
+func registerHandlers(cancel context.CancelFunc) {
 	mux := http.NewServeMux()
 	healthz.InstallHandler(mux, newHealthzChecker(nghttpxHealthPort))
 
@@ -345,7 +349,7 @@ func registerHandlers(lbc *controller.LoadBalancerController) {
 	})
 
 	http.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
-		lbc.Stop()
+		cancel()
 	})
 
 	if profiling {
@@ -361,13 +365,13 @@ func registerHandlers(lbc *controller.LoadBalancerController) {
 	klog.Exit(server.ListenAndServe())
 }
 
-func handleSigterm(lbc *controller.LoadBalancerController) {
+func handleSigterm(cancel context.CancelFunc) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM)
 	<-signalChan
 	klog.Infof("Received SIGTERM, shutting down")
 
-	lbc.Stop()
+	cancel()
 }
 
 //go:embed default.tmpl

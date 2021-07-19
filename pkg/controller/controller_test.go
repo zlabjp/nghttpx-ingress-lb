@@ -248,7 +248,7 @@ func newFakeManager() *fakeManager {
 	return fm
 }
 
-func (fm *fakeManager) Start(path, confPath string, stopCh <-chan struct{}) {}
+func (fm *fakeManager) Start(ctx context.Context, path, confPath string) {}
 
 func (fm *fakeManager) CheckAndReload(ingConfig *nghttpx.IngressConfig) (bool, error) {
 	return fm.checkAndReloadHandler(ingConfig)
@@ -1483,7 +1483,7 @@ func TestUpdateIngressStatus(t *testing.T) {
 	f.prepare()
 	f.setupStore()
 
-	err := f.lbc.updateIngressStatus(lbIngs)
+	err := f.lbc.updateIngressStatus(context.Background(), lbIngs)
 
 	f.verifyActions()
 

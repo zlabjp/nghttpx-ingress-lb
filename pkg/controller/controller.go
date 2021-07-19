@@ -124,7 +124,6 @@ type LoadBalancerController struct {
 	// allowing concurrent stoppers leads to stack traces.
 	stopLock sync.Mutex
 	shutdown bool
-	stopCh   chan struct{}
 
 	reloadRateLimiter flowcontrol.RateLimiter
 }
@@ -187,7 +186,6 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 
 	lbc := LoadBalancerController{
 		clientset:                clientset,
-		stopCh:                   make(chan struct{}),
 		podInfo:                  runtimeInfo,
 		nghttpx:                  manager,
 		ngxConfigMap:             config.NghttpxConfigMap,
@@ -1441,7 +1439,7 @@ func (lbc *LoadBalancerController) getNamedPortFromPod(ref *v1.ObjectReference, 
 }
 
 // Stop commences shutting down the loadbalancer controller.
-func (lbc *LoadBalancerController) Stop() {
+func (lbc *LoadBalancerController) stop() {
 	// Stop is invoked from the http endpoint.
 	lbc.stopLock.Lock()
 	defer lbc.stopLock.Unlock()
@@ -1453,20 +1451,6 @@ func (lbc *LoadBalancerController) Stop() {
 	}
 
 	lbc.shutdown = true
-
-	go func() {
-		if lbc.deferredShutdownPeriod != 0 {
-			klog.Infof("Deferred shutdown period is %v", lbc.deferredShutdownPeriod)
-
-			lbc.enqueue()
-
-			<-time.After(lbc.deferredShutdownPeriod)
-		}
-
-		klog.Infof("Commencing shutting down")
-
-		close(lbc.stopCh)
-	}()
 }
 
 // ShutdownCommenced returns true if the controller is shutting down.  This includes deferred shutdown period.
@@ -1478,23 +1462,26 @@ func (lbc *LoadBalancerController) ShutdownCommenced() bool {
 }
 
 // Run starts the loadbalancer controller.
-func (lbc *LoadBalancerController) Run() {
+func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	klog.Infof("Starting nghttpx loadbalancer controller")
+
+	ctrlCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		lbc.nghttpx.Start(lbc.nghttpxExecPath, nghttpx.ConfigPath(lbc.nghttpxConfDir), lbc.stopCh)
+		lbc.nghttpx.Start(ctrlCtx, lbc.nghttpxExecPath, nghttpx.ConfigPath(lbc.nghttpxConfDir))
 	}()
 
-	go lbc.ingInformer.Run(lbc.stopCh)
-	go lbc.svcInformer.Run(lbc.stopCh)
-	go lbc.secretInformer.Run(lbc.stopCh)
-	go lbc.cmInformer.Run(lbc.stopCh)
-	go lbc.podInformer.Run(lbc.stopCh)
-	go lbc.nodeInformer.Run(lbc.stopCh)
+	go lbc.ingInformer.Run(ctrlCtx.Done())
+	go lbc.svcInformer.Run(ctrlCtx.Done())
+	go lbc.secretInformer.Run(ctrlCtx.Done())
+	go lbc.cmInformer.Run(ctrlCtx.Done())
+	go lbc.podInformer.Run(ctrlCtx.Done())
+	go lbc.nodeInformer.Run(ctrlCtx.Done())
 
 	hasSynced := []cache.InformerSynced{
 		lbc.ingInformer.HasSynced,
@@ -1506,19 +1493,19 @@ func (lbc *LoadBalancerController) Run() {
 	}
 
 	if lbc.ingClassInformer != nil {
-		go lbc.ingClassInformer.Run(lbc.stopCh)
+		go lbc.ingClassInformer.Run(ctrlCtx.Done())
 		hasSynced = append(hasSynced, lbc.ingClassInformer.HasSynced)
 	}
 	if lbc.epInformer != nil {
-		go lbc.epInformer.Run(lbc.stopCh)
+		go lbc.epInformer.Run(ctrlCtx.Done())
 		hasSynced = append(hasSynced, lbc.epInformer.HasSynced)
 	}
 	if lbc.epSliceInformer != nil {
-		go lbc.epSliceInformer.Run(lbc.stopCh)
+		go lbc.epSliceInformer.Run(ctrlCtx.Done())
 		hasSynced = append(hasSynced, lbc.epSliceInformer.HasSynced)
 	}
 
-	if !cache.WaitForCacheSync(lbc.stopCh, hasSynced...) {
+	if !cache.WaitForCacheSync(ctrlCtx.Done(), hasSynced...) {
 		return
 	}
 
@@ -1527,10 +1514,28 @@ func (lbc *LoadBalancerController) Run() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		lbc.syncIngress(lbc.stopCh)
+		lbc.syncIngress(ctrlCtx)
 	}()
 
-	<-lbc.stopCh
+	go func() {
+		<-ctx.Done()
+
+		lbc.stop()
+
+		if lbc.deferredShutdownPeriod != 0 {
+			klog.Infof("Deferred shutdown period is %v", lbc.deferredShutdownPeriod)
+
+			lbc.enqueue()
+
+			<-time.After(lbc.deferredShutdownPeriod)
+		}
+
+		klog.Infof("Commencing shutting down")
+
+		cancel()
+	}()
+
+	<-ctrlCtx.Done()
 
 	klog.Infof("Shutting down nghttpx loadbalancer controller")
 
@@ -1602,14 +1607,14 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *networking.Ingress)
 }
 
 // syncIngress udpates Ingress resource status.
-func (lbc *LoadBalancerController) syncIngress(stopCh <-chan struct{}) {
+func (lbc *LoadBalancerController) syncIngress(ctx context.Context) {
 	for {
-		if err := lbc.getLoadBalancerIngressAndUpdateIngress(); err != nil {
+		if err := lbc.getLoadBalancerIngressAndUpdateIngress(ctx); err != nil {
 			klog.Errorf("Could not update Ingress status: %v", err)
 		}
 
 		select {
-		case <-stopCh:
+		case <-ctx.Done():
 			if err := lbc.removeAddressFromLoadBalancerIngress(); err != nil {
 				klog.Error(err)
 			}
@@ -1620,7 +1625,7 @@ func (lbc *LoadBalancerController) syncIngress(stopCh <-chan struct{}) {
 }
 
 // getLoadBalancerIngressAndUpdateIngress gets addresses to set in Ingress resource, and updates Ingress Status with them.
-func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress() error {
+func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx context.Context) error {
 	var lbIngs []v1.LoadBalancerIngress
 
 	if lbc.publishSvc == nil {
@@ -1645,7 +1650,7 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress() erro
 
 	sortLoadBalancerIngress(lbIngs)
 
-	return lbc.updateIngressStatus(uniqLoadBalancerIngress(lbIngs))
+	return lbc.updateIngressStatus(ctx, uniqLoadBalancerIngress(lbIngs))
 }
 
 // getThisPod returns this controller's pod.
@@ -1658,7 +1663,7 @@ func (lbc *LoadBalancerController) getThisPod() (*v1.Pod, error) {
 }
 
 // updateIngressStatus updates LoadBalancerIngress field of all Ingresses.
-func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []v1.LoadBalancerIngress) error {
+func (lbc *LoadBalancerController) updateIngressStatus(ctx context.Context, lbIngs []v1.LoadBalancerIngress) error {
 
 	ings, err := lbc.ingLister.List(labels.Everything())
 	if err != nil {
@@ -1667,7 +1672,7 @@ func (lbc *LoadBalancerController) updateIngressStatus(lbIngs []v1.LoadBalancerI
 
 	for _, ing := range ings {
 		select {
-		case <-lbc.stopCh:
+		case <-ctx.Done():
 			return nil
 		default:
 		}
