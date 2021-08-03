@@ -113,7 +113,7 @@ func (ia ingressAnnotation) getPathConfig() (*nghttpx.PathConfig, map[string]*ng
 	return &defaultConfig, config
 }
 
-// normalizePathKey prepends "/" if key does not contain "/".
+// normalizePathKey appends "/" if key does not contain "/".
 func normalizePathKey(src map[string]*nghttpx.PathConfig) map[string]*nghttpx.PathConfig {
 	if len(src) == 0 {
 		return src
