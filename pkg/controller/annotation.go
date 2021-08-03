@@ -130,13 +130,18 @@ func normalizePathKey(src map[string]*nghttpx.PathConfig) map[string]*nghttpx.Pa
 	return dst
 }
 
-// unmarshal deserializes data into dest.  This function first tries yaml and then JSON.
+// unmarshal deserializes data into dest.  This function first tries YAML and then JSON.
 func unmarshal(data []byte, dest interface{}) error {
-	if err := yaml.Unmarshal(data, dest); err != nil {
-		klog.Infof("Could not unmarshal YAML string; fall back to JSON: %v", err)
-		if err := json.Unmarshal(data, dest); err != nil {
-			return fmt.Errorf("could not unmarshal JSON string: %v", err)
-		}
+	err := yaml.Unmarshal(data, dest)
+	if err == nil {
+		return nil
 	}
+
+	klog.Infof("Could not unmarshal YAML string; fall back to JSON: %v", err)
+
+	if err := json.Unmarshal(data, dest); err != nil {
+		return fmt.Errorf("could not unmarshal JSON string: %v", err)
+	}
+
 	return nil
 }
