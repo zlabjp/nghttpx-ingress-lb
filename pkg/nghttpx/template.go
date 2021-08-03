@@ -56,9 +56,9 @@ var (
 	nghttpxBackendTmpl string
 )
 
-func (ngx *Manager) loadTemplate() {
-	ngx.template = template.Must(template.New("nghttpx.tmpl").Funcs(funcMap).Parse(nghttpxTmpl))
-	ngx.backendTemplate = template.Must(template.New("nghttpx-backend.tmpl").Funcs(funcMap).Parse(nghttpxBackendTmpl))
+func (mgr *Manager) loadTemplate() {
+	mgr.template = template.Must(template.New("nghttpx.tmpl").Funcs(funcMap).Parse(nghttpxTmpl))
+	mgr.backendTemplate = template.Must(template.New("nghttpx-backend.tmpl").Funcs(funcMap).Parse(nghttpxBackendTmpl))
 }
 
 const (
@@ -71,15 +71,15 @@ const (
 )
 
 // generateCfg generates nghttpx's main and backend configurations.
-func (ngx *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error) {
+func (mgr *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error) {
 	mainConfigBuffer := new(bytes.Buffer)
-	if err := ngx.template.Execute(mainConfigBuffer, ingConfig); err != nil {
+	if err := mgr.template.Execute(mainConfigBuffer, ingConfig); err != nil {
 		klog.Infof("nghttpx error while executing main configuration template: %v", err)
 		return nil, nil, err
 	}
 
 	backendConfigBuffer := new(bytes.Buffer)
-	if err := ngx.backendTemplate.Execute(backendConfigBuffer, ingConfig); err != nil {
+	if err := mgr.backendTemplate.Execute(backendConfigBuffer, ingConfig); err != nil {
 		klog.Infof("nghttpx error while executing backend configuration template: %v", err)
 		return nil, nil, err
 	}
@@ -87,7 +87,7 @@ func (ngx *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error
 	return mainConfigBuffer.Bytes(), backendConfigBuffer.Bytes(), nil
 }
 
-func (ngx *Manager) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backendConfig []byte) (int, error) {
+func (mgr *Manager) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backendConfig []byte) (int, error) {
 	configPath := ConfigPath(ingConfig.ConfDir)
 	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
 

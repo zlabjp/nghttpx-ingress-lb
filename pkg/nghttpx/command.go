@@ -41,12 +41,12 @@ import (
 )
 
 // Start starts a nghttpx process using nghttpx executable at path, and wait.
-func (ngx *Manager) Start(ctx context.Context, path, confPath string) {
+func (mgr *Manager) Start(ctx context.Context, path, confPath string) {
 	klog.Infof("Starting nghttpx process: %v --conf %v", path, confPath)
-	ngx.cmd = exec.Command(path, "--conf", confPath)
-	ngx.cmd.Stdout = os.Stdout
-	ngx.cmd.Stderr = os.Stderr
-	if err := ngx.cmd.Start(); err != nil {
+	mgr.cmd = exec.Command(path, "--conf", confPath)
+	mgr.cmd.Stdout = os.Stdout
+	mgr.cmd.Stderr = os.Stderr
+	if err := mgr.cmd.Start(); err != nil {
 		klog.Errorf("nghttpx didn't started successfully: %v", err)
 		return
 	}
@@ -54,7 +54,7 @@ func (ngx *Manager) Start(ctx context.Context, path, confPath string) {
 	waitCtx, cancel := context.WithCancel(context.Background())
 
 	go func() {
-		if err := ngx.cmd.Wait(); err != nil {
+		if err := mgr.cmd.Wait(); err != nil {
 			klog.Errorf("nghttpx didn't complete successfully: %v", err)
 		}
 		cancel()
@@ -64,9 +64,9 @@ func (ngx *Manager) Start(ctx context.Context, path, confPath string) {
 	case <-waitCtx.Done():
 		klog.Infof("nghttpx exited")
 	case <-ctx.Done():
-		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", ngx.cmd.Process.Pid)
-		if err := ngx.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
-			klog.Errorf("Could not send signal to nghttpx process (PID %v): %v", ngx.cmd.Process.Pid, err)
+		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", mgr.cmd.Process.Pid)
+		if err := mgr.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
+			klog.Errorf("Could not send signal to nghttpx process (PID %v): %v", mgr.cmd.Process.Pid, err)
 			cancel()
 		}
 		<-waitCtx.Done()
@@ -80,13 +80,13 @@ func (ngx *Manager) Start(ctx context.Context, path, confPath string) {
 // with new configuration.  If its invocation succeeds, current
 // nghttpx is going to shutdown gracefully.  The invocation of new
 // process may fail due to invalid configurations.
-func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
-	mainConfig, backendConfig, err := ngx.generateCfg(ingressCfg)
+func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
+	mainConfig, backendConfig, err := mgr.generateCfg(ingressCfg)
 	if err != nil {
 		return false, err
 	}
 
-	changed, err := ngx.checkAndWriteCfg(ingressCfg, mainConfig, backendConfig)
+	changed, err := mgr.checkAndWriteCfg(ingressCfg, mainConfig, backendConfig)
 	if err != nil {
 		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %v", err)
 	}
@@ -105,7 +105,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 
 	switch changed {
 	case mainConfigChanged:
-		oldConfRev, err := ngx.getNghttpxConfigRevision()
+		oldConfRev, err := mgr.getNghttpxConfigRevision()
 		if err != nil {
 			return false, err
 		}
@@ -120,11 +120,11 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		}
 
 		klog.Info("change in configuration detected. Reloading...")
-		if err := ngx.cmd.Process.Signal(syscall.SIGHUP); err != nil {
-			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %v", ngx.cmd.Process.Pid, err)
+		if err := mgr.cmd.Process.Signal(syscall.SIGHUP); err != nil {
+			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %v", mgr.cmd.Process.Pid, err)
 		}
 
-		if err := ngx.waitUntilConfigRevisionChanges(oldConfRev); err != nil {
+		if err := mgr.waitUntilConfigRevisionChanges(oldConfRev); err != nil {
 			return false, err
 		}
 
@@ -138,7 +138,7 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 			return false, err
 		}
 
-		if err := ngx.issueBackendReplaceRequest(ingressCfg); err != nil {
+		if err := mgr.issueBackendReplaceRequest(ingressCfg); err != nil {
 			return false, fmt.Errorf("failed to issue backend replace request: %v", err)
 		}
 
@@ -224,8 +224,8 @@ func deleteAssetFiles(dir string, keep map[string]bool) error {
 	return nil
 }
 
-func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
-	klog.Infof("Issuing API request %v", ngx.backendconfigURI)
+func (mgr *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
+	klog.Infof("Issuing API request %v", mgr.backendconfigURI)
 
 	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
 
@@ -236,14 +236,14 @@ func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 
 	defer in.Close()
 
-	req, err := http.NewRequest(http.MethodPost, ngx.backendconfigURI, in)
+	req, err := http.NewRequest(http.MethodPost, mgr.backendconfigURI, in)
 	if err != nil {
 		return fmt.Errorf("could not create API request: %v", err)
 	}
 
 	req.Header.Add("Content-Type", "text/plain")
 
-	resp, err := ngx.httpClient.Do(req)
+	resp, err := mgr.httpClient.Do(req)
 
 	if err != nil {
 		return fmt.Errorf("could not issue API request: %v", err)
@@ -277,10 +277,10 @@ type apiResult struct {
 }
 
 // getNghttpxConfigRevision returns the current nghttpx configRevision through configrevision API call.
-func (ngx *Manager) getNghttpxConfigRevision() (string, error) {
-	klog.V(4).Infof("Issuing API request %v", ngx.configrevisionURI)
+func (mgr *Manager) getNghttpxConfigRevision() (string, error) {
+	klog.V(4).Infof("Issuing API request %v", mgr.configrevisionURI)
 
-	resp, err := ngx.httpClient.Get(ngx.configrevisionURI)
+	resp, err := mgr.httpClient.Get(mgr.configrevisionURI)
 	if err != nil {
 		return "", fmt.Errorf("could not get nghttpx configRevision: %v", err)
 	}
@@ -315,11 +315,11 @@ func (ngx *Manager) getNghttpxConfigRevision() (string, error) {
 }
 
 // waitUntilConfigRevisionChanges waits for the current nghttpx configuration to change from old value, oldConfRev.
-func (ngx *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
+func (mgr *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
 	klog.Infof("Waiting for nghttpx to finish reloading configuration")
 
 	if err := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
-		newConfRev, err := ngx.getNghttpxConfigRevision()
+		newConfRev, err := mgr.getNghttpxConfigRevision()
 		if err != nil {
 			klog.Error(err)
 			return false, nil

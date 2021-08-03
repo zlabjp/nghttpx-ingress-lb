@@ -57,7 +57,7 @@ type Manager struct {
 
 // NewManager ...
 func NewManager(apiPort int) *Manager {
-	ngx := &Manager{
+	mgr := &Manager{
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
 			Transport: &http.Transport{
@@ -69,7 +69,7 @@ func NewManager(apiPort int) *Manager {
 		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", apiPort),
 	}
 
-	ngx.loadTemplate()
+	mgr.loadTemplate()
 
-	return ngx
+	return mgr
 }
