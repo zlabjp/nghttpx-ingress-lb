@@ -80,7 +80,7 @@ func CreateTLSCred(dir, name string, cert, key, ocspResp []byte) (*TLSCred, erro
 // writeTLSKeyCert writes TLS private keys and certificates to their files.
 func writeTLSKeyCert(ingConfig *IngressConfig) error {
 	if err := MkdirAll(filepath.Join(ingConfig.ConfDir, tlsDir)); err != nil {
-		return fmt.Errorf("failed to create tls directory: %v", err)
+		return fmt.Errorf("failed to create TLS directory: %v", err)
 	}
 
 	if ingConfig.DefaultTLSCred != nil {
