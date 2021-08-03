@@ -153,10 +153,10 @@ func (ngx *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 // deleteStaleAssets deletes asset files which are no longer used.
 func deleteStaleAssets(ingConfig *IngressConfig) error {
 	if err := deleteStaleTLSAssets(ingConfig); err != nil {
-		return fmt.Errorf("Could not delete stale TLS assets: %v", err)
+		return fmt.Errorf("could not delete stale TLS assets: %v", err)
 	}
 	if err := deleteStaleMrubyAssets(ingConfig); err != nil {
-		return fmt.Errorf("Could not delete stale mruby assets: %v", err)
+		return fmt.Errorf("could not delete stale mruby assets: %v", err)
 	}
 	return nil
 }
@@ -231,14 +231,14 @@ func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 
 	in, err := os.Open(backendConfigPath)
 	if err != nil {
-		return fmt.Errorf("Could not open backend configuration file %v: %v", backendConfigPath, err)
+		return fmt.Errorf("could not open backend configuration file %v: %v", backendConfigPath, err)
 	}
 
 	defer in.Close()
 
 	req, err := http.NewRequest(http.MethodPost, ngx.backendconfigURI, in)
 	if err != nil {
-		return fmt.Errorf("Could not create API request: %v", err)
+		return fmt.Errorf("could not create API request: %v", err)
 	}
 
 	req.Header.Add("Content-Type", "text/plain")
@@ -246,7 +246,7 @@ func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 	resp, err := ngx.httpClient.Do(req)
 
 	if err != nil {
-		return fmt.Errorf("Could not issue API request: %v", err)
+		return fmt.Errorf("could not issue API request: %v", err)
 	}
 
 	defer resp.Body.Close()
@@ -257,7 +257,7 @@ func (ngx *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Error while reading API response body: %v", err)
+		return fmt.Errorf("could not read API response body: %v", err)
 	}
 
 	if klog.V(3).Enabled() {
@@ -282,7 +282,7 @@ func (ngx *Manager) getNghttpxConfigRevision() (string, error) {
 
 	resp, err := ngx.httpClient.Get(ngx.configrevisionURI)
 	if err != nil {
-		return "", fmt.Errorf("Could not get nghttpx configRevision: %v", err)
+		return "", fmt.Errorf("could not get nghttpx configRevision: %v", err)
 	}
 
 	defer resp.Body.Close()
@@ -296,7 +296,7 @@ func (ngx *Manager) getNghttpxConfigRevision() (string, error) {
 
 	var r apiResult
 	if err := d.Decode(&r); err != nil {
-		return "", fmt.Errorf("Could not parse nghttpx configuration API result: %v", err)
+		return "", fmt.Errorf("could not parse nghttpx configuration API result: %v", err)
 	}
 
 	if r.Data == nil {
@@ -331,7 +331,7 @@ func (ngx *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
 
 		return true, nil
 	}); err != nil {
-		return fmt.Errorf("Could not get new nghttpx configRevision: %v", err)
+		return fmt.Errorf("could not get new nghttpx configRevision: %v", err)
 	}
 
 	return nil

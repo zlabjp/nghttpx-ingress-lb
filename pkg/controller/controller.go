@@ -1059,7 +1059,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 	case path == "":
 		normalizedPath = "/"
 	case !strings.HasPrefix(path, "/"):
-		return nil, fmt.Errorf("Host %v has Path which does not start /: %v", host, path)
+		return nil, fmt.Errorf("host %v has Path which does not start /: %v", host, path)
 	default:
 		// nghttpx requires ':' to be percent-encoded.  Otherwise, ':' is recognized as pattern separator.
 		normalizedPath = strings.ReplaceAll(path, ":", "%3A")
@@ -1156,7 +1156,7 @@ func (lbc *LoadBalancerController) getTLSCredFromSecret(key *types.NamespacedNam
 		return nil, fmt.Errorf("Secret %v has been deleted", key)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Could not get TLS secret %v: %v", key, err)
+		return nil, fmt.Errorf("could not get TLS secret %v: %v", key, err)
 	}
 	tlsCred, err := lbc.createTLSCredFromSecret(secret)
 	if err != nil {
@@ -1180,7 +1180,7 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *networking.Ingress
 			if errors.IsNotFound(err) {
 				return nil, fmt.Errorf("Secret %v/%v has been deleted", ing.Namespace, tls.SecretName)
 			}
-			return nil, fmt.Errorf("Error retrieving Secret %v/%v for Ingress %v/%v: %v", ing.Namespace, tls.SecretName, ing.Namespace, ing.Name, err)
+			return nil, fmt.Errorf("could not retrieve Secret %v/%v for Ingress %v/%v: %v", ing.Namespace, tls.SecretName, ing.Namespace, ing.Name, err)
 		}
 		tlsCred, err := lbc.createTLSCredFromSecret(secret)
 		if err != nil {
@@ -1208,12 +1208,12 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 
 	cert, err = nghttpx.NormalizePEM(cert)
 	if err != nil {
-		return nil, fmt.Errorf("Could not normalize certificate in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+		return nil, fmt.Errorf("could not normalize certificate in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
 
 	key, err = nghttpx.NormalizePEM(key)
 	if err != nil {
-		return nil, fmt.Errorf("Could not normalize private key in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+		return nil, fmt.Errorf("could not normalize private key in Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
 
 	if _, err := tls.X509KeyPair(cert, key); err != nil {
@@ -1229,7 +1229,7 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 
 	tlsCred, err := nghttpx.CreateTLSCred(lbc.nghttpxConfDir, nghttpx.TLSCredPrefix(secret), cert, key, ocspResp)
 	if err != nil {
-		return nil, fmt.Errorf("Could not create private key and certificate files for Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+		return nil, fmt.Errorf("could not create private key and certificate files for Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 	}
 
 	return tlsCred, nil
@@ -1450,12 +1450,12 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, ep
 func (lbc *LoadBalancerController) getNamedPortFromPod(ref *v1.ObjectReference, servicePort *v1.ServicePort) (int32, error) {
 	pod, err := lbc.podLister.Pods(ref.Namespace).Get(ref.Name)
 	if err != nil {
-		return 0, fmt.Errorf("Could not get Pods %v/%v: %v", ref.Namespace, ref.Name, err)
+		return 0, fmt.Errorf("could not get Pods %v/%v: %v", ref.Namespace, ref.Name, err)
 	}
 
 	port, err := podFindPort(pod, servicePort)
 	if err != nil {
-		return 0, fmt.Errorf("Failed to find port %v from Pod %v/%v: %v", servicePort.TargetPort.String(), pod.Namespace, pod.Name, err)
+		return 0, fmt.Errorf("could not find port %v from Pod %v/%v: %v", servicePort.TargetPort.String(), pod.Namespace, pod.Name, err)
 	}
 	return int32(port), nil
 }
@@ -1640,7 +1640,7 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx co
 		selector := labels.Set(thisPod.Labels).AsSelector()
 		lbIngs, err = lbc.getLoadBalancerIngress(selector)
 		if err != nil {
-			return fmt.Errorf("Could not get Node IP of Ingress controller: %v", err)
+			return fmt.Errorf("could not get Node IP of Ingress controller: %v", err)
 		}
 	} else {
 		svc, err := lbc.svcLister.Services(lbc.publishSvc.Namespace).Get(lbc.publishSvc.Name)
@@ -1660,7 +1660,7 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx co
 func (lbc *LoadBalancerController) getThisPod() (*v1.Pod, error) {
 	pod, err := lbc.podLister.Pods(lbc.podInfo.Namespace).Get(lbc.podInfo.Name)
 	if err != nil {
-		return nil, fmt.Errorf("Could not get Pod %v from lister: %v", lbc.podInfo, err)
+		return nil, fmt.Errorf("could not get Pod %v from lister: %v", lbc.podInfo, err)
 	}
 	return pod, nil
 }
@@ -1670,7 +1670,7 @@ func (lbc *LoadBalancerController) updateIngressStatus(ctx context.Context, lbIn
 
 	ings, err := lbc.ingLister.List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("Could not list Ingress: %v", err)
+		return fmt.Errorf("could not list Ingress: %v", err)
 	}
 
 	for _, ing := range ings {
@@ -1707,7 +1707,7 @@ func (lbc *LoadBalancerController) updateIngressStatus(ctx context.Context, lbIn
 func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Selector) ([]v1.LoadBalancerIngress, error) {
 	pods, err := lbc.podLister.List(selector)
 	if err != nil {
-		return nil, fmt.Errorf("Could not list Pods with label %v", selector)
+		return nil, fmt.Errorf("could not list Pods with label %v", selector)
 	}
 
 	if len(pods) == 0 {
@@ -1756,11 +1756,12 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressFromService(svc *v1.Ser
 // address of pod if hostNetwork is true?
 func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
 	node, err := lbc.nodeLister.Get(pod.Spec.NodeName)
-	if errors.IsNotFound(err) {
-		return "", fmt.Errorf("Node %v for Pod %v/%v has been deleted", pod.Spec.NodeName, pod.Namespace, pod.Name)
-	}
 	if err != nil {
-		return "", fmt.Errorf("Could not get Node %v for Pod %v/%v from lister: %v", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
+		if errors.IsNotFound(err) {
+			return "", fmt.Errorf("Node %v for Pod %v/%v has been deleted", pod.Spec.NodeName, pod.Namespace, pod.Name)
+		}
+
+		return "", fmt.Errorf("could not get Node %v for Pod %v/%v from lister: %v", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
 	}
 	var externalIP string
 	for i := range node.Status.Addresses {
@@ -1792,17 +1793,17 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 
 	thisPod, err := lbc.getThisPod()
 	if err != nil {
-		return fmt.Errorf("Could not remove address from LoadBalancerIngress: %v", err)
+		return fmt.Errorf("could not remove address from LoadBalancerIngress: %v", err)
 	}
 
 	addr, err := lbc.getPodAddress(thisPod)
 	if err != nil {
-		return fmt.Errorf("Could not remove address from LoadBalancerIngress: %v", err)
+		return fmt.Errorf("could not remove address from LoadBalancerIngress: %v", err)
 	}
 
 	ings, err := lbc.ingLister.List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("Could not remove address from LoadBalancerIngress: %v", err)
+		return fmt.Errorf("could not remove address from LoadBalancerIngress: %v", err)
 	}
 
 	for _, ing := range ings {
