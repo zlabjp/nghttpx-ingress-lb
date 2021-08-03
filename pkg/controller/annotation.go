@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
-	networking "k8s.io/api/networking/v1beta1"
 	"k8s.io/klog/v2"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
@@ -140,9 +139,4 @@ func unmarshal(data []byte, dest interface{}) error {
 		}
 	}
 	return nil
-}
-
-// getIngressClass returns Ingress class from annotation.
-func (ia ingressAnnotation) getIngressClass() string {
-	return ia[networking.AnnotationIngressClass]
 }
