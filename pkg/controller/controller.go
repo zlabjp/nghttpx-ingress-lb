@@ -349,7 +349,7 @@ func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Could not get object from tombstone %+v", obj)
 			return
 		}
 		ing, ok = tombstone.Obj.(*networking.Ingress)
@@ -382,7 +382,7 @@ func (lbc *LoadBalancerController) deleteIngressClassNotification(obj interface{
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Could not get object from tombstone %+v", obj)
 			return
 		}
 		ingClass, ok = tombstone.Obj.(*networking.IngressClass)
@@ -419,7 +419,7 @@ func (lbc *LoadBalancerController) deleteEndpointsNotification(obj interface{}) 
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Could not get object from tombstone %+v", obj)
 			return
 		}
 		ep, ok = tombstone.Obj.(*v1.Endpoints)
@@ -464,7 +464,7 @@ func (lbc *LoadBalancerController) deleteEndpointSliceNotification(obj interface
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Could not get object from tombstone %+v", obj)
 			return
 		}
 		es, ok = tombstone.Obj.(*discovery.EndpointSlice)
@@ -514,7 +514,7 @@ func (lbc *LoadBalancerController) deleteServiceNotification(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Could not get object from tombstone %+v", obj)
 			return
 		}
 		svc, ok = tombstone.Obj.(*v1.Service)
@@ -605,7 +605,7 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Could not get object from tombstone %+v", obj)
 			return
 		}
 		s, ok = tombstone.Obj.(*v1.Secret)
@@ -645,7 +645,7 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Could not get object from tombstone %+v", obj)
 			return
 		}
 		c, ok = tombstone.Obj.(*v1.ConfigMap)
@@ -685,7 +685,7 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Couldn't get object from tombstone %+v", obj)
+			klog.Errorf("Could not get object from tombstone %+v", obj)
 			return
 		}
 		pod, ok = tombstone.Obj.(*v1.Pod)
