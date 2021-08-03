@@ -8,8 +8,6 @@ ifndef VERSION
   VERSION := git-$(shell git rev-parse --short HEAD)
 endif
 
-export GO111MODULE=on
-
 .PHONY: all
 all: push
 
