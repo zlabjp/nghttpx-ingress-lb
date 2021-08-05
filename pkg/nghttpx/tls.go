@@ -43,17 +43,17 @@ const (
 
 // CreateTLSKeyPath returns TLS private key file path.
 func CreateTLSKeyPath(dir, name string) string {
-	return filepath.Join(dir, tlsDir, fmt.Sprintf("%v.key", name))
+	return filepath.Join(dir, tlsDir, name+".key")
 }
 
 // CreateTLSCertPath returns TLS certificate file path.
 func CreateTLSCertPath(dir, name string) string {
-	return filepath.Join(dir, tlsDir, fmt.Sprintf("%v.crt", name))
+	return filepath.Join(dir, tlsDir, name+".crt")
 }
 
 // CreateTLSOCSPRespPath returns TLS OCSP response file path.
 func CreateTLSOCSPRespPath(dir, name string) string {
-	return filepath.Join(dir, tlsDir, fmt.Sprintf("%v.ocsp-resp", name))
+	return filepath.Join(dir, tlsDir, name+".ocsp-resp")
 }
 
 // CreateTLSCred creates TLSCred for given private key and certificate.  ocspResp is optional, and could be nil.
