@@ -97,12 +97,12 @@ type LoadBalancerController struct {
 	podInfo                  *types.NamespacedName
 	defaultSvc               types.NamespacedName
 	ngxConfigMap             *types.NamespacedName
-	nghttpxHealthPort        int
-	nghttpxAPIPort           int
+	nghttpxHealthPort        int32
+	nghttpxAPIPort           int32
 	nghttpxConfDir           string
 	nghttpxExecPath          string
-	nghttpxHTTPPort          int
-	nghttpxHTTPSPort         int
+	nghttpxHTTPPort          int32
+	nghttpxHTTPSPort         int32
 	defaultTLSSecret         *types.NamespacedName
 	watchNamespace           string
 	ingressClassController   string
@@ -113,7 +113,7 @@ type LoadBalancerController struct {
 	publishSvc               *types.NamespacedName
 	noDefaultBackendOverride bool
 	deferredShutdownPeriod   time.Duration
-	healthzPort              int
+	healthzPort              int32
 
 	recorder record.EventRecorder
 
@@ -134,17 +134,17 @@ type Config struct {
 	// NghttpxConfigMap is the name of ConfigMap resource which contains additional configuration for nghttpx.
 	NghttpxConfigMap *types.NamespacedName
 	// NghttpxHealthPort is the port for nghttpx health monitor endpoint.
-	NghttpxHealthPort int
+	NghttpxHealthPort int32
 	// NghttpxAPIPort is the port for nghttpx API endpoint.
-	NghttpxAPIPort int
+	NghttpxAPIPort int32
 	// NghttpxConfDir is the directory which contains nghttpx configuration files.
 	NghttpxConfDir string
 	// NghttpxExecPath is a path to nghttpx executable.
 	NghttpxExecPath string
 	// NghttpxHTTPPort is a port to listen to for HTTP (non-TLS) requests.
-	NghttpxHTTPPort int
+	NghttpxHTTPPort int32
 	// NghttpxHTTPSPort is a port to listen to for HTTPS (TLS) requests.
-	NghttpxHTTPSPort int
+	NghttpxHTTPSPort int32
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret *types.NamespacedName
 	// IngressClassController is the name of IngressClass controller for this controller.
@@ -168,7 +168,7 @@ type Config struct {
 	// DeferredShutdownPeriod is a period before the controller starts shutting down when it receives shutdown signal.
 	DeferredShutdownPeriod time.Duration
 	// HealthzPort is a port for healthz endpoint.
-	HealthzPort int
+	HealthzPort int32
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer

@@ -63,9 +63,9 @@ var (
 	ngxConfigMap             string
 	kubeconfig               string
 	watchNamespace           = metav1.NamespaceAll
-	healthzPort              = 11249
-	nghttpxHealthPort        = 10901
-	nghttpxAPIPort           = 10902
+	healthzPort              = int32(11249)
+	nghttpxHealthPort        = int32(10901)
+	nghttpxAPIPort           = int32(10902)
 	profiling                = true
 	allowInternalIP          = false
 	defaultTLSSecret         string
@@ -73,8 +73,8 @@ var (
 	ingressClassController   = "zlab.co.jp/nghttpx"
 	nghttpxConfDir           = "/etc/nghttpx"
 	nghttpxExecPath          = "/usr/local/bin/nghttpx"
-	nghttpxHTTPPort          = 80
-	nghttpxHTTPSPort         = 443
+	nghttpxHTTPPort          = int32(80)
+	nghttpxHTTPSPort         = int32(443)
 	fetchOCSPRespFromSecret  = false
 	proxyProto               = false
 	ocspRespKey              = "tls.ocsp-resp"
@@ -112,11 +112,11 @@ func main() {
 
 	rootCmd.Flags().StringVar(&watchNamespace, "watch-namespace", watchNamespace, `Namespace to watch for Ingress.  Default is to watch all namespaces.`)
 
-	rootCmd.Flags().IntVar(&healthzPort, "healthz-port", healthzPort, "Port for healthz endpoint.")
+	rootCmd.Flags().Int32Var(&healthzPort, "healthz-port", healthzPort, "Port for healthz endpoint.")
 
-	rootCmd.Flags().IntVar(&nghttpxHealthPort, "nghttpx-health-port", nghttpxHealthPort, "Port for nghttpx health monitor endpoint.")
+	rootCmd.Flags().Int32Var(&nghttpxHealthPort, "nghttpx-health-port", nghttpxHealthPort, "Port for nghttpx health monitor endpoint.")
 
-	rootCmd.Flags().IntVar(&nghttpxAPIPort, "nghttpx-api-port", nghttpxAPIPort, "Port for nghttpx API endpoint.")
+	rootCmd.Flags().Int32Var(&nghttpxAPIPort, "nghttpx-api-port", nghttpxAPIPort, "Port for nghttpx API endpoint.")
 
 	rootCmd.Flags().BoolVar(&profiling, "profiling", profiling, `Enable profiling at the health port.  It exposes /debug/pprof/ endpoint.`)
 
@@ -137,9 +137,9 @@ func main() {
 
 	rootCmd.Flags().StringVar(&nghttpxExecPath, "nghttpx-exec-path", nghttpxExecPath, `Path to the nghttpx executable.`)
 
-	rootCmd.Flags().IntVar(&nghttpxHTTPPort, "nghttpx-http-port", nghttpxHTTPPort, `Port to listen to for HTTP (non-TLS) requests.  Specifying 0 disables HTTP port.`)
+	rootCmd.Flags().Int32Var(&nghttpxHTTPPort, "nghttpx-http-port", nghttpxHTTPPort, `Port to listen to for HTTP (non-TLS) requests.  Specifying 0 disables HTTP port.`)
 
-	rootCmd.Flags().IntVar(&nghttpxHTTPSPort, "nghttpx-https-port", nghttpxHTTPSPort, `Port to listen to for HTTPS (TLS) requests.  Specifying 0 disables HTTPS port.`)
+	rootCmd.Flags().Int32Var(&nghttpxHTTPSPort, "nghttpx-https-port", nghttpxHTTPSPort, `Port to listen to for HTTPS (TLS) requests.  Specifying 0 disables HTTPS port.`)
 
 	rootCmd.Flags().BoolVar(&fetchOCSPRespFromSecret, "fetch-ocsp-resp-from-secret", fetchOCSPRespFromSecret, `Fetch OCSP response from TLS secret.`)
 
@@ -304,7 +304,7 @@ type healthzChecker struct {
 }
 
 // newHealthzChecker returns new healthzChecker.
-func newHealthzChecker(healthPort int) *healthzChecker {
+func newHealthzChecker(healthPort int32) *healthzChecker {
 	return &healthzChecker{
 		targetURI: fmt.Sprintf("http://127.0.0.1:%v/healthz", healthPort),
 	}
@@ -369,7 +369,7 @@ func handleSigterm(cancel context.CancelFunc) {
 var defaultTmpl string
 
 // generateDefaultNghttpxConfig generates default configuration file for nghttpx.
-func generateDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nghttpxAPIPort int) error {
+func generateDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nghttpxAPIPort int32) error {
 	if err := nghttpx.MkdirAll(nghttpxConfDir); err != nil {
 		return err
 	}

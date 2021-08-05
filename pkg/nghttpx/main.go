@@ -56,7 +56,7 @@ type Manager struct {
 }
 
 // NewManager ...
-func NewManager(apiPort int) *Manager {
+func NewManager(apiPort int32) *Manager {
 	mgr := &Manager{
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
