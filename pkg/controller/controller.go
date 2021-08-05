@@ -1457,7 +1457,7 @@ func (lbc *LoadBalancerController) getNamedPortFromPod(ref *v1.ObjectReference, 
 	if err != nil {
 		return 0, fmt.Errorf("could not find port %v from Pod %v/%v: %v", servicePort.TargetPort.String(), pod.Namespace, pod.Name, err)
 	}
-	return int32(port), nil
+	return port, nil
 }
 
 // Stop commences shutting down the loadbalancer controller.
