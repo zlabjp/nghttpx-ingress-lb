@@ -549,7 +549,7 @@ func (lbc *LoadBalancerController) serviceReferenced(svc types.NamespacedName) b
 		}
 		if !lbc.noDefaultBackendOverride {
 			if isb := getDefaultBackendService(ing); isb != nil && svc.Name == isb.Name {
-				klog.V(4).Infof("Endpoints %v/%v is referenced by Ingress %v/%v", svc.Namespace, svc.Name, ing.Namespace, ing.Name)
+				klog.V(4).Infof("Service %v/%v is referenced by Ingress %v/%v", svc.Namespace, svc.Name, ing.Namespace, ing.Name)
 				return true
 			}
 		}
