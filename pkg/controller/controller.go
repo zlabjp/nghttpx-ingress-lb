@@ -119,11 +119,9 @@ type LoadBalancerController struct {
 
 	syncQueue workqueue.Interface
 
-	// stopLock is used to enforce only a single call to Stop is active.
-	// Needed because we allow stopping through an http endpoint and
-	// allowing concurrent stoppers leads to stack traces.
-	stopLock sync.Mutex
-	shutdown bool
+	// shutdownMu protects shutdown from the concurrent read/write.
+	shutdownMu sync.RWMutex
+	shutdown   bool
 
 	reloadRateLimiter flowcontrol.RateLimiter
 }
@@ -1462,8 +1460,8 @@ func (lbc *LoadBalancerController) getNamedPortFromPod(ref *v1.ObjectReference, 
 
 // Stop commences shutting down the loadbalancer controller.
 func (lbc *LoadBalancerController) stop() {
-	lbc.stopLock.Lock()
-	defer lbc.stopLock.Unlock()
+	lbc.shutdownMu.Lock()
+	defer lbc.shutdownMu.Unlock()
 
 	// Only try draining the workqueue if we haven't already.
 	if lbc.shutdown {
@@ -1476,8 +1474,8 @@ func (lbc *LoadBalancerController) stop() {
 
 // ShutdownCommenced returns true if the controller is shutting down.  This includes deferred shutdown period.
 func (lbc *LoadBalancerController) ShutdownCommenced() bool {
-	lbc.stopLock.Lock()
-	defer lbc.stopLock.Unlock()
+	lbc.shutdownMu.RLock()
+	defer lbc.shutdownMu.RUnlock()
 
 	return lbc.shutdown
 }
