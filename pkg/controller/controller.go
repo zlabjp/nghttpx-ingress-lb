@@ -1462,7 +1462,6 @@ func (lbc *LoadBalancerController) getNamedPortFromPod(ref *v1.ObjectReference, 
 
 // Stop commences shutting down the loadbalancer controller.
 func (lbc *LoadBalancerController) stop() {
-	// Stop is invoked from the http endpoint.
 	lbc.stopLock.Lock()
 	defer lbc.stopLock.Unlock()
 
