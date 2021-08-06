@@ -27,6 +27,7 @@ package nghttpx
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"text/template"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,6 +55,8 @@ var (
 	nghttpxTmpl string
 	//go:embed nghttpx-backend.tmpl
 	nghttpxBackendTmpl string
+	//go:embed default.tmpl
+	defaultTmpl string
 )
 
 func (mgr *Manager) loadTemplate() {
@@ -129,4 +132,26 @@ func (mgr *Manager) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backe
 	}
 
 	return configNotChanged, nil
+}
+
+// writeDefaultNghttpxConfig writes default configuration file for nghttpx.
+func (mgr *Manager) writeDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nghttpxAPIPort int32) error {
+	if err := MkdirAll(nghttpxConfDir); err != nil {
+		return err
+	}
+
+	var buf bytes.Buffer
+	t := template.Must(template.New("default.tmpl").Parse(defaultTmpl))
+	if err := t.Execute(&buf, map[string]interface{}{
+		"HealthPort": nghttpxHealthPort,
+		"APIPort":    nghttpxAPIPort,
+	}); err != nil {
+		return fmt.Errorf("could not create default configuration file for nghttpx: %v", err)
+	}
+
+	if err := WriteFile(ConfigPath(nghttpxConfDir), buf.Bytes()); err != nil {
+		return fmt.Errorf("could not write default configuration file for nghttpx: %v", err)
+	}
+
+	return nil
 }

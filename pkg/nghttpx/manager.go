@@ -32,6 +32,12 @@ import (
 	"time"
 )
 
+type ManagerConfig struct {
+	NghttpxHealthPort int32
+	NghttpxAPIPort    int32
+	NghttpxConfDir    string
+}
+
 // Manager ...
 type Manager struct {
 	// httpClient is used to issue backend API request to nghttpx
@@ -56,7 +62,7 @@ type Manager struct {
 }
 
 // NewManager ...
-func NewManager(apiPort int32) *Manager {
+func NewManager(config ManagerConfig) (*Manager, error) {
 	mgr := &Manager{
 		httpClient: &http.Client{
 			Timeout: time.Second * 30,
@@ -65,11 +71,15 @@ func NewManager(apiPort int32) *Manager {
 				DisableKeepAlives: true,
 			},
 		},
-		backendconfigURI:  fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", apiPort),
-		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", apiPort),
+		backendconfigURI:  fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", config.NghttpxAPIPort),
+		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", config.NghttpxAPIPort),
 	}
 
 	mgr.loadTemplate()
 
-	return mgr
+	if err := mgr.writeDefaultNghttpxConfig(config.NghttpxConfDir, config.NghttpxHealthPort, config.NghttpxAPIPort); err != nil {
+		return nil, err
+	}
+
+	return mgr, nil
 }

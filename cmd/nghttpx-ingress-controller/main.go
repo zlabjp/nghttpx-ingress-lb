@@ -25,9 +25,7 @@ limitations under the License.
 package main
 
 import (
-	"bytes"
 	"context"
-	_ "embed"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -36,7 +34,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"text/template"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -282,11 +279,18 @@ func run(cmd *cobra.Command, args []string) {
 		HealthzPort:              healthzPort,
 	}
 
-	if err := generateDefaultNghttpxConfig(nghttpxConfDir, nghttpxHealthPort, nghttpxAPIPort); err != nil {
+	mgrConfig := nghttpx.ManagerConfig{
+		NghttpxHealthPort: nghttpxHealthPort,
+		NghttpxAPIPort:    nghttpxAPIPort,
+		NghttpxConfDir:    nghttpxConfDir,
+	}
+
+	mgr, err := nghttpx.NewManager(mgrConfig)
+	if err != nil {
 		klog.Exit(err)
 	}
 
-	lbc := controller.NewLoadBalancerController(clientset, nghttpx.NewManager(nghttpxAPIPort), &controllerConfig, runtimePodInfo)
+	lbc := controller.NewLoadBalancerController(clientset, mgr, &controllerConfig, runtimePodInfo)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -363,29 +367,4 @@ func handleSigterm(cancel context.CancelFunc) {
 	klog.Infof("Received SIGTERM, shutting down")
 
 	cancel()
-}
-
-//go:embed default.tmpl
-var defaultTmpl string
-
-// generateDefaultNghttpxConfig generates default configuration file for nghttpx.
-func generateDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nghttpxAPIPort int32) error {
-	if err := nghttpx.MkdirAll(nghttpxConfDir); err != nil {
-		return err
-	}
-
-	var buf bytes.Buffer
-	t := template.Must(template.New("default.tmpl").Parse(defaultTmpl))
-	if err := t.Execute(&buf, map[string]interface{}{
-		"HealthPort": nghttpxHealthPort,
-		"APIPort":    nghttpxAPIPort,
-	}); err != nil {
-		return fmt.Errorf("could not create default configuration file for nghttpx: %v", err)
-	}
-
-	if err := nghttpx.WriteFile(nghttpx.ConfigPath(nghttpxConfDir), buf.Bytes()); err != nil {
-		return fmt.Errorf("could not create default configuration file for nghttpx: %v", err)
-	}
-
-	return nil
 }
