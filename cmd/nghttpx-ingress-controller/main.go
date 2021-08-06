@@ -242,18 +242,6 @@ func run(cmd *cobra.Command, args []string) {
 		klog.Exitf("Failed to create clientset: %v", err)
 	}
 
-	runtimePodInfo := &types.NamespacedName{
-		Name:      os.Getenv("POD_NAME"),
-		Namespace: os.Getenv("POD_NAMESPACE"),
-	}
-
-	if runtimePodInfo.Name == "" {
-		klog.Exit("POD_NAME environment variable cannot be empty.")
-	}
-	if runtimePodInfo.Namespace == "" {
-		klog.Exit("POD_NAMESPACE environment variable cannot be empty.")
-	}
-
 	controllerConfig := controller.Config{
 		DefaultBackendService:    defaultSvcKey,
 		WatchNamespace:           watchNamespace,
@@ -277,6 +265,17 @@ func run(cmd *cobra.Command, args []string) {
 		NoDefaultBackendOverride: noDefaultBackendOverride,
 		DeferredShutdownPeriod:   deferredShutdownPeriod,
 		HealthzPort:              healthzPort,
+		PodInfo: types.NamespacedName{
+			Name:      os.Getenv("POD_NAME"),
+			Namespace: os.Getenv("POD_NAMESPACE"),
+		},
+	}
+
+	if controllerConfig.PodInfo.Name == "" {
+		klog.Exit("POD_NAME environment variable cannot be empty.")
+	}
+	if controllerConfig.PodInfo.Namespace == "" {
+		klog.Exit("POD_NAMESPACE environment variable cannot be empty.")
 	}
 
 	mgrConfig := nghttpx.ManagerConfig{
@@ -290,7 +289,7 @@ func run(cmd *cobra.Command, args []string) {
 		klog.Exit(err)
 	}
 
-	lbc := controller.NewLoadBalancerController(clientset, mgr, &controllerConfig, runtimePodInfo)
+	lbc := controller.NewLoadBalancerController(clientset, mgr, controllerConfig)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

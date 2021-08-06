@@ -94,7 +94,7 @@ type LoadBalancerController struct {
 	podLister                listerscore.PodLister
 	nodeLister               listerscore.NodeLister
 	nghttpx                  nghttpx.Interface
-	podInfo                  *types.NamespacedName
+	podInfo                  types.NamespacedName
 	defaultSvc               types.NamespacedName
 	ngxConfigMap             *types.NamespacedName
 	nghttpxHealthPort        int32
@@ -169,17 +169,19 @@ type Config struct {
 	DeferredShutdownPeriod time.Duration
 	// HealthzPort is a port for healthz endpoint.
 	HealthzPort int32
+	// PodInfo is the Pod where this controller runs.
+	PodInfo types.NamespacedName
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
-func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config *Config, runtimeInfo *types.NamespacedName) *LoadBalancerController {
+func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config Config) *LoadBalancerController {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: clientset.CoreV1().Events(config.WatchNamespace)})
 
 	lbc := LoadBalancerController{
 		clientset:                clientset,
-		podInfo:                  runtimeInfo,
+		podInfo:                  config.PodInfo,
 		nghttpx:                  manager,
 		ngxConfigMap:             config.NghttpxConfigMap,
 		nghttpxHealthPort:        config.NghttpxHealthPort,
@@ -302,8 +304,8 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	if lbc.ngxConfigMap != nil {
 		cmNamespace = lbc.ngxConfigMap.Namespace
 	} else {
-		// Just watch runtimeInfo.Namespace to make codebase simple
-		cmNamespace = runtimeInfo.Namespace
+		// Just watch config.PodInfo.Namespace to make codebase simple
+		cmNamespace = config.PodInfo.Namespace
 	}
 
 	cmNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(cmNamespace))

@@ -132,8 +132,9 @@ func (f *fixture) prepare() {
 		EnableEndpointSlice:    f.enableEndpointSlice,
 		ReloadRate:             1.0,
 		ReloadBurst:            1,
+		PodInfo:                defaultRuntimeInfo,
 	}
-	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), &config, &defaultRuntimeInfo)
+	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), config)
 }
 
 func (f *fixture) run() {
