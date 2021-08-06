@@ -163,14 +163,14 @@ func VerifyCertificate(certPEM []byte) error {
 	return nil
 }
 
-var certNotFound = errors.New("certificate not found")
+var errCertNotFound = errors.New("certificate not found")
 
 // readLeafCertificate returns the first certificate found in certPEM.
 func readLeafCertificate(certPEM []byte) ([]byte, error) {
 	for {
 		block, rest := pem.Decode(certPEM)
 		if block == nil {
-			return nil, certNotFound
+			return nil, errCertNotFound
 		}
 		if block.Type != "CERTIFICATE" {
 			certPEM = rest
