@@ -36,14 +36,6 @@ import (
 
 var (
 	funcMap = template.FuncMap{
-		"empty": func(input interface{}) bool {
-			check, ok := input.(string)
-			if ok {
-				return len(check) == 0
-			}
-
-			return true
-		},
 		"duration": func(d *metav1.Duration) string {
 			return nghttpxDuration(d.Duration)
 		},
