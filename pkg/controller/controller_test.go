@@ -1590,3 +1590,52 @@ func TestSyncNamedServicePort(t *testing.T) {
 		t.Errorf("backend.Port = %v, want %v", got, want)
 	}
 }
+
+// TestSyncInternalDefaultBackend verifies that controller creates configuration for the internal default backend.
+func TestSyncInternalDefaultBackend(t *testing.T) {
+	tests := []struct {
+		desc string
+	}{
+		{
+			desc: "Create internal default backend",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+
+			f.prepare()
+
+			f.lbc.internalDefaultBackend = true
+
+			f.run()
+
+			fm := f.lbc.nghttpx.(*fakeManager)
+			ingConfig := fm.ingConfig
+
+			if got, want := len(ingConfig.Upstreams), 1; got != want {
+				t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+			}
+
+			upstream := ingConfig.Upstreams[0]
+			if got, want := upstream.Path, ""; got != want {
+				t.Errorf("upstream.Path = %v, want %v", got, want)
+			}
+
+			backends := upstream.Backends
+			if got, want := len(backends), 1; got != want {
+				t.Errorf("len(backends) = %v, want %v", got, want)
+			}
+
+			us := backends[0]
+			if got, want := us.Address, "127.0.0.1"; got != want {
+				t.Errorf("0: us.Address = %v, want %v", got, want)
+			}
+
+			if got, want := upstream.DoNotForward, true; got != want {
+				t.Errorf("upstream.DoNotForward = %v, want %v", got, want)
+			}
+		})
+	}
+}

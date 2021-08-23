@@ -82,6 +82,7 @@ var (
 	noDefaultBackendOverride = false
 	deferredShutdownPeriod   time.Duration
 	configOverrides          clientcmd.ConfigOverrides
+	internalDefaultBackend   = false
 )
 
 func main() {
@@ -100,7 +101,7 @@ func main() {
 	clientcmd.BindOverrideFlags(&configOverrides, rootCmd.Flags(), clientcmd.RecommendedConfigOverrideFlags(""))
 
 	rootCmd.Flags().StringVar(&defaultSvc, "default-backend-service", defaultSvc,
-		`(Required) Service used to serve a 404 page for the default backend.  Takes the form namespace/name.  The controller uses the first node port of this Service for the default backend.`)
+		`Service used to serve a 404 page for the default backend.  Takes the form namespace/name.  The controller uses the first node port of this Service for the default backend.  This flag must be specified unless --internal-default-backend is given.`)
 
 	rootCmd.Flags().StringVar(&ngxConfigMap, "nghttpx-configmap", ngxConfigMap,
 		`Namespace/name of the ConfigMap that contains the custom nghttpx configuration to use.  Takes the form namespace/name.`)
@@ -160,6 +161,9 @@ func main() {
 	rootCmd.Flags().DurationVar(&deferredShutdownPeriod, "deferred-shutdown-period", deferredShutdownPeriod,
 		`How long the controller waits before actually starting shutting down.  If nonzero value is given, additional health check endpoint is added to HTTP/HTTPS endpoint.  The health check request path is /nghttpx-healthz.  Normally, it returns 200 HTTP status code, but in this period, the endpoint returns 503.`)
 
+	rootCmd.Flags().BoolVar(&internalDefaultBackend, "internal-default-backend", internalDefaultBackend,
+		`Use the internal default backend instead of an external service specified by --default-backend-service flag.  The internal default backend responds with 200 status code when /healthz is requested.  It responds with 404 status code to the other requests.  The internal default backend can still be overridden by Ingress resource unless --no-default-backend-override flag is given.`)
+
 	if err := rootCmd.Execute(); err != nil {
 		klog.Exitf("Exiting due to command-line error: %v", err)
 	}
@@ -175,15 +179,17 @@ func run(cmd *cobra.Command, args []string) {
 		publishSvcKey       *types.NamespacedName
 	)
 
-	if defaultSvc == "" {
-		klog.Exitf("default-backend-service cannot be empty")
-	}
-	if ns, name, err := cache.SplitMetaNamespaceKey(defaultSvc); err != nil {
-		klog.Exitf("default-backend-service: invalid Service identifier %v: %v", defaultSvc, err)
-	} else {
-		defaultSvcKey = types.NamespacedName{
-			Namespace: ns,
-			Name:      name,
+	if !internalDefaultBackend {
+		if defaultSvc == "" {
+			klog.Exitf("default-backend-service cannot be empty")
+		}
+		if ns, name, err := cache.SplitMetaNamespaceKey(defaultSvc); err != nil {
+			klog.Exitf("default-backend-service: invalid Service identifier %v: %v", defaultSvc, err)
+		} else {
+			defaultSvcKey = types.NamespacedName{
+				Namespace: ns,
+				Name:      name,
+			}
 		}
 	}
 
@@ -265,6 +271,7 @@ func run(cmd *cobra.Command, args []string) {
 		NoDefaultBackendOverride: noDefaultBackendOverride,
 		DeferredShutdownPeriod:   deferredShutdownPeriod,
 		HealthzPort:              healthzPort,
+		InternalDefaultBackend:   internalDefaultBackend,
 		PodInfo: types.NamespacedName{
 			Name:      os.Getenv("POD_NAME"),
 			Namespace: os.Getenv("POD_NAMESPACE"),
