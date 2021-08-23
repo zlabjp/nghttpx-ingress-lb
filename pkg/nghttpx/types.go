@@ -73,9 +73,6 @@ type IngressConfig struct {
 	FetchOCSPRespFromSecret bool
 	// ProxyProto toggles the use of PROXY protocol for all public-facing frontends.
 	ProxyProto bool
-	// HealthzPort is the port of backend for mruby script healthz endpoint.  mruby script returns response, therefore this backend is
-	// not used, but nghttpx needs functional backend for this purpose.
-	HealthzPort int32
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.

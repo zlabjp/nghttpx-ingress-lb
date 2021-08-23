@@ -921,7 +921,6 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 	ingConfig.HTTPSPort = lbc.nghttpxHTTPSPort
 	ingConfig.FetchOCSPRespFromSecret = lbc.fetchOCSPRespFromSecret
 	ingConfig.ProxyProto = lbc.proxyProto
-	ingConfig.HealthzPort = lbc.healthzPort
 
 	var (
 		upstreams []*nghttpx.Upstream
