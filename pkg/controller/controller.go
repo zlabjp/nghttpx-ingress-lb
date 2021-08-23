@@ -114,6 +114,7 @@ type LoadBalancerController struct {
 	noDefaultBackendOverride bool
 	deferredShutdownPeriod   time.Duration
 	healthzPort              int32
+	internalDefaultBackend   bool
 
 	recorder record.EventRecorder
 
@@ -169,6 +170,8 @@ type Config struct {
 	DeferredShutdownPeriod time.Duration
 	// HealthzPort is a port for healthz endpoint.
 	HealthzPort int32
+	// InternalDefaultBackend, if true, instructs the controller to use internal default backend instead of an external one.
+	InternalDefaultBackend bool
 	// PodInfo is the Pod where this controller runs.
 	PodInfo types.NamespacedName
 }
@@ -202,6 +205,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		noDefaultBackendOverride: config.NoDefaultBackendOverride,
 		deferredShutdownPeriod:   config.DeferredShutdownPeriod,
 		healthzPort:              config.HealthzPort,
+		internalDefaultBackend:   config.InternalDefaultBackend,
 		recorder:                 eventBroadcaster.NewRecorder(scheme.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
 		syncQueue:                workqueue.New(),
 		reloadRateLimiter:        flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
@@ -536,7 +540,7 @@ func namespacedName(obj metav1.Object) types.NamespacedName {
 
 // serviceReferenced returns true if we are interested in svc.
 func (lbc *LoadBalancerController) serviceReferenced(svc types.NamespacedName) bool {
-	if svc.Namespace == lbc.defaultSvc.Namespace && svc.Name == lbc.defaultSvc.Name {
+	if !lbc.internalDefaultBackend && svc.Namespace == lbc.defaultSvc.Namespace && svc.Name == lbc.defaultSvc.Name {
 		return true
 	}
 
@@ -703,10 +707,12 @@ func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
 
 // podReferenced returns true if we are interested in pod.
 func (lbc *LoadBalancerController) podReferenced(pod *v1.Pod) bool {
-	if svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name); err == nil {
-		if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
-			klog.V(4).Infof("Pod %v/%v is referenced by default Service %v/%v", pod.Namespace, pod.Name, lbc.defaultSvc.Namespace, lbc.defaultSvc.Name)
-			return true
+	if !lbc.internalDefaultBackend {
+		if svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name); err == nil {
+			if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
+				klog.V(4).Infof("Pod %v/%v is referenced by default Service %v/%v", pod.Namespace, pod.Name, lbc.defaultSvc.Namespace, lbc.defaultSvc.Name)
+				return true
+			}
 		}
 	}
 
@@ -833,6 +839,42 @@ func (lbc *LoadBalancerController) sync(key string) error {
 }
 
 func (lbc *LoadBalancerController) getDefaultUpstream() *nghttpx.Upstream {
+	if lbc.internalDefaultBackend {
+		script := []byte(`
+class App
+  def on_req(env)
+    req = env.req
+    resp = env.resp
+    resp.add_header 'content-type', 'text/plain; charset=utf-8'
+    if req.path == '/healthz' || req.path.start_with?('/healthz?')
+      resp.status = 200
+      resp.return 'ok'
+      return
+    end
+    resp.status = 404
+    resp.return 'default backend - 404'
+  end
+end
+
+App.new
+`)
+		return &nghttpx.Upstream{
+			Name:             "internal-default-backend",
+			RedirectIfNotTLS: lbc.defaultTLSSecret != nil,
+			Affinity:         nghttpx.AffinityNone,
+			Mruby:            nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, script),
+			DoNotForward:     true,
+			Backends: []nghttpx.UpstreamServer{
+				{
+					Address:  "127.0.0.1",
+					Port:     "9999",
+					Protocol: nghttpx.ProtocolH1,
+					Affinity: nghttpx.AffinityNone,
+				},
+			},
+		}
+	}
+
 	svcKey := lbc.defaultSvc.String()
 	upstream := &nghttpx.Upstream{
 		Name:             svcKey,

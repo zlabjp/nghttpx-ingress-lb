@@ -99,6 +99,7 @@ type Upstream struct {
 	AffinityCookieSecure AffinityCookieSecure
 	ReadTimeout          *metav1.Duration
 	WriteTimeout         *metav1.Duration
+	DoNotForward         bool
 }
 
 type Affinity string

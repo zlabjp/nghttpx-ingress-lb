@@ -18,6 +18,10 @@ The official Docker images are available at [Docker Hub](https://hub.docker.com/
 Actually, any backend web server will suffice as long as it returns
 some kind of error code for any requests.
 
+If `--internal-default-backend` flag is given, the default backend
+service is not necessary.  The controller configures nghttpx to act as
+a default backend.
+
 ## Deploy the Ingress controller
 
 Before the deploy of the Ingress controller we need a default backend:
@@ -223,10 +227,15 @@ kubctl apply -f examples/proxyproto/
 
 The default backend is used when the request does not match any given
 rules.  The default backend must be set in command-line flag of
-nghttpx Ingress controller.  It can be overridden by specifying
+nghttpx Ingress controller unless `--internal-default-backend` flag is
+given, see below.  It can be overridden by specifying
 Ingress.Spec.Backend.  If multiple Ingress resources have
 .Spec.Backend, one of them is used, but it is undefined which one is
 used.  The default backend always does not require TLS.
+
+If `--internal-default-backend` is used, the controller configures
+nghttpx to act as a default backend.  In this case, the default
+backend service is not necessary.
 
 ## Logs
 
