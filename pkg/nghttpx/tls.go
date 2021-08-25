@@ -117,7 +117,7 @@ func writeTLSCred(tlsCred *TLSCred) error {
 	return nil
 }
 
-// RemoveDuplicatePems removes duplicates from pems.  It assumes that pems are sorted using TLSCredKeyLess.
+// RemoveDuplicatePems removes duplicates from pems.  It assumes that pems are sorted by TLSCred.Key.Path.
 func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 	if len(pems) == 0 {
 		return pems
