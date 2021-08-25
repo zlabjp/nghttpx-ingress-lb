@@ -136,7 +136,7 @@ spec:
 
 If TLS is configured for a service, and it is accessed via cleartext
 HTTP, those requests are redirected to HTTPS URI.  If
---default-tls-secret flag is used, all cleartext HTTP requests are
+`--default-tls-secret` flag is used, all cleartext HTTP requests are
 redirected to https URI.  This behaviour is configurable using
 [path-config](#ingresszlabcojppath-config-annotation) annotation.
 
@@ -568,7 +568,7 @@ TBD
 
 ### Debug
 
-Using the flag `--v=XX` it is possible to increase the level of logging.
+Using the `--v` flag it is possible to increase the level of logging.
 In particular:
 - `--v=2` shows details using `diff` about the changes in the configuration in nghttpx
 
