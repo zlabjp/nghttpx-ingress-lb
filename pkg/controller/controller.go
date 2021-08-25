@@ -1486,8 +1486,8 @@ func (lbc *LoadBalancerController) getNamedPortFromPod(ref *v1.ObjectReference, 
 	return port, nil
 }
 
-// Stop commences shutting down the loadbalancer controller.
-func (lbc *LoadBalancerController) stop() {
+// startShutdown commences shutting down the loadbalancer controller.
+func (lbc *LoadBalancerController) startShutdown() {
 	lbc.shutdownMu.Lock()
 	defer lbc.shutdownMu.Unlock()
 
@@ -1565,7 +1565,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	go func() {
 		<-ctx.Done()
 
-		lbc.stop()
+		lbc.startShutdown()
 
 		if lbc.deferredShutdownPeriod != 0 {
 			klog.Infof("Deferred shutdown period is %v", lbc.deferredShutdownPeriod)
