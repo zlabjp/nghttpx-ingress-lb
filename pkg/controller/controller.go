@@ -796,11 +796,12 @@ func (lbc *LoadBalancerController) getConfigMap(cmKey *types.NamespacedName) (*v
 	}
 
 	cm, err := lbc.cmLister.ConfigMaps(cmKey.Namespace).Get(cmKey.Name)
-	if errors.IsNotFound(err) {
-		klog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
-		return &v1.ConfigMap{}, nil
-	}
 	if err != nil {
+		if errors.IsNotFound(err) {
+			klog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
+			return &v1.ConfigMap{}, nil
+		}
+
 		return nil, err
 	}
 	return cm, nil
@@ -882,14 +883,8 @@ App.new
 		Affinity:         nghttpx.AffinityNone,
 	}
 	svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name)
-	if errors.IsNotFound(err) {
-		klog.Warningf("service %v not found", svcKey)
-		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
-		return upstream
-	}
-
 	if err != nil {
-		klog.Warningf("unexpected error searching the default backend %v: %v", svcKey, err)
+		klog.Warningf("unable to get Service %v: %v", svcKey, err)
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
 		return upstream
 	}
@@ -1135,10 +1130,6 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 
 	svcKey := fmt.Sprintf("%v/%v", ing.Namespace, isb.Name)
 	svc, err := lbc.svcLister.Services(ing.Namespace).Get(isb.Name)
-	if errors.IsNotFound(err) {
-		return nil, fmt.Errorf("service %v not found", svcKey)
-	}
-
 	if err != nil {
 		return nil, fmt.Errorf("error getting service %v from the cache: %v", svcKey, err)
 	}
@@ -1193,9 +1184,6 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 // getTLSCredFromSecret returns nghttpx.TLSCred obtained from the Secret denoted by secretKey.
 func (lbc *LoadBalancerController) getTLSCredFromSecret(key *types.NamespacedName) (*nghttpx.TLSCred, error) {
 	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
-	if errors.IsNotFound(err) {
-		return nil, fmt.Errorf("Secret %v has been deleted", key)
-	}
 	if err != nil {
 		return nil, fmt.Errorf("could not get TLS secret %v: %v", key, err)
 	}
@@ -1218,9 +1206,6 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ing *networking.Ingress
 		tls := &ing.Spec.TLS[i]
 		secret, err := lbc.secretLister.Secrets(ing.Namespace).Get(tls.SecretName)
 		if err != nil {
-			if errors.IsNotFound(err) {
-				return nil, fmt.Errorf("Secret %v/%v has been deleted", ing.Namespace, tls.SecretName)
-			}
 			return nil, fmt.Errorf("could not retrieve Secret %v/%v for Ingress %v/%v: %v", ing.Namespace, tls.SecretName, ing.Namespace, ing.Name, err)
 		}
 		tlsCred, err := lbc.createTLSCredFromSecret(secret)
@@ -1635,14 +1620,16 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *networking.Ingress)
 	}
 
 	for _, ingClass := range ingClasses {
-		if ingClass.Annotations[annotationIsDefaultIngressClass] == "true" {
-			if ingClass.Spec.Controller != lbc.ingressClassController {
-				klog.V(4).Infof("Skip Ingress %v/%v because it defaults to IngressClass %v controller %v", ing.Namespace, ing.Name,
-					ingClass.Name, ingClass.Spec.Controller)
-				return false
-			}
-			return true
+		if ingClass.Annotations[annotationIsDefaultIngressClass] != "true" {
+			continue
 		}
+
+		if ingClass.Spec.Controller != lbc.ingressClassController {
+			klog.V(4).Infof("Skip Ingress %v/%v because it defaults to IngressClass %v controller %v", ing.Namespace, ing.Name,
+				ingClass.Name, ingClass.Spec.Controller)
+			return false
+		}
+		return true
 	}
 
 	// If there is no default IngressClass and no deprecated annotation, process the Ingress.
@@ -1797,10 +1784,6 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressFromService(svc *v1.Ser
 func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
 	node, err := lbc.nodeLister.Get(pod.Spec.NodeName)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			return "", fmt.Errorf("Node %v for Pod %v/%v has been deleted", pod.Spec.NodeName, pod.Namespace, pod.Name)
-		}
-
 		return "", fmt.Errorf("could not get Node %v for Pod %v/%v from lister: %v", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
 	}
 	var externalIP string

@@ -48,8 +48,7 @@ func writePerPatternMrubyFile(ingConfig *IngressConfig) error {
 		}
 	}
 
-	if ingConfig.HealthzMruby != nil {
-		f := ingConfig.HealthzMruby
+	if f := ingConfig.HealthzMruby; f != nil {
 		if err := WriteFile(f.Path, f.Content); err != nil {
 			return fmt.Errorf("failed to write healthz mruby file: %v", err)
 		}
