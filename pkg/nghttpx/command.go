@@ -236,7 +236,10 @@ func (mgr *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 
 	defer in.Close()
 
-	req, err := http.NewRequest(http.MethodPost, mgr.backendconfigURI, in)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, mgr.backendconfigURI, in)
 	if err != nil {
 		return fmt.Errorf("could not create API request: %v", err)
 	}
@@ -280,7 +283,15 @@ type apiResult struct {
 func (mgr *Manager) getNghttpxConfigRevision() (string, error) {
 	klog.V(4).Infof("Issuing API request %v", mgr.configrevisionURI)
 
-	resp, err := mgr.httpClient.Get(mgr.configrevisionURI)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mgr.configrevisionURI, nil)
+	if err != nil {
+		return "", fmt.Errorf("could not create API request: %v", err)
+	}
+
+	resp, err := mgr.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("could not get nghttpx configRevision: %v", err)
 	}

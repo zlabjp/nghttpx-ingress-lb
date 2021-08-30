@@ -29,7 +29,6 @@ import (
 	"net/http"
 	"os/exec"
 	"text/template"
-	"time"
 )
 
 type ManagerConfig struct {
@@ -69,7 +68,6 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 
 	mgr := &Manager{
 		httpClient: &http.Client{
-			Timeout:   time.Second * 30,
 			Transport: tr,
 		},
 		backendconfigURI:  fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", config.NghttpxAPIPort),
