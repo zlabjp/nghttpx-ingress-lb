@@ -63,13 +63,14 @@ type Manager struct {
 
 // NewManager ...
 func NewManager(config ManagerConfig) (*Manager, error) {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	// Disable keep alive connection, so that API request does not interfere graceful shutdown of nghttpx.
+	tr.DisableKeepAlives = true
+
 	mgr := &Manager{
 		httpClient: &http.Client{
-			Timeout: time.Second * 30,
-			Transport: &http.Transport{
-				// Disable keep alive connection, so that API request does not interfere graceful shutdown of nghttpx.
-				DisableKeepAlives: true,
-			},
+			Timeout:   time.Second * 30,
+			Transport: tr,
 		},
 		backendconfigURI:  fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", config.NghttpxAPIPort),
 		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", config.NghttpxAPIPort),
