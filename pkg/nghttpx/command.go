@@ -47,7 +47,7 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) {
 	mgr.cmd.Stdout = os.Stdout
 	mgr.cmd.Stderr = os.Stderr
 	if err := mgr.cmd.Start(); err != nil {
-		klog.Errorf("nghttpx didn't started successfully: %v", err)
+		klog.Errorf("nghttpx did not start successfully: %v", err)
 		return
 	}
 
@@ -55,7 +55,7 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) {
 
 	go func() {
 		if err := mgr.cmd.Wait(); err != nil {
-			klog.Errorf("nghttpx didn't complete successfully: %v", err)
+			klog.Errorf("nghttpx did not finish successfully: %v", err)
 		}
 		cancel()
 	}()
