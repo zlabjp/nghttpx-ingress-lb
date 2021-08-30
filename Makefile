@@ -9,7 +9,7 @@ ifndef VERSION
 endif
 
 .PHONY: all
-all: push
+all: container
 
 .PHONY: controller
 controller:
