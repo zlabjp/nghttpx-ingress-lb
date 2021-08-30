@@ -1632,7 +1632,7 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *networking.Ingress)
 		return true
 	}
 
-	// If there is no default IngressClass and no deprecated annotation, process the Ingress.
+	// If there is no default IngressClass, process the Ingress.
 	return true
 }
 
