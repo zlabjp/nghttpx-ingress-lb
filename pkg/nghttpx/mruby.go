@@ -1,6 +1,7 @@
 package nghttpx
 
 import (
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 )
@@ -14,9 +15,9 @@ const (
 func CreatePerPatternMrubyChecksumFile(dir string, mruby []byte) *ChecksumFile {
 	checksum := Checksum(mruby)
 	return &ChecksumFile{
-		Path:     filepath.Join(dir, mrubyDir, checksum+".rb"),
+		Path:     filepath.Join(dir, mrubyDir, hex.EncodeToString(checksum)+".rb"),
 		Content:  mruby,
-		Checksum: Checksum(mruby),
+		Checksum: checksum,
 	}
 }
 

@@ -14,12 +14,12 @@ frontend=*,{{ .HTTPSPort }}{{ if .ProxyProto }};proxyproto{{ end }}
 
 {{ $defaultCred := .DefaultTLSCred }}
 # checksum is required to detect changes in the generated configuration and force a reload
-# checksum: {{ $defaultCred.Key.Checksum }} {{ $defaultCred.Cert.Checksum }}
+# checksum: {{ encodeHex $defaultCred.Key.Checksum }} {{ encodeHex $defaultCred.Cert.Checksum }}
 private-key-file={{ $defaultCred.Key.Path }}
 certificate-file={{ $defaultCred.Cert.Path }}
 
 {{ range $cred := .SubTLSCred }}
-# checksum: {{ $cred.Key.Checksum }} {{ $cred.Cert.Checksum }}
+# checksum: {{ encodeHex $cred.Key.Checksum }} {{ encodeHex $cred.Cert.Checksum }}
 subcert={{ $cred.Key.Path }}:{{ $cred.Cert.Path }}
 {{ end }}
 
@@ -39,7 +39,7 @@ workers={{ .Workers }}
 {{ .ExtraConfig }}
 
 {{ if .MrubyFile }}
-# checksum: {{ .MrubyFile.Checksum }}
+# checksum: {{ encodeHex .MrubyFile.Checksum }}
 mruby-file={{ .MrubyFile.Path }}
 {{ end }}
 

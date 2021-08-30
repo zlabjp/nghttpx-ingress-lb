@@ -25,6 +25,7 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"reflect"
@@ -713,11 +714,11 @@ func TestSyncDefaultSecret(t *testing.T) {
 	if got, want := ingConfig.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(defaultConfDir, prefix); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Cert.Path = %v, want %v", got, want)
 	}
-	if got, want := ingConfig.DefaultTLSCred.Key.Checksum, nghttpx.Checksum(dKey); got != want {
-		t.Errorf("ingConfig.DefaultTLSCred.Key.Checksum = %v, want %v", got, want)
+	if got, want := ingConfig.DefaultTLSCred.Key.Checksum, nghttpx.Checksum(dKey); !bytes.Equal(got, want) {
+		t.Errorf("ingConfig.DefaultTLSCred.Key.Checksum = %x, want %x", got, want)
 	}
-	if got, want := ingConfig.DefaultTLSCred.Cert.Checksum, nghttpx.Checksum(dCrt); got != want {
-		t.Errorf("ingConfig.DefaultTLSCred.Cert.Checksum = %v, want %v", got, want)
+	if got, want := ingConfig.DefaultTLSCred.Cert.Checksum, nghttpx.Checksum(dCrt); !bytes.Equal(got, want) {
+		t.Errorf("ingConfig.DefaultTLSCred.Cert.Checksum = %v, want %x", got, want)
 	}
 
 	if got, want := ingConfig.Upstreams[0].RedirectIfNotTLS, true; got != want {

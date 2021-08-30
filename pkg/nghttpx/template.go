@@ -27,6 +27,7 @@ package nghttpx
 import (
 	"bytes"
 	_ "embed"
+	"encoding/hex"
 	"fmt"
 	"text/template"
 
@@ -38,6 +39,9 @@ var (
 	funcMap = template.FuncMap{
 		"duration": func(d *metav1.Duration) string {
 			return nghttpxDuration(d.Duration)
+		},
+		"encodeHex": func(b []byte) string {
+			return hex.EncodeToString(b)
 		},
 	}
 )

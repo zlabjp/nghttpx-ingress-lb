@@ -422,5 +422,5 @@ func (pc *PathConfig) SetRedirectIfNotTLS(b bool) {
 type ChecksumFile struct {
 	Path     string
 	Content  []byte
-	Checksum string
+	Checksum []byte
 }
