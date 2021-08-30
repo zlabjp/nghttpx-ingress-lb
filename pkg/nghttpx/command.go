@@ -62,7 +62,6 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) {
 
 	select {
 	case <-waitCtx.Done():
-		klog.Infof("nghttpx exited")
 	case <-ctx.Done():
 		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", mgr.cmd.Process.Pid)
 		if err := mgr.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
@@ -70,8 +69,9 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) {
 			cancel()
 		}
 		<-waitCtx.Done()
-		klog.Infof("nghttpx exited")
 	}
+
+	klog.Infof("nghttpx exited")
 }
 
 // CheckAndReload verify if the nghttpx configuration changed and sends a reload
