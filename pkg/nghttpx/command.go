@@ -329,7 +329,7 @@ func (mgr *Manager) getNghttpxConfigRevision() (string, error) {
 func (mgr *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
 	klog.Infof("Waiting for nghttpx to finish reloading configuration")
 
-	if err := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
+	if err := wait.Poll(time.Second, 30*time.Second, func() (bool, error) {
 		newConfRev, err := mgr.getNghttpxConfigRevision()
 		if err != nil {
 			klog.Error(err)
