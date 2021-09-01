@@ -1456,16 +1456,11 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, ep
 			return *epPort.Port, nil
 		}
 	case svcPort.TargetPort.StrVal != "":
-		port, err := strconv.ParseUint(svcPort.TargetPort.StrVal, 10, 16)
+		port, err := lbc.getNamedPortFromPod(ref, svcPort)
 		if err != nil {
-			port, err := lbc.getNamedPortFromPod(ref, svcPort)
-			if err != nil {
-				return 0, fmt.Errorf("could not find named port %v in Pod spec: %v", svcPort.TargetPort.String(), err)
-			}
-			if *epPort.Port == port {
-				return *epPort.Port, nil
-			}
-		} else if *epPort.Port == int32(port) {
+			return 0, fmt.Errorf("could not find named port %v in Pod spec: %v", svcPort.TargetPort.String(), err)
+		}
+		if *epPort.Port == port {
 			return *epPort.Port, nil
 		}
 	default:

@@ -956,62 +956,6 @@ func TestSyncStringNamedPort(t *testing.T) {
 	}
 }
 
-// TestSyncNumericTargetPort verifies that if target port is numeric, it is compared to endpoint port directly.
-func TestSyncNumericTargetPort(t *testing.T) {
-	tests := []struct {
-		desc                string
-		enableEndpointSlice bool
-	}{
-		{
-			desc: "With Endpoint",
-		},
-		{
-			desc:                "With EndpointSlice",
-			enableEndpointSlice: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
-			f := newFixture(t)
-			f.enableEndpointSlice = tt.enableEndpointSlice
-
-			svc, eps, ess := newDefaultBackend()
-
-			bs1, be1, bes1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-			bs1.Spec.Ports[0] = v1.ServicePort{
-				Port:       8080,
-				TargetPort: intstr.FromString("80"),
-				Protocol:   v1.ProtocolTCP,
-			}
-			ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
-
-			f.svcStore = append(f.svcStore, svc, bs1)
-			f.epStore = append(f.epStore, eps, be1)
-			f.epSliceStore = append(f.epSliceStore, ess...)
-			f.epSliceStore = append(f.epSliceStore, bes1)
-			f.ingStore = append(f.ingStore, ing1)
-
-			f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
-
-			f.prepare()
-			f.run()
-
-			fm := f.lbc.nghttpx.(*fakeManager)
-			ingConfig := fm.ingConfig
-
-			if got, want := len(ingConfig.Upstreams), 2; got != want {
-				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-			}
-
-			backend := ingConfig.Upstreams[0].Backends[0]
-			if got, want := backend.Port, "80"; got != want {
-				t.Errorf("backend.Port = %v, want %v", got, want)
-			}
-		})
-	}
-}
-
 // TestSyncEmptyTargetPort verifies that if target port is empty, port is used instead.  In practice, target port is always filled out.
 func TestSyncEmptyTargetPort(t *testing.T) {
 	f := newFixture(t)
