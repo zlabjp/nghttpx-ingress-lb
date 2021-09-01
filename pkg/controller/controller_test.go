@@ -285,7 +285,7 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{
 				{
-					Port:       8081,
+					Port:       8181,
 					TargetPort: intstr.FromInt(8080),
 					Protocol:   v1.ProtocolTCP,
 				},
@@ -439,7 +439,7 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{
 				{
-					Port:       81,
+					Port:       8281,
 					TargetPort: intstr.FromInt(80),
 					Protocol:   v1.ProtocolTCP,
 				},
@@ -1215,7 +1215,7 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 
 	var found bool
 	for _, upstream := range ingConfig.Upstreams {
-		if upstream.Name == "default/bravo,81;/" {
+		if upstream.Name == "default/bravo,8281;/" {
 			found = true
 			break
 		}

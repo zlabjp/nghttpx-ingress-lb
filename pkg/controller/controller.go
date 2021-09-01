@@ -1450,11 +1450,12 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, ep
 		return 0, fmt.Errorf("EndpointPort has no port defined")
 	}
 
-	if svcPort.TargetPort.StrVal == "" {
-		if *epPort.Port == svcPort.Port {
+	switch {
+	case svcPort.TargetPort.IntVal != 0:
+		if *epPort.Port == svcPort.TargetPort.IntVal {
 			return *epPort.Port, nil
 		}
-	} else {
+	case svcPort.TargetPort.StrVal != "":
 		port, err := strconv.ParseUint(svcPort.TargetPort.StrVal, 10, 16)
 		if err != nil {
 			port, err := lbc.getNamedPortFromPod(ref, svcPort)
@@ -1465,6 +1466,11 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, ep
 				return *epPort.Port, nil
 			}
 		} else if *epPort.Port == int32(port) {
+			return *epPort.Port, nil
+		}
+	default:
+		// svcPort.TargetPort is not specified.
+		if *epPort.Port == svcPort.Port {
 			return *epPort.Port, nil
 		}
 	}
