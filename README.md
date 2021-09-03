@@ -301,10 +301,6 @@ dictionary, and can contain the following key value pairs:
   A, while remaining 20% traffic to Service B.  The value must be [1,
   256], inclusive.
 
-The affinity settings in backend-config have been deprecated.  In
-order to configure affinity, use
-[path-config](#ingresszlabcojppath-config-annotation) annotation.
-
 The following example specifies HTTP/2 as backend connection for
 service "greeter", and service port "50051":
 

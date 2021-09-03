@@ -34,20 +34,20 @@ func TestGetBackendConfig(t *testing.T) {
 		},
 		{
 			desc:                    "Just default config",
-			annotationDefaultConfig: `{"affinity": "ip"}`,
+			annotationDefaultConfig: `{"sni": "example.com"}`,
 			wantDefaultConfig: func() *nghttpx.PortBackendConfig {
 				a := &nghttpx.PortBackendConfig{}
-				a.SetAffinity(nghttpx.AffinityIP)
+				a.SetSNI("example.com")
 				return a
 			}(),
 		},
 		{
 			desc:                    "Both config and default config",
-			annotationDefaultConfig: `{"affinity": "ip"}`,
+			annotationDefaultConfig: `{"sni": "example.com"}`,
 			annotationConfig:        `{"svc": {"80": {"proto": "h2"}}}`,
 			wantDefaultConfig: func() *nghttpx.PortBackendConfig {
 				a := &nghttpx.PortBackendConfig{}
-				a.SetAffinity(nghttpx.AffinityIP)
+				a.SetSNI("example.com")
 				return a
 			}(),
 			wantConfig: map[string]map[string]*nghttpx.PortBackendConfig{
@@ -55,7 +55,7 @@ func TestGetBackendConfig(t *testing.T) {
 					"80": func() *nghttpx.PortBackendConfig {
 						a := &nghttpx.PortBackendConfig{}
 						a.SetProto(nghttpx.ProtocolH2)
-						a.SetAffinity(nghttpx.AffinityIP)
+						a.SetSNI("example.com")
 						return a
 					}(),
 				},

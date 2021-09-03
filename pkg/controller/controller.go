@@ -1420,18 +1420,14 @@ func newEndpointSliceSelector(svc *v1.Service) labels.Selector {
 
 func (lbc *LoadBalancerController) createUpstreamServer(svc *v1.Service, address string, targetPort int32, portBackendConfig *nghttpx.PortBackendConfig) nghttpx.UpstreamServer {
 	ups := nghttpx.UpstreamServer{
-		Address:              address,
-		Port:                 strconv.Itoa(int(targetPort)),
-		Protocol:             portBackendConfig.GetProto(),
-		TLS:                  portBackendConfig.GetTLS(),
-		SNI:                  portBackendConfig.GetSNI(),
-		DNS:                  portBackendConfig.GetDNS(),
-		Affinity:             portBackendConfig.GetAffinity(),
-		AffinityCookieName:   portBackendConfig.GetAffinityCookieName(),
-		AffinityCookiePath:   portBackendConfig.GetAffinityCookiePath(),
-		AffinityCookieSecure: portBackendConfig.GetAffinityCookieSecure(),
-		Group:                strings.Join([]string{svc.Namespace, svc.Name}, "/"),
-		Weight:               portBackendConfig.GetWeight(),
+		Address:  address,
+		Port:     strconv.Itoa(int(targetPort)),
+		Protocol: portBackendConfig.GetProto(),
+		TLS:      portBackendConfig.GetTLS(),
+		SNI:      portBackendConfig.GetSNI(),
+		DNS:      portBackendConfig.GetDNS(),
+		Group:    strings.Join([]string{svc.Namespace, svc.Name}, "/"),
+		Weight:   portBackendConfig.GetWeight(),
 	}
 	// Set Protocol and Affinity here if they are empty.  Template expects them.
 	if ups.Protocol == "" {

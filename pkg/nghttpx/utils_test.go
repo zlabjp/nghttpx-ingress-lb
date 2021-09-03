@@ -18,40 +18,29 @@ import (
 // TestFixupPortBackendConfig validates fixupPortBackendConfig corrects invalid input to the correct default value.
 func TestFixupPortBackendConfig(t *testing.T) {
 	tests := []struct {
-		desc                    string
-		inProto                 Protocol
-		inAffinity              Affinity
-		inAffinityCookieSecure  AffinityCookieSecure
-		inWeight                uint32
-		outProto                Protocol
-		outAffinity             Affinity
-		outAffinityCookieSecure AffinityCookieSecure
-		outWeight               uint32
+		desc      string
+		inProto   Protocol
+		inWeight  uint32
+		outProto  Protocol
+		outWeight uint32
 	}{
 		{
-			desc:                    "Fixup incorrect input",
-			inProto:                 "foo",
-			inAffinity:              "bar",
-			inAffinityCookieSecure:  "buzz",
-			inWeight:                0,
-			outProto:                ProtocolH1,
-			outAffinity:             AffinityNone,
-			outAffinityCookieSecure: AffinityCookieSecureAuto,
-			outWeight:               1,
+			desc:      "Fixup incorrect input",
+			inProto:   "foo",
+			inWeight:  257,
+			outProto:  ProtocolH1,
+			outWeight: 256,
 		},
 		{
-			desc: "Empty input leaves as is.",
+			desc:      "Empty input",
+			outWeight: 1,
 		},
 		{
-			desc:                    "Correct input must be left unchanged.",
-			inProto:                 ProtocolH2,
-			inAffinity:              AffinityIP,
-			inAffinityCookieSecure:  AffinityCookieSecureYes,
-			inWeight:                256,
-			outProto:                ProtocolH2,
-			outAffinity:             AffinityIP,
-			outAffinityCookieSecure: AffinityCookieSecureYes,
-			outWeight:               256,
+			desc:      "Correct input must be left unchanged.",
+			inProto:   ProtocolH2,
+			inWeight:  256,
+			outProto:  ProtocolH2,
+			outWeight: 256,
 		},
 	}
 
@@ -59,17 +48,13 @@ func TestFixupPortBackendConfig(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			c := &PortBackendConfig{}
 			c.SetProto(tt.inProto)
-			c.SetAffinity(tt.inAffinity)
-			c.SetAffinityCookieSecure(tt.inAffinityCookieSecure)
+			c.SetWeight(tt.inWeight)
 			FixupPortBackendConfig(c)
 			if got, want := c.GetProto(), tt.outProto; got != want {
 				t.Errorf("c.GetProto() = %q, want %q", got, want)
 			}
-			if got, want := c.GetAffinity(), tt.outAffinity; got != want {
-				t.Errorf("c.GetAffinity() = %q, want %q", got, want)
-			}
-			if got, want := c.GetAffinityCookieSecure(), tt.outAffinityCookieSecure; got != want {
-				t.Errorf("c.GetAffinityCookieSecure() = %q, want %q", got, want)
+			if got, want := c.GetWeight(), tt.outWeight; got != want {
+				t.Errorf("c.GetWeight() = %v, want %v", got, want)
 			}
 		})
 	}
@@ -113,38 +98,6 @@ func TestApplyDefaultPortBackendConfig(t *testing.T) {
 				return a
 			}(),
 		},
-		{
-			desc: "Enable IP based affinity",
-			defaultConf: func() *PortBackendConfig {
-				a := &PortBackendConfig{}
-				a.SetAffinity(AffinityIP)
-				return a
-			}(),
-		},
-		{
-			desc: "Set name of affinity cookie",
-			defaultConf: func() *PortBackendConfig {
-				a := &PortBackendConfig{}
-				a.SetAffinityCookieName("lb-cookie")
-				return a
-			}(),
-		},
-		{
-			desc: "Set path of affinity cookie",
-			defaultConf: func() *PortBackendConfig {
-				a := &PortBackendConfig{}
-				a.SetAffinityCookiePath("/path")
-				return a
-			}(),
-		},
-		{
-			desc: "Set secure attribute of affinity cookie",
-			defaultConf: func() *PortBackendConfig {
-				a := &PortBackendConfig{}
-				a.SetAffinityCookieSecure(AffinityCookieSecureNo)
-				return a
-			}(),
-		},
 	}
 
 	for _, tt := range tests {
@@ -163,18 +116,6 @@ func TestApplyDefaultPortBackendConfig(t *testing.T) {
 			}
 			if got, want := a.GetDNS(), tt.defaultConf.GetDNS(); got != want {
 				t.Errorf("a.GetDNS() = %v, want %v", got, want)
-			}
-			if got, want := a.GetAffinity(), tt.defaultConf.GetAffinity(); got != want {
-				t.Errorf("a.GetAffinity() = %v, want %v", got, want)
-			}
-			if got, want := a.GetAffinityCookieName(), tt.defaultConf.GetAffinityCookieName(); got != want {
-				t.Errorf("a.GetAffinityCookieName() = %v, want %v", got, want)
-			}
-			if got, want := a.GetAffinityCookiePath(), tt.defaultConf.GetAffinityCookiePath(); got != want {
-				t.Errorf("a.GetAffinityCookiePath() = %v, want %v", got, want)
-			}
-			if got, want := a.GetAffinityCookieSecure(), tt.defaultConf.GetAffinityCookieSecure(); got != want {
-				t.Errorf("a.GetAffinityCookieSecure() = %v, want %v", got, want)
 			}
 		})
 	}

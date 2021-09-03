@@ -177,18 +177,6 @@ type PortBackendConfig struct {
 	SNI *string `json:"sni,omitempty"`
 	// DNS is true if backend hostname is resolved dynamically rather than start up or configuration reloading.
 	DNS *bool `json:"dns,omitempty"`
-	// (Deprecated) Affinity is session affinity method nghttpx supports.  See affinity parameter in backend option of nghttpx.  This
-	// field is deprecated.  Use PathConfig instead.
-	Affinity *Affinity `json:"affinity,omitempty"`
-	// (Deprecated) AffinityCookieName is a name of cookie to use for cookie-based session affinity.  This field is deprecated.  Use
-	// PathConfig instead.
-	AffinityCookieName *string `json:"affinityCookieName,omitempty"`
-	// (Deprecated) AffinityCookiePath is a path of cookie for cookie-based session affinity.  This field is deprecated.  Use PathConfig
-	// instead.
-	AffinityCookiePath *string `json:"affinityCookiePath,omitempty"`
-	// (Deprecated) AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.  This field is deleted.
-	// Use PathConfig instead.
-	AffinityCookieSecure *AffinityCookieSecure `json:"affinityCookieSecure,omitempty"`
 	// Weight is a weight of backend selection.
 	Weight *uint32 `json:"weight,omitempty"`
 }
@@ -239,54 +227,6 @@ func (pbc *PortBackendConfig) GetDNS() bool {
 func (pbc *PortBackendConfig) SetDNS(dns bool) {
 	pbc.DNS = new(bool)
 	*pbc.DNS = dns
-}
-
-func (pbc *PortBackendConfig) GetAffinity() Affinity {
-	if pbc.Affinity == nil {
-		return AffinityNone
-	}
-	return *pbc.Affinity
-}
-
-func (pbc *PortBackendConfig) SetAffinity(affinity Affinity) {
-	pbc.Affinity = new(Affinity)
-	*pbc.Affinity = affinity
-}
-
-func (pbc *PortBackendConfig) GetAffinityCookieName() string {
-	if pbc.AffinityCookieName == nil {
-		return ""
-	}
-	return *pbc.AffinityCookieName
-}
-
-func (pbc *PortBackendConfig) SetAffinityCookieName(affinityCookieName string) {
-	pbc.AffinityCookieName = new(string)
-	*pbc.AffinityCookieName = affinityCookieName
-}
-
-func (pbc *PortBackendConfig) GetAffinityCookiePath() string {
-	if pbc.AffinityCookiePath == nil {
-		return ""
-	}
-	return *pbc.AffinityCookiePath
-}
-
-func (pbc *PortBackendConfig) SetAffinityCookiePath(affinityCookiePath string) {
-	pbc.AffinityCookiePath = new(string)
-	*pbc.AffinityCookiePath = affinityCookiePath
-}
-
-func (pbc *PortBackendConfig) GetAffinityCookieSecure() AffinityCookieSecure {
-	if pbc.AffinityCookieSecure == nil {
-		return ""
-	}
-	return *pbc.AffinityCookieSecure
-}
-
-func (pbc *PortBackendConfig) SetAffinityCookieSecure(affinityCookieSecure AffinityCookieSecure) {
-	pbc.AffinityCookieSecure = new(AffinityCookieSecure)
-	*pbc.AffinityCookieSecure = affinityCookieSecure
 }
 
 func (pbc *PortBackendConfig) GetWeight() uint32 {

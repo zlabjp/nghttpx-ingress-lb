@@ -115,22 +115,6 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 		klog.Errorf("unrecognized backend protocol %q", config.GetProto())
 		config.SetProto(ProtocolH1)
 	}
-	// deprecated
-	switch config.GetAffinity() {
-	case AffinityNone, AffinityIP, AffinityCookie, "":
-		// OK
-	default:
-		klog.Errorf("unsupported affinity method %v", config.GetAffinity())
-		config.SetAffinity(AffinityNone)
-	}
-	// deprecated
-	switch config.GetAffinityCookieSecure() {
-	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo, "":
-		// OK
-	default:
-		klog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
-		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
-	}
 	if config.Weight != nil {
 		weight := config.GetWeight()
 		switch {
@@ -158,22 +142,6 @@ func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *Por
 	}
 	if defaultConfig.DNS != nil && config.DNS == nil {
 		config.SetDNS(*defaultConfig.DNS)
-	}
-	// deprecated
-	if defaultConfig.Affinity != nil && config.Affinity == nil {
-		config.SetAffinity(*defaultConfig.Affinity)
-	}
-	// deprecated
-	if defaultConfig.AffinityCookieName != nil && config.AffinityCookieName == nil {
-		config.SetAffinityCookieName(*defaultConfig.AffinityCookieName)
-	}
-	// deprecated
-	if defaultConfig.AffinityCookiePath != nil && config.AffinityCookiePath == nil {
-		config.SetAffinityCookiePath(*defaultConfig.AffinityCookiePath)
-	}
-	// deprecated
-	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
-		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
 	}
 	if defaultConfig.Weight != nil && config.Weight == nil {
 		config.SetWeight(*defaultConfig.Weight)
