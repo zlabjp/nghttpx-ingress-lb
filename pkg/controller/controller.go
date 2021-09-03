@@ -830,9 +830,12 @@ func (lbc *LoadBalancerController) sync(key string) error {
 
 	nghttpx.ReadConfig(ingConfig, cm)
 
-	if reloaded, err := lbc.nghttpx.CheckAndReload(ingConfig); err != nil {
+	reloaded, err := lbc.nghttpx.CheckAndReload(ingConfig)
+	if err != nil {
 		return err
-	} else if !reloaded {
+	}
+
+	if !reloaded {
 		klog.V(4).Infof("No need to reload configuration.")
 	}
 
@@ -1144,15 +1147,15 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 		// servicePort.Port.  servicePort.TargetPort could be a string.  This is really messy.
 
 		var key string
-		if isb.Port.Name != "" {
-			if isb.Port.Name == servicePort.Name {
-				key = isb.Port.Name
+		switch {
+		case isb.Port.Name != "":
+			if isb.Port.Name != servicePort.Name {
+				continue
 			}
-		} else if isb.Port.Number == servicePort.Port {
+			key = isb.Port.Name
+		case isb.Port.Number == servicePort.Port:
 			key = strconv.FormatInt(int64(isb.Port.Number), 10)
-		}
-
-		if key == "" {
+		default:
 			continue
 		}
 
