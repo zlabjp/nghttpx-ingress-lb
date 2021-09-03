@@ -27,7 +27,6 @@ package nghttpx
 import (
 	"context"
 	"runtime"
-	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -51,7 +50,7 @@ type IngressConfig struct {
 	SubTLSCred     []*TLSCred
 	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-n
 	// Set the number of worker threads.
-	Workers string
+	Workers int32
 	// ExtraConfig is the extra configurations in a format that nghttpx accepts in --conf.
 	ExtraConfig string
 	// MrubyFileContent is the extra mruby script.  It is saved in the container disk space, and will be referenced by mruby-file from
@@ -78,7 +77,7 @@ type IngressConfig struct {
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.
 func NewIngressConfig() *IngressConfig {
 	return &IngressConfig{
-		Workers: strconv.Itoa(runtime.NumCPU()),
+		Workers: int32(runtime.NumCPU()),
 	}
 }
 
