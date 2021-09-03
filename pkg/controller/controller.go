@@ -1310,10 +1310,10 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *v1.Service, sv
 	ep, err := lbc.epLister.Endpoints(svc.Namespace).Get(svc.Name)
 	if err != nil {
 		klog.Warningf("unexpected error obtaining service endpoints: %v", err)
-		return []nghttpx.UpstreamServer{}
+		return nil
 	}
 
-	upsServers := []nghttpx.UpstreamServer{}
+	var upsServers []nghttpx.UpstreamServer
 
 	for i := range ep.Subsets {
 		ss := &ep.Subsets[i]
