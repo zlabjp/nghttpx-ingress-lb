@@ -1128,7 +1128,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 
 	klog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
 
-	svcKey := fmt.Sprintf("%v/%v", ing.Namespace, isb.Name)
+	svcKey := strings.Join([]string{ing.Namespace, isb.Name}, "/")
 	svc, err := lbc.svcLister.Services(ing.Namespace).Get(isb.Name)
 	if err != nil {
 		return nil, fmt.Errorf("error getting service %v from the cache: %v", svcKey, err)
@@ -1427,7 +1427,7 @@ func (lbc *LoadBalancerController) createUpstreamServer(svc *v1.Service, address
 		AffinityCookieName:   portBackendConfig.GetAffinityCookieName(),
 		AffinityCookiePath:   portBackendConfig.GetAffinityCookiePath(),
 		AffinityCookieSecure: portBackendConfig.GetAffinityCookieSecure(),
-		Group:                fmt.Sprintf("%v/%v", svc.Namespace, svc.Name),
+		Group:                strings.Join([]string{svc.Namespace, svc.Name}, "/"),
 		Weight:               portBackendConfig.GetWeight(),
 	}
 	// Set Protocol and Affinity here if they are empty.  Template expects them.
