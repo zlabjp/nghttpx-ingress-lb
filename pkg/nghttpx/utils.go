@@ -209,12 +209,18 @@ func WriteFile(path string, content []byte) error {
 	if err != nil {
 		return err
 	}
-	tempFile.Close()
 
-	if err := os.WriteFile(tempFile.Name(), content, 0600); err != nil {
+	if _, err := tempFile.Write(content); err != nil {
+		tempFile.Close()
 		os.Remove(tempFile.Name())
 		return err
 	}
+
+	if err := tempFile.Close(); err != nil {
+		os.Remove(tempFile.Name())
+		return err
+	}
+
 	return os.Rename(tempFile.Name(), path)
 }
 
