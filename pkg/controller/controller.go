@@ -1256,12 +1256,7 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *v1.Secret) (*
 	// OCSP response in TLS secret is optional feature.
 	ocspResp := secret.Data[lbc.ocspRespKey]
 
-	tlsCred, err := nghttpx.CreateTLSCred(lbc.nghttpxConfDir, nghttpx.TLSCredPrefix(secret), cert, key, ocspResp)
-	if err != nil {
-		return nil, fmt.Errorf("could not create private key and certificate files for Secret %v/%v: %v", secret.Namespace, secret.Name, err)
-	}
-
-	return tlsCred, nil
+	return nghttpx.CreateTLSCred(lbc.nghttpxConfDir, nghttpx.TLSCredPrefix(secret), cert, key, ocspResp), nil
 }
 
 func (lbc *LoadBalancerController) secretReferenced(s *v1.Secret) bool {

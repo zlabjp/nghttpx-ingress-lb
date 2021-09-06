@@ -56,10 +56,7 @@ func TestCreateTLSCred(t *testing.T) {
 	}
 
 	name := fmt.Sprintf("test-%v", time.Now().UnixNano())
-	tlsCred, err := CreateTLSCred(defaultConfDir, name, dCrt, dKey, []byte(tlsOCSPResp))
-	if err != nil {
-		t.Fatalf("unexpected error writing TLS key pair: %v", err)
-	}
+	tlsCred := CreateTLSCred(defaultConfDir, name, dCrt, dKey, []byte(tlsOCSPResp))
 
 	if got, want := tlsCred.Key.Path, filepath.Join(defaultConfDir, tlsDir, name+".key"); got != want {
 		t.Errorf("tlsCred.Key = %v, want %v", got, want)
