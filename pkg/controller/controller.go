@@ -1134,10 +1134,10 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 	svcKey := strings.Join([]string{ing.Namespace, isb.Name}, "/")
 	svc, err := lbc.svcLister.Services(ing.Namespace).Get(isb.Name)
 	if err != nil {
-		return nil, fmt.Errorf("error getting service %v from the cache: %v", svcKey, err)
+		return nil, fmt.Errorf("error getting Service %v from the cache: %v", svcKey, err)
 	}
 
-	klog.V(3).Infof("obtaining port information for service %v", svcKey)
+	klog.V(3).Infof("obtaining port information for Service %v", svcKey)
 
 	svcBackendConfig := backendConfig[isb.Name]
 
@@ -1169,7 +1169,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 
 		eps := lbc.getEndpoints(svc, servicePort, portBackendConfig)
 		if len(eps) == 0 {
-			klog.Warningf("service %v does not have any active endpoints", svcKey)
+			klog.Warningf("Service %v does not have any active endpoints", svcKey)
 			break
 		}
 
@@ -1178,7 +1178,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 	}
 
 	if len(ups.Backends) == 0 {
-		return nil, fmt.Errorf("no backend service port found for service %v", svcKey)
+		return nil, fmt.Errorf("no backend service port found for Service %v", svcKey)
 	}
 
 	return ups, nil
@@ -1476,7 +1476,7 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, ep
 func (lbc *LoadBalancerController) getNamedPortFromPod(ref *v1.ObjectReference, servicePort *v1.ServicePort) (int32, error) {
 	pod, err := lbc.podLister.Pods(ref.Namespace).Get(ref.Name)
 	if err != nil {
-		return 0, fmt.Errorf("could not get Pods %v/%v: %v", ref.Namespace, ref.Name, err)
+		return 0, fmt.Errorf("could not get Pod %v/%v: %v", ref.Namespace, ref.Name, err)
 	}
 
 	port, err := podFindPort(pod, servicePort)
