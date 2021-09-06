@@ -116,10 +116,17 @@ func podFindPort(pod *v1.Pod, svcPort *v1.ServicePort) (int32, error) {
 	switch portName.Type {
 	case intstr.String:
 		name := portName.StrVal
-		for _, container := range pod.Spec.Containers {
-			for _, port := range container.Ports {
-				if port.Name == name && port.Protocol == svcPort.Protocol {
-					return port.ContainerPort, nil
+	loop:
+		for i := range pod.Spec.Containers {
+			container := &pod.Spec.Containers[i]
+			for i := range container.Ports {
+				port := &container.Ports[i]
+				// port.Name must be unique inside Pod.
+				if port.Name == name {
+					if port.Protocol == svcPort.Protocol {
+						return port.ContainerPort, nil
+					}
+					break loop
 				}
 			}
 		}
