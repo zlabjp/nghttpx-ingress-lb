@@ -249,7 +249,7 @@ func MkdirAll(path string) error {
 // Otherwise, it formats d in seconds.
 func nghttpxDuration(d time.Duration) string {
 	d = d.Round(time.Millisecond)
-	msec := int64(d.Nanoseconds() / 1000000)
+	msec := d.Nanoseconds() / 1000000
 	if msec%1000 == 0 {
 		return strconv.FormatInt(msec/1000, 10)
 	}
