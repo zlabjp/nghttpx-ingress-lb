@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"k8s.io/klog/v2"
 	"path/filepath"
+	"strings"
 
 	"k8s.io/api/core/v1"
 )
@@ -138,7 +139,7 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 
 // TLSCredPrefix returns prefix of TLS certificate/private key files.
 func TLSCredPrefix(secret *v1.Secret) string {
-	return fmt.Sprintf("%v_%v", secret.Namespace, secret.Name)
+	return strings.Join([]string{secret.Namespace, secret.Name}, "_")
 }
 
 // VerifyCertificate verifies certPEM passed in PEM format.
