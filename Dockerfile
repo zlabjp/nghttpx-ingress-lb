@@ -19,7 +19,7 @@
 
 FROM debian:buster as build
 
-COPY patches/extra-mrbgem.patch patches/0001-Add-dnf-do-not-forward-parameter-to-backend-option.patch /
+COPY patches/extra-mrbgem.patch patches/0001-Add-dnf-do-not-forward-parameter-to-backend-option.patch patches/0001-nghttpx-Fix-uninitialized-dnf-fields.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
@@ -30,6 +30,7 @@ RUN apt-get update && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     patch -p1 < /0001-Add-dnf-do-not-forward-parameter-to-backend-option.patch && \
+    patch -p1 < /0001-nghttpx-Fix-uninitialized-dnf-fields.patch && \
     git submodule update --init && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed \
@@ -51,7 +52,7 @@ RUN apt-get update && \
         /var/log/* \
         /tmp/* \
         /var/tmp/* && \
-    rm /extra-mrbgem.patch /0001-Add-dnf-do-not-forward-parameter-to-backend-option.patch
+    rm /extra-mrbgem.patch /0001-Add-dnf-do-not-forward-parameter-to-backend-option.patch /0001-nghttpx-Fix-uninitialized-dnf-fields.patch
 
 FROM gcr.io/distroless/cc-debian10@sha256:f8203eb3a375ddf03523497419fb9354d26fe2d1620b3ed5d522430c74297327
 
