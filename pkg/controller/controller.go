@@ -1641,7 +1641,7 @@ func (lbc *LoadBalancerController) syncIngress(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			if err := lbc.removeAddressFromLoadBalancerIngress(); err != nil {
-				klog.Error(err)
+				klog.Errorf("Could not remove address from LoadBalancerIngress: %v", err)
 			}
 			return
 		case <-time.After(time.Duration(float64(30*time.Second) * (rand.Float64() + 1))):
