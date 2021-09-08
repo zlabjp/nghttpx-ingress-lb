@@ -35,7 +35,7 @@ import (
 type Interface interface {
 	// Start starts a nghttpx process using executable at path with configuration file at confPath, and waits for the process to finish.
 	// If ctx is canceled, kill nghttpx process, and return.
-	Start(ctx context.Context, path, confPath string)
+	Start(ctx context.Context, path, confPath string) error
 	// CheckAndReload checks whether the nghttpx configuration changed, and if so, make nghttpx reload its configuration.  If reloading
 	// is required, and it successfully issues reloading, returns true.  If there is no need to reloading, it returns false.  On error,
 	// it returns false, and non-nil error.

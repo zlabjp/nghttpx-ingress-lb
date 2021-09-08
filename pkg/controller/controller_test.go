@@ -245,7 +245,9 @@ func newFakeManager() *fakeManager {
 	return fm
 }
 
-func (fm *fakeManager) Start(ctx context.Context, path, confPath string) {}
+func (fm *fakeManager) Start(ctx context.Context, path, confPath string) error {
+	return nil
+}
 
 func (fm *fakeManager) CheckAndReload(ingConfig *nghttpx.IngressConfig) (bool, error) {
 	return fm.checkAndReloadHandler(ingConfig)

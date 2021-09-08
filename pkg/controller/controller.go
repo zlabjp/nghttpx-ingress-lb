@@ -1513,7 +1513,9 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		lbc.nghttpx.Start(ctrlCtx, lbc.nghttpxExecPath, nghttpx.ConfigPath(lbc.nghttpxConfDir))
+		if err := lbc.nghttpx.Start(ctrlCtx, lbc.nghttpxExecPath, nghttpx.ConfigPath(lbc.nghttpxConfDir)); err != nil {
+			klog.Errorf("Could not start nghttpx: %v", err)
+		}
 	}()
 
 	go lbc.ingInformer.Run(ctrlCtx.Done())

@@ -41,14 +41,14 @@ import (
 )
 
 // Start starts a nghttpx process using nghttpx executable at path, and wait.
-func (mgr *Manager) Start(ctx context.Context, path, confPath string) {
+func (mgr *Manager) Start(ctx context.Context, path, confPath string) error {
 	klog.Infof("Starting nghttpx process: %v --conf %v", path, confPath)
 	mgr.cmd = exec.Command(path, "--conf", confPath)
 	mgr.cmd.Stdout = os.Stdout
 	mgr.cmd.Stderr = os.Stderr
 	if err := mgr.cmd.Start(); err != nil {
 		klog.Errorf("nghttpx did not start successfully: %v", err)
-		return
+		return err
 	}
 
 	waitCtx, cancel := context.WithCancel(context.Background())
@@ -72,6 +72,8 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) {
 	}
 
 	klog.Infof("nghttpx exited")
+
+	return nil
 }
 
 // CheckAndReload checks whether the nghttpx configuration changed and if so, makes nghttpx reload its configuration.
