@@ -74,7 +74,7 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) {
 	klog.Infof("nghttpx exited")
 }
 
-// CheckAndReload verify if the nghttpx configuration changed and sends a reload
+// CheckAndReload checks whether the nghttpx configuration changed and if so, makes nghttpx reload its configuration.
 //
 // The current running nghttpx master process executes new nghttpx
 // with new configuration.  If its invocation succeeds, current
