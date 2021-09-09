@@ -27,6 +27,7 @@ package controller
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -40,7 +41,7 @@ import (
 	clientv1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
 	networking "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -796,7 +797,7 @@ func (lbc *LoadBalancerController) getConfigMap(cmKey *types.NamespacedName) (*v
 
 	cm, err := lbc.cmLister.ConfigMaps(cmKey.Namespace).Get(cmKey.Name)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			klog.V(3).Infof("ConfigMap %v has been deleted", cmKey)
 			return &v1.ConfigMap{}, nil
 		}
@@ -1439,7 +1440,7 @@ func (lbc *LoadBalancerController) createUpstreamServer(svc *v1.Service, address
 // not a number, a port is looked up by referencing Pod denoted by ref.
 func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, epPort *discovery.EndpointPort, ref *v1.ObjectReference) (int32, error) {
 	if epPort.Port == nil {
-		return 0, fmt.Errorf("EndpointPort has no port defined")
+		return 0, errors.New("EndpointPort has no port defined")
 	}
 
 	switch {
@@ -1462,7 +1463,7 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *v1.ServicePort, ep
 		}
 	}
 
-	return 0, fmt.Errorf("no matching port found")
+	return 0, errors.New("no matching port found")
 }
 
 // getNamedPortFromPod returns port number from Pod denoted by ref which shares the same port name with servicePort.

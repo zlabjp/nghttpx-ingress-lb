@@ -27,6 +27,7 @@ package nghttpx
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -311,13 +312,13 @@ func (mgr *Manager) getNghttpxConfigRevision() (string, error) {
 	}
 
 	if r.Data == nil {
-		return "", fmt.Errorf("nghttpx configuration API result has nil Data field")
+		return "", errors.New("nghttpx configuration API result has nil Data field")
 	}
 
 	s := r.Data["configRevision"]
 	confRev, ok := s.(json.Number)
 	if !ok {
-		return "", fmt.Errorf("nghttpx configuration API result has non json.Number configRevision")
+		return "", errors.New("nghttpx configuration API result has non json.Number configRevision")
 	}
 
 	klog.V(4).Infof("nghttpx configRevision is %v", confRev)

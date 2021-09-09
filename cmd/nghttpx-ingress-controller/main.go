@@ -26,6 +26,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -334,7 +335,7 @@ func (hc healthzChecker) Check(_ *http.Request) error {
 	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
-		return fmt.Errorf("nghttpx is unhealthy")
+		return errors.New("nghttpx is unhealthy")
 	}
 
 	return nil
