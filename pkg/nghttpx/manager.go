@@ -45,11 +45,9 @@ type Manager struct {
 	// template loaded ready to be used to generate the nghttpx configuration file
 	template *template.Template
 
-	// template for backend configuration.  This is a part of
-	// nghttpx configuration, and included from main one (template
-	// above).  We have separate template for backend to change
-	// backend configuration without reloading nghttpx if main
-	// configuration has not changed.
+	// template for backend configuration.  This is a part of nghttpx configuration, and included from main one (template above).  We
+	// have separate template for backend to change backend configuration without reloading nghttpx if main configuration has not
+	// changed.
 	backendTemplate *template.Template
 	// backendconfigURI is the nghttpx backendconfig endpoint.
 	backendconfigURI string

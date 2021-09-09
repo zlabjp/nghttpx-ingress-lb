@@ -71,8 +71,7 @@ const (
 	annotationIsDefaultIngressClass = "ingressclass.kubernetes.io/is-default-class"
 )
 
-// LoadBalancerController watches the kubernetes api and adds/removes services
-// from the loadbalancer
+// LoadBalancerController watches the kubernetes api and adds/removes services from the loadbalancer
 type LoadBalancerController struct {
 	clientset                clientset.Interface
 	ingInformer              cache.SharedIndexInformer
@@ -1143,8 +1142,8 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 
 	for i := range svc.Spec.Ports {
 		servicePort := &svc.Spec.Ports[i]
-		// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use
-		// servicePort.Port.  servicePort.TargetPort could be a string.  This is really messy.
+		// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use servicePort.Port.
+		// servicePort.TargetPort could be a string.  This is really messy.
 
 		var key string
 		switch {
@@ -1393,7 +1392,8 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *v1.Service
 					continue
 				}
 
-				// TODO We historically added all addresses in Endpoints code.  Not sure we should just pick one here instead.
+				// TODO We historically added all addresses in Endpoints code.  Not sure we should just pick one here
+				// instead.
 				for _, addr := range ep.Addresses {
 					upsServers = append(upsServers, lbc.createUpstreamServer(svc, addr, targetPort, portBackendConfig))
 				}

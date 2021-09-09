@@ -59,11 +59,9 @@ func ReadConfig(ingConfig *IngressConfig, config *v1.ConfigMap) {
 	}
 }
 
-// needsReload first checks that configuration is changed.  filename
-// is the current configuration file path, and data includes the new
-// configuration.  If they differ, we write data into filename, and
-// return true.  Otherwise, just return false without altering
-// existing file.
+// needsReload first checks that configuration is changed.  filename is the current configuration file path, and data includes the new
+// configuration.  If they differ, we write data into filename, and return true.  Otherwise, just return false without altering existing
+// file.
 func needsReload(filename string, newCfg []byte) (bool, error) {
 	in, err := os.Open(filename)
 	if err != nil {

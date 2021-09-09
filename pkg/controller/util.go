@@ -107,10 +107,8 @@ func removeAddressFromLoadBalancerIngress(a []v1.LoadBalancerIngress, addr strin
 // https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/api/v1/pod/util.go#L29 because original
 // FindPort requires k8s.io/kubernetes/pkg/api/v1 while we use k8s.io/client-go/pkg/api/v1.
 
-// podFindPort locates the container port for the given pod and portName.  If the
-// targetPort is a number, use that.  If the targetPort is a string, look that
-// string up in all named ports in all containers in the target pod.  If no
-// match is found, fail.
+// podFindPort locates the container port for the given pod and portName.  If the targetPort is a number, use that.  If the targetPort is a
+// string, look that string up in all named ports in all containers in the target pod.  If no match is found, fail.
 func podFindPort(pod *v1.Pod, svcPort *v1.ServicePort) (int32, error) {
 	portName := svcPort.TargetPort
 	switch portName.Type {

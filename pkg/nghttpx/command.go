@@ -78,10 +78,8 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) error {
 
 // CheckAndReload checks whether the nghttpx configuration changed and if so, makes nghttpx reload its configuration.
 //
-// The current running nghttpx master process executes new nghttpx
-// with new configuration.  If its invocation succeeds, current
-// nghttpx is going to shutdown gracefully.  The invocation of new
-// process may fail due to invalid configurations.
+// The current running nghttpx master process executes new nghttpx with new configuration.  If its invocation succeeds, current nghttpx is
+// going to shutdown gracefully.  The invocation of new process may fail due to invalid configurations.
 func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 	mainConfig, backendConfig, err := mgr.generateCfg(ingressCfg)
 	if err != nil {
