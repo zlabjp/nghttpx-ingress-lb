@@ -100,7 +100,7 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		if err != nil {
 			fmt.Println("error:", err)
 		}
-		klog.Infof("nghttpx configuration:\n%v", string(b))
+		klog.Infof("nghttpx configuration:\n%s", b)
 	}
 
 	switch changed {
@@ -264,7 +264,7 @@ func (mgr *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 	}
 
 	if klog.V(3).Enabled() {
-		klog.Infof("API request returned response body: %v", string(respBody))
+		klog.Infof("API request returned response body: %s", respBody)
 	}
 
 	klog.Info("API request has completed successfully")
