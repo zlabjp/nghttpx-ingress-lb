@@ -101,7 +101,7 @@ func main() {
 	clientcmd.BindOverrideFlags(&configOverrides, rootCmd.Flags(), clientcmd.RecommendedConfigOverrideFlags(""))
 
 	rootCmd.Flags().StringVar(&defaultSvc, "default-backend-service", defaultSvc,
-		`Service used to serve a 404 page for the default backend.  Takes the form namespace/name.  The controller uses the first node port of this Service for the default backend.  This flag must be specified unless --internal-default-backend is given.`)
+		`Service used to serve a 404 page for the default backend.  Takes the form namespace/name.  The controller uses the first port of this Service for the default backend.  This flag must be specified unless --internal-default-backend is given.`)
 
 	rootCmd.Flags().StringVar(&ngxConfigMap, "nghttpx-configmap", ngxConfigMap,
 		`Namespace/name of the ConfigMap that contains the custom nghttpx configuration to use.  Takes the form namespace/name.`)
@@ -116,13 +116,13 @@ func main() {
 
 	rootCmd.Flags().Int32Var(&nghttpxAPIPort, "nghttpx-api-port", nghttpxAPIPort, "Port for nghttpx API endpoint.")
 
-	rootCmd.Flags().BoolVar(&profiling, "profiling", profiling, `Enable profiling at the health port.  It exposes /debug/pprof/ endpoint.`)
+	rootCmd.Flags().BoolVar(&profiling, "profiling", profiling, `Enable profiling at the health port.  It exposes /debug/pprof/ endpoint on a port specified by --healthz-port.`)
 
 	rootCmd.Flags().BoolVar(&allowInternalIP, "allow-internal-ip", allowInternalIP,
 		`Allow to use address of type NodeInternalIP when fetching external IP address.  This is the workaround for the cluster configuration where NodeExternalIP or NodeLegacyHostIP is not assigned or cannot be used.`)
 
 	rootCmd.Flags().StringVar(&defaultTLSSecret, "default-tls-secret", defaultTLSSecret,
-		`Name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.`)
+		`Name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.  The redirection can be turned off per Ingress basis with redirectIfNotTLS=false in ingress.zlab.co.jp/path-config annotation.`)
 
 	rootCmd.Flags().StringVar(&ingressClass, "ingress-class", ingressClass,
 		`(Deprecated) Ingress class which this controller is responsible for.  This is the value of the deprecated "kubernetes.io/ingress.class" annotation.  For Kubernetes v1.18 or later, use ingress-class-controller flag and IngressClass resource.`)
@@ -159,7 +159,7 @@ func main() {
 		`Ignore any settings or rules in Ingress resources which override default backend service.`)
 
 	rootCmd.Flags().DurationVar(&deferredShutdownPeriod, "deferred-shutdown-period", deferredShutdownPeriod,
-		`How long the controller waits before actually starting shutting down.  If nonzero value is given, additional health check endpoint is added to HTTP/HTTPS endpoint.  The health check request path is /nghttpx-healthz.  Normally, it returns 200 HTTP status code, but in this period, the endpoint returns 503.`)
+		`How long the controller waits before actually starting shutting down.  If nonzero value is given, additional health check endpoint is added to HTTP/HTTPS endpoint.  The health check request path is /nghttpx-healthz.  Normally, it returns 200 HTTP status code, but after entering this period, the endpoint returns 503.`)
 
 	rootCmd.Flags().BoolVar(&internalDefaultBackend, "internal-default-backend", internalDefaultBackend,
 		`Use the internal default backend instead of an external service specified by --default-backend-service flag.  The internal default backend responds with 200 status code when /healthz is requested.  It responds with 404 status code to the other requests.  The internal default backend can still be overridden by Ingress resource unless --no-default-backend-override flag is given.`)
