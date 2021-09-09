@@ -1631,7 +1631,7 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *networking.Ingress)
 	return true
 }
 
-// syncIngress udpates Ingress resource status.
+// syncIngress updates Ingress resource status.
 func (lbc *LoadBalancerController) syncIngress(ctx context.Context) {
 	for {
 		if err := lbc.getLoadBalancerIngressAndUpdateIngress(ctx); err != nil {
