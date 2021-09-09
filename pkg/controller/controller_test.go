@@ -125,7 +125,7 @@ var (
 func (f *fixture) prepare() {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
 	config := Config{
-		DefaultBackendService:  types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
+		DefaultBackendService:  &types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
 		WatchNamespace:         defaultIngNamespace,
 		NghttpxConfigMap:       &types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
 		NghttpxConfDir:         defaultConfDir,

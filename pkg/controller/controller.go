@@ -95,7 +95,7 @@ type LoadBalancerController struct {
 	nodeLister               listerscore.NodeLister
 	nghttpx                  nghttpx.Interface
 	podInfo                  types.NamespacedName
-	defaultSvc               types.NamespacedName
+	defaultSvc               *types.NamespacedName
 	ngxConfigMap             *types.NamespacedName
 	nghttpxHealthPort        int32
 	nghttpxAPIPort           int32
@@ -128,8 +128,8 @@ type LoadBalancerController struct {
 }
 
 type Config struct {
-	// DefaultBackendService is the default backend service name.
-	DefaultBackendService types.NamespacedName
+	// DefaultBackendService is the default backend service name.  It must be specified if InternalDefaultBackend == false.
+	DefaultBackendService *types.NamespacedName
 	// WatchNamespace is the namespace to watch for Ingress resource updates.
 	WatchNamespace string
 	// NghttpxConfigMap is the name of ConfigMap resource which contains additional configuration for nghttpx.

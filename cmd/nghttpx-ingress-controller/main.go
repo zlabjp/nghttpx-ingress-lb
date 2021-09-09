@@ -173,7 +173,7 @@ func run(cmd *cobra.Command, args []string) {
 	klog.Infof("Using build: %v - %v", gitRepo, version)
 
 	var (
-		defaultSvcKey       types.NamespacedName
+		defaultSvcKey       *types.NamespacedName
 		defaultTLSSecretKey *types.NamespacedName
 		nghttpxConfigMapKey *types.NamespacedName
 		publishSvcKey       *types.NamespacedName
@@ -186,7 +186,7 @@ func run(cmd *cobra.Command, args []string) {
 		if ns, name, err := cache.SplitMetaNamespaceKey(defaultSvc); err != nil {
 			klog.Exitf("default-backend-service: invalid Service identifier %v: %v", defaultSvc, err)
 		} else {
-			defaultSvcKey = types.NamespacedName{
+			defaultSvcKey = &types.NamespacedName{
 				Namespace: ns,
 				Name:      name,
 			}
