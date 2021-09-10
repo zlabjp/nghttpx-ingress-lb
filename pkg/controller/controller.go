@@ -96,7 +96,7 @@ type LoadBalancerController struct {
 	nghttpx                  nghttpx.Interface
 	podInfo                  types.NamespacedName
 	defaultSvc               *types.NamespacedName
-	ngxConfigMap             *types.NamespacedName
+	nghttpxConfigMap         *types.NamespacedName
 	defaultTLSSecret         *types.NamespacedName
 	publishSvc               *types.NamespacedName
 	nghttpxHealthPort        int32
@@ -183,7 +183,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		clientset:                clientset,
 		podInfo:                  config.PodInfo,
 		nghttpx:                  manager,
-		ngxConfigMap:             config.NghttpxConfigMap,
+		nghttpxConfigMap:         config.NghttpxConfigMap,
 		nghttpxHealthPort:        config.NghttpxHealthPort,
 		nghttpxAPIPort:           config.NghttpxAPIPort,
 		nghttpxConfDir:           config.NghttpxConfDir,
@@ -302,8 +302,8 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	}
 
 	var cmNamespace string
-	if lbc.ngxConfigMap != nil {
-		cmNamespace = lbc.ngxConfigMap.Namespace
+	if lbc.nghttpxConfigMap != nil {
+		cmNamespace = lbc.nghttpxConfigMap.Namespace
 	} else {
 		// Just watch config.PodInfo.Namespace to make codebase simple
 		cmNamespace = config.PodInfo.Namespace
@@ -624,7 +624,7 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 
 func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 	c := obj.(*v1.ConfigMap)
-	if lbc.ngxConfigMap == nil || c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
+	if lbc.nghttpxConfigMap == nil || c.Namespace != lbc.nghttpxConfigMap.Namespace || c.Name != lbc.nghttpxConfigMap.Name {
 		return
 	}
 	klog.V(4).Infof("ConfigMap %v/%v added", c.Namespace, c.Name)
@@ -633,7 +633,7 @@ func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 
 func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interface{}) {
 	curC := cur.(*v1.ConfigMap)
-	if lbc.ngxConfigMap == nil || curC.Namespace != lbc.ngxConfigMap.Namespace || curC.Name != lbc.ngxConfigMap.Name {
+	if lbc.nghttpxConfigMap == nil || curC.Namespace != lbc.nghttpxConfigMap.Namespace || curC.Name != lbc.nghttpxConfigMap.Name {
 		return
 	}
 	// updates to configuration configmaps can trigger an update
@@ -655,7 +655,7 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 			return
 		}
 	}
-	if lbc.ngxConfigMap == nil || c.Namespace != lbc.ngxConfigMap.Namespace || c.Name != lbc.ngxConfigMap.Name {
+	if lbc.nghttpxConfigMap == nil || c.Namespace != lbc.nghttpxConfigMap.Namespace || c.Name != lbc.nghttpxConfigMap.Name {
 		return
 	}
 	klog.V(4).Infof("ConfigMap %v/%v deleted", c.Namespace, c.Name)
@@ -820,7 +820,7 @@ func (lbc *LoadBalancerController) sync(key string) error {
 		return err
 	}
 
-	cm, err := lbc.getConfigMap(lbc.ngxConfigMap)
+	cm, err := lbc.getConfigMap(lbc.nghttpxConfigMap)
 	if err != nil {
 		return err
 	}
