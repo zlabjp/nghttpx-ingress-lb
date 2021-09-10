@@ -265,7 +265,7 @@ func run(cmd *cobra.Command, args []string) {
 		OCSPRespKey:              ocspRespKey,
 		FetchOCSPRespFromSecret:  fetchOCSPRespFromSecret,
 		ProxyProto:               proxyProto,
-		PublishSvc:               publishSvcKey,
+		PublishService:           publishSvcKey,
 		EnableEndpointSlice:      endpointSlices,
 		ReloadRate:               reloadRate,
 		ReloadBurst:              reloadBurst,

@@ -1490,7 +1490,7 @@ func TestGetLoadBalancerIngressFromService(t *testing.T) {
 	}
 
 	f.prepare()
-	f.lbc.publishSvc = &types.NamespacedName{
+	f.lbc.publishService = &types.NamespacedName{
 		Namespace: "alpha",
 		Name:      "bravo",
 	}

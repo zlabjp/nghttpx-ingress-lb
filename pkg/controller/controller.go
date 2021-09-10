@@ -98,7 +98,7 @@ type LoadBalancerController struct {
 	defaultSvc               *types.NamespacedName
 	nghttpxConfigMap         *types.NamespacedName
 	defaultTLSSecret         *types.NamespacedName
-	publishSvc               *types.NamespacedName
+	publishService           *types.NamespacedName
 	nghttpxHealthPort        int32
 	nghttpxAPIPort           int32
 	nghttpxConfDir           string
@@ -152,9 +152,9 @@ type Config struct {
 	FetchOCSPRespFromSecret bool
 	// ProxyProto toggles the use of PROXY protocol for all public-facing frontends.
 	ProxyProto bool
-	// PublishSvc is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
+	// PublishService is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
 	// controller Pod.
-	PublishSvc *types.NamespacedName
+	PublishService *types.NamespacedName
 	// EnableEndpointSlice tells controller to use EndpointSlices instead of Endpoints.
 	EnableEndpointSlice bool
 	// ReloadRate is a rate (QPS) of reloading nghttpx configuration.
@@ -198,7 +198,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		ocspRespKey:              config.OCSPRespKey,
 		fetchOCSPRespFromSecret:  config.FetchOCSPRespFromSecret,
 		proxyProto:               config.ProxyProto,
-		publishSvc:               config.PublishSvc,
+		publishService:           config.PublishService,
 		noDefaultBackendOverride: config.NoDefaultBackendOverride,
 		deferredShutdownPeriod:   config.DeferredShutdownPeriod,
 		healthzPort:              config.HealthzPort,
@@ -1651,7 +1651,7 @@ func (lbc *LoadBalancerController) syncIngress(ctx context.Context) {
 func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx context.Context) error {
 	var lbIngs []v1.LoadBalancerIngress
 
-	if lbc.publishSvc == nil {
+	if lbc.publishService == nil {
 		thisPod, err := lbc.getThisPod()
 		if err != nil {
 			return err
@@ -1663,7 +1663,7 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx co
 			return fmt.Errorf("could not get Node IP of Ingress controller: %v", err)
 		}
 	} else {
-		svc, err := lbc.svcLister.Services(lbc.publishSvc.Namespace).Get(lbc.publishSvc.Name)
+		svc, err := lbc.svcLister.Services(lbc.publishService.Namespace).Get(lbc.publishService.Name)
 		if err != nil {
 			return err
 		}
