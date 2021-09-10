@@ -97,34 +97,31 @@ type LoadBalancerController struct {
 	podInfo                  types.NamespacedName
 	defaultSvc               *types.NamespacedName
 	ngxConfigMap             *types.NamespacedName
+	defaultTLSSecret         *types.NamespacedName
+	publishSvc               *types.NamespacedName
 	nghttpxHealthPort        int32
 	nghttpxAPIPort           int32
 	nghttpxConfDir           string
 	nghttpxExecPath          string
 	nghttpxHTTPPort          int32
 	nghttpxHTTPSPort         int32
-	defaultTLSSecret         *types.NamespacedName
 	watchNamespace           string
 	ingressClassController   string
 	allowInternalIP          bool
 	ocspRespKey              string
 	fetchOCSPRespFromSecret  bool
 	proxyProto               bool
-	publishSvc               *types.NamespacedName
 	noDefaultBackendOverride bool
 	deferredShutdownPeriod   time.Duration
 	healthzPort              int32
 	internalDefaultBackend   bool
-
-	recorder record.EventRecorder
-
-	syncQueue workqueue.Interface
+	reloadRateLimiter        flowcontrol.RateLimiter
+	recorder                 record.EventRecorder
+	syncQueue                workqueue.Interface
 
 	// shutdownMu protects shutdown from the concurrent read/write.
 	shutdownMu sync.RWMutex
 	shutdown   bool
-
-	reloadRateLimiter flowcontrol.RateLimiter
 }
 
 type Config struct {
