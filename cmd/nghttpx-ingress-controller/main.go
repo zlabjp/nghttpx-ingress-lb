@@ -42,9 +42,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/server/healthz"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
@@ -249,6 +251,27 @@ func run(cmd *cobra.Command, args []string) {
 		klog.Exitf("Failed to create clientset: %v", err)
 	}
 
+	podInfo := types.NamespacedName{Name: os.Getenv("POD_NAME"), Namespace: os.Getenv("POD_NAMESPACE")}
+
+	if podInfo.Name == "" {
+		klog.Exit("POD_NAME environment variable cannot be empty.")
+	}
+	if podInfo.Namespace == "" {
+		klog.Exit("POD_NAMESPACE environment variable cannot be empty.")
+	}
+
+	thisPod, err := clientset.CoreV1().Pods(podInfo.Namespace).Get(context.Background(), podInfo.Name, metav1.GetOptions{})
+	if err != nil {
+		klog.Exit("Could not get Pod %v/%v: %v", podInfo.Namespace, podInfo.Name, err)
+	}
+
+	eventBroadcasterCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: clientset.EventsV1()})
+	eventBroadcaster.StartRecordingToSink(eventBroadcasterCtx.Done())
+	eventRecorder := eventBroadcaster.NewRecorder(scheme.Scheme, "nghttpx-ingress-controller")
+
 	controllerConfig := controller.Config{
 		DefaultBackendService:    defaultSvcKey,
 		WatchNamespace:           watchNamespace,
@@ -273,23 +296,16 @@ func run(cmd *cobra.Command, args []string) {
 		DeferredShutdownPeriod:   deferredShutdownPeriod,
 		HealthzPort:              healthzPort,
 		InternalDefaultBackend:   internalDefaultBackend,
-		PodInfo: types.NamespacedName{
-			Name:      os.Getenv("POD_NAME"),
-			Namespace: os.Getenv("POD_NAMESPACE"),
-		},
-	}
-
-	if controllerConfig.PodInfo.Name == "" {
-		klog.Exit("POD_NAME environment variable cannot be empty.")
-	}
-	if controllerConfig.PodInfo.Namespace == "" {
-		klog.Exit("POD_NAMESPACE environment variable cannot be empty.")
+		Pod:                      thisPod,
+		EventRecorder:            eventRecorder,
 	}
 
 	mgrConfig := nghttpx.ManagerConfig{
 		NghttpxHealthPort: nghttpxHealthPort,
 		NghttpxAPIPort:    nghttpxAPIPort,
 		NghttpxConfDir:    nghttpxConfDir,
+		Pod:               thisPod,
+		EventRecorder:     eventRecorder,
 	}
 
 	mgr, err := nghttpx.NewManager(mgrConfig)
@@ -306,6 +322,8 @@ func run(cmd *cobra.Command, args []string) {
 	go handleSigterm(cancel)
 
 	lbc.Run(ctx)
+
+	eventBroadcaster.Shutdown()
 }
 
 // healthzChecker implements healthz.HealthzChecker interface.

@@ -38,7 +38,6 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
-	clientv1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
 	networking "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -47,13 +46,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	listerscore "k8s.io/client-go/listers/core/v1"
 	listersdiscovery "k8s.io/client-go/listers/discovery/v1beta1"
 	listersnetworking "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
@@ -94,7 +91,7 @@ type LoadBalancerController struct {
 	podLister                listerscore.PodLister
 	nodeLister               listerscore.NodeLister
 	nghttpx                  nghttpx.Interface
-	podInfo                  types.NamespacedName
+	pod                      *v1.Pod
 	defaultSvc               *types.NamespacedName
 	nghttpxConfigMap         *types.NamespacedName
 	defaultTLSSecret         *types.NamespacedName
@@ -116,7 +113,7 @@ type LoadBalancerController struct {
 	healthzPort              int32
 	internalDefaultBackend   bool
 	reloadRateLimiter        flowcontrol.RateLimiter
-	recorder                 record.EventRecorder
+	eventRecorder            events.EventRecorder
 	syncQueue                workqueue.Interface
 
 	// shutdownMu protects shutdown from the concurrent read/write.
@@ -169,19 +166,17 @@ type Config struct {
 	HealthzPort int32
 	// InternalDefaultBackend, if true, instructs the controller to use internal default backend instead of an external one.
 	InternalDefaultBackend bool
-	// PodInfo is the Pod where this controller runs.
-	PodInfo types.NamespacedName
+	// Pod is the Pod where this controller runs.
+	Pod *v1.Pod
+	// EventRecorder is the event recorder.
+	EventRecorder events.EventRecorder
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
 func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config Config) *LoadBalancerController {
-	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartLogging(klog.Infof)
-	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: clientset.CoreV1().Events(config.WatchNamespace)})
-
 	lbc := LoadBalancerController{
 		clientset:                clientset,
-		podInfo:                  config.PodInfo,
+		pod:                      config.Pod,
 		nghttpx:                  manager,
 		nghttpxConfigMap:         config.NghttpxConfigMap,
 		nghttpxHealthPort:        config.NghttpxHealthPort,
@@ -203,7 +198,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		deferredShutdownPeriod:   config.DeferredShutdownPeriod,
 		healthzPort:              config.HealthzPort,
 		internalDefaultBackend:   config.InternalDefaultBackend,
-		recorder:                 eventBroadcaster.NewRecorder(scheme.Scheme, clientv1.EventSource{Component: "nghttpx-ingress-controller"}),
+		eventRecorder:            config.EventRecorder,
 		syncQueue:                workqueue.New(),
 		reloadRateLimiter:        flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
 	}
@@ -305,8 +300,8 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	if lbc.nghttpxConfigMap != nil {
 		cmNamespace = lbc.nghttpxConfigMap.Namespace
 	} else {
-		// Just watch config.PodInfo.Namespace to make codebase simple
-		cmNamespace = config.PodInfo.Namespace
+		// Just watch config.Pod.Namespace to make codebase simple
+		cmNamespace = config.Pod.Namespace
 	}
 
 	cmNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(cmNamespace))
@@ -1488,6 +1483,8 @@ func (lbc *LoadBalancerController) startShutdown() {
 		return
 	}
 
+	lbc.eventRecorder.Eventf(lbc.pod, nil, v1.EventTypeNormal, "Shutdown", "Shutdown", "Shutting down started")
+
 	lbc.shutdown = true
 }
 
@@ -1652,12 +1649,8 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx co
 	var lbIngs []v1.LoadBalancerIngress
 
 	if lbc.publishService == nil {
-		thisPod, err := lbc.getThisPod()
-		if err != nil {
-			return err
-		}
-
-		selector := labels.Set(thisPod.Labels).AsSelector()
+		selector := labels.Set(lbc.pod.Labels).AsSelector()
+		var err error
 		lbIngs, err = lbc.getLoadBalancerIngress(selector)
 		if err != nil {
 			return fmt.Errorf("could not get Node IP of Ingress controller: %v", err)
@@ -1674,15 +1667,6 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx co
 	sortLoadBalancerIngress(lbIngs)
 
 	return lbc.updateIngressStatus(ctx, uniqLoadBalancerIngress(lbIngs))
-}
-
-// getThisPod returns this controller's pod.
-func (lbc *LoadBalancerController) getThisPod() (*v1.Pod, error) {
-	pod, err := lbc.podLister.Pods(lbc.podInfo.Namespace).Get(lbc.podInfo.Name)
-	if err != nil {
-		return nil, fmt.Errorf("could not get Pod %v from lister: %v", lbc.podInfo, err)
-	}
-	return pod, nil
 }
 
 // updateIngressStatus updates LoadBalancerIngress field of all Ingresses.
@@ -1807,12 +1791,7 @@ func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
 func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error {
 	klog.Infof("Remove this address from all Ingress.Status.LoadBalancer.Ingress.")
 
-	thisPod, err := lbc.getThisPod()
-	if err != nil {
-		return fmt.Errorf("could not remove address from LoadBalancerIngress: %v", err)
-	}
-
-	addr, err := lbc.getPodAddress(thisPod)
+	addr, err := lbc.getPodAddress(lbc.pod)
 	if err != nil {
 		return fmt.Errorf("could not remove address from LoadBalancerIngress: %v", err)
 	}

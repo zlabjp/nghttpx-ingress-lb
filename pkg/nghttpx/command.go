@@ -37,6 +37,7 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 )
@@ -129,6 +130,8 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 			return false, err
 		}
 
+		mgr.eventRecorder.Eventf(mgr.pod, nil, v1.EventTypeNormal, "Reload", "Reload", "nghttpx reloaded its configuration")
+
 		klog.Info("nghttpx has finished reloading new configuration")
 
 		if err := deleteStaleAssets(ingressCfg); err != nil {
@@ -142,6 +145,8 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		if err := mgr.issueBackendReplaceRequest(ingressCfg); err != nil {
 			return false, fmt.Errorf("failed to issue backend replace request: %v", err)
 		}
+
+		mgr.eventRecorder.Eventf(mgr.pod, nil, v1.EventTypeNormal, "ReplaceBackend", "ReplaceBackend", "nghttpx replaced its backend servers")
 
 		if err := deleteStaleMrubyAssets(ingressCfg); err != nil {
 			klog.Errorf("Could not delete stale assets: %v", err)

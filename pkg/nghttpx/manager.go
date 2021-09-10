@@ -29,18 +29,25 @@ import (
 	"net/http"
 	"os/exec"
 	"text/template"
+
+	"k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/events"
 )
 
 type ManagerConfig struct {
 	NghttpxHealthPort int32
 	NghttpxAPIPort    int32
 	NghttpxConfDir    string
+	Pod               *v1.Pod
+	EventRecorder     events.EventRecorder
 }
 
 // Manager ...
 type Manager struct {
 	// httpClient is used to issue backend API request to nghttpx
-	httpClient *http.Client
+	httpClient    *http.Client
+	pod           *v1.Pod
+	eventRecorder events.EventRecorder
 
 	// template loaded ready to be used to generate the nghttpx configuration file
 	template *template.Template
@@ -68,6 +75,8 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 		httpClient: &http.Client{
 			Transport: tr,
 		},
+		pod:               config.Pod,
+		eventRecorder:     config.EventRecorder,
 		backendconfigURI:  fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", config.NghttpxAPIPort),
 		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", config.NghttpxAPIPort),
 	}

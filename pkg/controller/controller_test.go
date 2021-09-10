@@ -42,6 +42,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/events"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -123,6 +124,10 @@ var (
 
 // prepare performs setup necessary for test run.
 func (f *fixture) prepare() {
+	f.preparePod(newIngPod(defaultRuntimeInfo.Name, "zulu.test"))
+}
+
+func (f *fixture) preparePod(pod *v1.Pod) {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
 	config := Config{
 		DefaultBackendService:  &types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
@@ -133,7 +138,8 @@ func (f *fixture) prepare() {
 		EnableEndpointSlice:    f.enableEndpointSlice,
 		ReloadRate:             1.0,
 		ReloadBurst:            1,
-		PodInfo:                defaultRuntimeInfo,
+		Pod:                    pod,
+		EventRecorder:          &events.FakeRecorder{},
 	}
 	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), config)
 }
@@ -1304,7 +1310,7 @@ func TestGetLoadBalancerIngress(t *testing.T) {
 
 	f.objects = append(f.objects, po1, po2, node1, node2)
 
-	f.prepare()
+	f.preparePod(po1)
 	f.setupStore()
 
 	lbIngs, err := f.lbc.getLoadBalancerIngress(labels.Set(defaultIngPodLables).AsSelector())
@@ -1409,7 +1415,7 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 
 	f.objects = append(f.objects, po, node, ing1, ing2, ing3, ing4)
 
-	f.prepare()
+	f.preparePod(po)
 	f.setupStore()
 
 	err := f.lbc.removeAddressFromLoadBalancerIngress()
