@@ -59,10 +59,10 @@ func TestCreateTLSCred(t *testing.T) {
 	tlsCred := CreateTLSCred(defaultConfDir, name, dCrt, dKey, []byte(tlsOCSPResp))
 
 	if got, want := tlsCred.Key.Path, filepath.Join(defaultConfDir, tlsDir, name+".key"); got != want {
-		t.Errorf("tlsCred.Key = %v, want %v", got, want)
+		t.Errorf("tlsCred.Key.Path = %v, want %v", got, want)
 	}
 	if got, want := tlsCred.Cert.Path, filepath.Join(defaultConfDir, tlsDir, name+".crt"); got != want {
-		t.Errorf("tlsCred.Crt = %v, want %v", got, want)
+		t.Errorf("tlsCred.Cert.Path = %v, want %v", got, want)
 	}
 	if got, want := tlsCred.OCSPResp.Path, filepath.Join(defaultConfDir, tlsDir, name+".ocsp-resp"); got != want {
 		t.Errorf("tlsCred.OCSPResp.Path = %v, want %v", got, want)
