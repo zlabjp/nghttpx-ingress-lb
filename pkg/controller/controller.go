@@ -1721,7 +1721,17 @@ func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Select
 	lbIngs := make([]v1.LoadBalancerIngress, 0, len(pods))
 
 	for _, pod := range pods {
-		externalIP, err := lbc.getPodAddress(pod)
+		if !pod.Spec.HostNetwork {
+			if pod.Status.PodIP == "" {
+				continue
+			}
+
+			lbIngs = append(lbIngs, v1.LoadBalancerIngress{IP: pod.Status.PodIP})
+
+			continue
+		}
+
+		externalIP, err := lbc.getPodNodeAddress(pod)
 		if err != nil {
 			klog.Error(err)
 			continue
@@ -1754,11 +1764,9 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressFromService(svc *v1.Ser
 	return lbIngs
 }
 
-// getPodAddress returns pod's address.  It prefers external IP.  It may return internal IP if configuration allows it.
-//
-// TODO: This function actually returns the IP address of Node where pod is deployed rather than the address of pod.  Should we return the
-// address of pod if hostNetwork is true?
-func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
+// getPodNodeAddress returns address of Node where pod is running.  It prefers external IP.  It may return internal IP if configuration
+// allows it.
+func (lbc *LoadBalancerController) getPodNodeAddress(pod *v1.Pod) (string, error) {
 	node, err := lbc.nodeLister.Get(pod.Spec.NodeName)
 	if err != nil {
 		return "", fmt.Errorf("could not get Node %v for Pod %v/%v from lister: %v", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
@@ -1791,9 +1799,18 @@ func (lbc *LoadBalancerController) getPodAddress(pod *v1.Pod) (string, error) {
 func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error {
 	klog.Infof("Remove this address from all Ingress.Status.LoadBalancer.Ingress.")
 
-	addr, err := lbc.getPodAddress(lbc.pod)
-	if err != nil {
-		return fmt.Errorf("could not remove address from LoadBalancerIngress: %v", err)
+	var (
+		addr string
+		err  error
+	)
+
+	if lbc.pod.Spec.HostNetwork {
+		addr, err = lbc.getPodNodeAddress(lbc.pod)
+		if err != nil {
+			return fmt.Errorf("could not remove address from LoadBalancerIngress: %v", err)
+		}
+	} else {
+		addr = lbc.pod.Status.PodIP
 	}
 
 	ings, err := lbc.ingLister.List(labels.Everything())

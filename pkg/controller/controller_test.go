@@ -1297,42 +1297,75 @@ func newNode(name string, addrs ...v1.NodeAddress) *v1.Node {
 
 // TestGetLoadBalancerIngress verifies that it collects node IPs from cache.
 func TestGetLoadBalancerIngress(t *testing.T) {
-	f := newFixture(t)
-
-	po1 := newIngPod(defaultRuntimeInfo.Name, "alpha.test")
-	node1 := newNode("alpha.test", v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.1"})
-
-	po2 := newIngPod("bravo", "bravo.test")
-	node2 := newNode("bravo.test", v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.1"}, v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.2"})
-
-	f.podStore = append(f.podStore, po1, po2)
-	f.nodeStore = append(f.nodeStore, node1, node2)
-
-	f.objects = append(f.objects, po1, po2, node1, node2)
-
-	f.preparePod(po1)
-	f.setupStore()
-
-	lbIngs, err := f.lbc.getLoadBalancerIngress(labels.Set(defaultIngPodLables).AsSelector())
-
-	f.verifyActions()
-
-	if err != nil {
-		t.Fatalf("f.lbc.getLoadBalancerIngress() returned unexpected error %v", err)
+	tests := []struct {
+		desc        string
+		hostNetwork bool
+	}{
+		{
+			desc:        "Use host network",
+			hostNetwork: true,
+		},
+		{
+			desc: "Do not use host network",
+		},
 	}
 
-	if got, want := len(lbIngs), 2; got != want {
-		t.Errorf("len(lbIngs) = %v, want %v", got, want)
-	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
 
-	sortLoadBalancerIngress(lbIngs)
+			po1 := newIngPod(defaultRuntimeInfo.Name, "alpha.test")
+			po1.Spec.HostNetwork = tt.hostNetwork
 
-	ans := []v1.LoadBalancerIngress{
-		{IP: "192.168.0.1"}, {IP: "192.168.0.2"},
-	}
+			var node1 *v1.Node
 
-	if got, want := lbIngs, ans; !reflect.DeepEqual(got, want) {
-		t.Errorf("lbIngs = %+v, want %+v", got, want)
+			if tt.hostNetwork {
+				node1 = newNode("alpha.test", v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.1"})
+			} else {
+				po1.Status.PodIP = "192.168.0.1"
+			}
+
+			po2 := newIngPod("bravo", "bravo.test")
+			po2.Spec.HostNetwork = true
+			node2 := newNode("bravo.test",
+				v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+				v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.2"})
+
+			f.podStore = append(f.podStore, po1, po2)
+			f.nodeStore = append(f.nodeStore, node2)
+
+			f.objects = append(f.objects, po1, po2, node2)
+
+			if tt.hostNetwork {
+				f.nodeStore = append(f.nodeStore, node1)
+				f.objects = append(f.objects, node1)
+			}
+
+			f.preparePod(po1)
+			f.setupStore()
+
+			lbIngs, err := f.lbc.getLoadBalancerIngress(labels.Set(defaultIngPodLables).AsSelector())
+
+			f.verifyActions()
+
+			if err != nil {
+				t.Fatalf("f.lbc.getLoadBalancerIngress() returned unexpected error %v", err)
+			}
+
+			if got, want := len(lbIngs), 2; got != want {
+				t.Errorf("len(lbIngs) = %v, want %v", got, want)
+			}
+
+			sortLoadBalancerIngress(lbIngs)
+
+			ans := []v1.LoadBalancerIngress{
+				{IP: "192.168.0.1"}, {IP: "192.168.0.2"},
+			}
+
+			if got, want := lbIngs, ans; !reflect.DeepEqual(got, want) {
+				t.Errorf("lbIngs = %+v, want %+v", got, want)
+			}
+		})
 	}
 }
 
@@ -1389,65 +1422,94 @@ func TestUpdateIngressStatus(t *testing.T) {
 
 // TestRemoveAddressFromLoadBalancerIngress verifies that removeAddressFromLoadBalancerIngress clears Ingress.Status.LoadBalancer.Ingress.
 func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
-	f := newFixture(t)
-
-	po := newIngPod(defaultRuntimeInfo.Name, "alpha.test")
-	node := newNode("alpha.test", v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.1"})
-
-	lbIngs := []v1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
-
-	ing1 := newIngress(metav1.NamespaceDefault, "delta-ing", "delta", serviceBackendPortNumber(80))
-	ing1.Status.LoadBalancer.Ingress = lbIngs
-
-	ing2 := newIngress(metav1.NamespaceDefault, "echo-ing", "echo", serviceBackendPortNumber(80))
-	ing2.Status.LoadBalancer.Ingress = lbIngs
-
-	ing3 := newIngress(metav1.NamespaceDefault, "foxtrot-ing", "foxtrot", serviceBackendPortNumber(80))
-	ing3.Spec.IngressClassName = stringPtr("not-nghttpx")
-	ing3.Status.LoadBalancer.Ingress = lbIngs
-
-	ing4 := newIngress(metav1.NamespaceDefault, "golf-ing", "golf", serviceBackendPortNumber(80))
-	ing4.Status.LoadBalancer.Ingress = lbIngs[1:]
-
-	f.podStore = append(f.podStore, po)
-	f.nodeStore = append(f.nodeStore, node)
-	f.ingStore = append(f.ingStore, ing1, ing2, ing3, ing4)
-
-	f.objects = append(f.objects, po, node, ing1, ing2, ing3, ing4)
-
-	f.preparePod(po)
-	f.setupStore()
-
-	err := f.lbc.removeAddressFromLoadBalancerIngress()
-
-	if err != nil {
-		t.Fatalf("f.lbc.removeAddressFromLoadBalancerIngress() returned unexpected error %v", err)
+	tests := []struct {
+		desc        string
+		hostNetwork bool
+	}{
+		{
+			desc:        "Use host network",
+			hostNetwork: true,
+		},
+		{
+			desc: "Do not use host network",
+		},
 	}
 
-	if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing1.Namespace).Get(context.TODO(), ing1.Name, metav1.GetOptions{}); err != nil {
-		t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
-	} else {
-		ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
-		if got, want := updatedIng.Status.LoadBalancer.Ingress, ans; !reflect.DeepEqual(got, want) {
-			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
-		}
-	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
 
-	if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing4.Namespace).Get(context.TODO(), ing4.Name, metav1.GetOptions{}); err != nil {
-		t.Errorf("Could not get Ingress %v/%v: %v", ing4.Namespace, ing4.Name, err)
-	} else {
-		ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
-		if got, want := updatedIng.Status.LoadBalancer.Ingress, ans; !reflect.DeepEqual(got, want) {
-			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
-		}
-	}
+			po := newIngPod(defaultRuntimeInfo.Name, "alpha.test")
+			po.Spec.HostNetwork = tt.hostNetwork
 
-	if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing3.Namespace).Get(context.TODO(), ing3.Name, metav1.GetOptions{}); err != nil {
-		t.Errorf("Could not get Ingress %v/%v: %v", ing3.Namespace, ing3.Name, err)
-	} else {
-		if got, want := updatedIng.Status.LoadBalancer.Ingress, ing3.Status.LoadBalancer.Ingress; !reflect.DeepEqual(got, want) {
-			t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
-		}
+			var node *v1.Node
+
+			if tt.hostNetwork {
+				node = newNode("alpha.test", v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.1"})
+			} else {
+				po.Status.PodIP = "192.168.0.1"
+			}
+
+			lbIngs := []v1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
+
+			ing1 := newIngress(metav1.NamespaceDefault, "delta-ing", "delta", serviceBackendPortNumber(80))
+			ing1.Status.LoadBalancer.Ingress = lbIngs
+
+			ing2 := newIngress(metav1.NamespaceDefault, "echo-ing", "echo", serviceBackendPortNumber(80))
+			ing2.Status.LoadBalancer.Ingress = lbIngs
+
+			ing3 := newIngress(metav1.NamespaceDefault, "foxtrot-ing", "foxtrot", serviceBackendPortNumber(80))
+			ing3.Spec.IngressClassName = stringPtr("not-nghttpx")
+			ing3.Status.LoadBalancer.Ingress = lbIngs
+
+			ing4 := newIngress(metav1.NamespaceDefault, "golf-ing", "golf", serviceBackendPortNumber(80))
+			ing4.Status.LoadBalancer.Ingress = lbIngs[1:]
+
+			f.podStore = append(f.podStore, po)
+			f.ingStore = append(f.ingStore, ing1, ing2, ing3, ing4)
+
+			f.objects = append(f.objects, po, ing1, ing2, ing3, ing4)
+
+			if tt.hostNetwork {
+				f.nodeStore = append(f.nodeStore, node)
+				f.objects = append(f.objects, node)
+			}
+
+			f.preparePod(po)
+			f.setupStore()
+
+			err := f.lbc.removeAddressFromLoadBalancerIngress()
+
+			if err != nil {
+				t.Fatalf("f.lbc.removeAddressFromLoadBalancerIngress() returned unexpected error %v", err)
+			}
+
+			if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing1.Namespace).Get(context.TODO(), ing1.Name, metav1.GetOptions{}); err != nil {
+				t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
+			} else {
+				ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
+				if got, want := updatedIng.Status.LoadBalancer.Ingress, ans; !reflect.DeepEqual(got, want) {
+					t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
+				}
+			}
+
+			if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing4.Namespace).Get(context.TODO(), ing4.Name, metav1.GetOptions{}); err != nil {
+				t.Errorf("Could not get Ingress %v/%v: %v", ing4.Namespace, ing4.Name, err)
+			} else {
+				ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
+				if got, want := updatedIng.Status.LoadBalancer.Ingress, ans; !reflect.DeepEqual(got, want) {
+					t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
+				}
+			}
+
+			if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing3.Namespace).Get(context.TODO(), ing3.Name, metav1.GetOptions{}); err != nil {
+				t.Errorf("Could not get Ingress %v/%v: %v", ing3.Namespace, ing3.Name, err)
+			} else {
+				if got, want := updatedIng.Status.LoadBalancer.Ingress, ing3.Status.LoadBalancer.Ingress; !reflect.DeepEqual(got, want) {
+					t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
+				}
+			}
+		})
 	}
 }
 
