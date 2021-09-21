@@ -235,6 +235,14 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 				return a
 			}(),
 		},
+		{
+			desc: "Set do not forward",
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
+				a.SetDoNotForward(true)
+				return a
+			}(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -265,6 +273,9 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			}
 			if got, want := a.GetRedirectIfNotTLS(), tt.defaultConf.GetRedirectIfNotTLS(); got != want {
 				t.Errorf("a.GetRedirectIfNotTLS() = %v, want %v", got, want)
+			}
+			if got, want := a.GetDoNotForward(), tt.defaultConf.GetDoNotForward(); got != want {
+				t.Errorf("a.GetDoNotForward() = %v, want %v", got, want)
 			}
 		})
 	}

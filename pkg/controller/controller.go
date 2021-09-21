@@ -1109,6 +1109,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 		Host:                 host,
 		Path:                 normalizedPath,
 		RedirectIfNotTLS:     pc.GetRedirectIfNotTLS() && (requireTLS || lbc.defaultTLSSecret != nil),
+		DoNotForward:         pc.GetDoNotForward(),
 		Affinity:             pc.GetAffinity(),
 		AffinityCookieName:   pc.GetAffinityCookieName(),
 		AffinityCookiePath:   pc.GetAffinityCookiePath(),
@@ -1119,9 +1120,16 @@ func (lbc *LoadBalancerController) createUpstream(ing *networking.Ingress, host,
 
 	if mruby := pc.GetMruby(); mruby != "" {
 		ups.Mruby = nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, []byte(mruby))
+	} else if ups.DoNotForward {
+		return nil, fmt.Errorf("Ingress %v/%v lacks mruby but doNotForward is used", ing.Namespace, ing.Name)
 	}
 
 	klog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
+
+	if ups.DoNotForward {
+		ups.Backends = []nghttpx.UpstreamServer{nghttpx.NewDefaultServer()}
+		return ups, nil
+	}
 
 	svcKey := strings.Join([]string{ing.Namespace, isb.Name}, "/")
 	svc, err := lbc.svcLister.Services(ing.Namespace).Get(isb.Name)

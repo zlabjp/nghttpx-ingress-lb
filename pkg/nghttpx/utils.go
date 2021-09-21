@@ -190,6 +190,9 @@ func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
 	if defaultConfig.RedirectIfNotTLS != nil && config.RedirectIfNotTLS == nil {
 		config.SetRedirectIfNotTLS(*defaultConfig.RedirectIfNotTLS)
 	}
+	if defaultConfig.DoNotForward != nil && config.DoNotForward == nil {
+		config.SetDoNotForward(*defaultConfig.DoNotForward)
+	}
 }
 
 // ResolvePathConfig returns a PathConfig which should be used for the pattern denoted by host and path.

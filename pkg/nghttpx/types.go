@@ -259,6 +259,8 @@ type PathConfig struct {
 	WriteTimeout *metav1.Duration `json:"writeTimeout,omitempty"`
 	// RedirectIfNotTLS, if set to true, redirects cleartext HTTP to HTTPS.
 	RedirectIfNotTLS *bool `json:"redirectIfNotTLS,omitempty"`
+	// DoNotForward, if set to true, does not forward a request to a backend.
+	DoNotForward *bool `json:"doNotForward,omitempty"`
 }
 
 func (pc *PathConfig) GetMruby() string {
@@ -355,6 +357,18 @@ func (pc *PathConfig) GetRedirectIfNotTLS() bool {
 func (pc *PathConfig) SetRedirectIfNotTLS(b bool) {
 	pc.RedirectIfNotTLS = new(bool)
 	*pc.RedirectIfNotTLS = b
+}
+
+func (pc *PathConfig) GetDoNotForward() bool {
+	if pc == nil || pc.DoNotForward == nil {
+		return false
+	}
+	return *pc.DoNotForward
+}
+
+func (pc *PathConfig) SetDoNotForward(b bool) {
+	pc.DoNotForward = new(bool)
+	*pc.DoNotForward = b
 }
 
 // ChecksumFile represents a file with path, its arbitrary content, and its checksum.
