@@ -1654,3 +1654,45 @@ func TestSyncInternalDefaultBackend(t *testing.T) {
 		})
 	}
 }
+
+// TestSyncDoNotForward verifies that service endpoints are ignored if doNotForward path-config is used.
+func TestSyncDoNotForward(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps, _ := newDefaultBackend()
+
+	ing1 := newIngress(metav1.NamespaceDefault, "alpha-ing", "alpha-svc", serviceBackendPortNumber(80))
+	ing1.Annotations = map[string]string{
+		pathConfigKey: `alpha-ing.default.test/:
+  doNotForward: true
+  mruby: foo
+`,
+	}
+
+	f.svcStore = append(f.svcStore, svc)
+	f.epStore = append(f.epStore, eps)
+	f.ingStore = append(f.ingStore, ing1)
+
+	f.objects = append(f.objects, svc, eps, ing1)
+
+	f.prepare()
+	f.run()
+
+	fm := f.lbc.nghttpx.(*fakeManager)
+	ingConfig := fm.ingConfig
+
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	}
+
+	upstream := ingConfig.Upstreams[0]
+
+	if got, want := upstream.DoNotForward, true; got != want {
+		t.Errorf("upstream.DoNotForward = %v, want %v", got, want)
+	}
+
+	backend := upstream.Backends[0]
+	if got, want := backend.Port, "8181"; got != want {
+		t.Errorf("backend.Port = %v, want %v", got, want)
+	}
+}
