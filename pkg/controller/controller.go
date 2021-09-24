@@ -112,6 +112,7 @@ type LoadBalancerController struct {
 	deferredShutdownPeriod   time.Duration
 	healthzPort              int32
 	internalDefaultBackend   bool
+	http3                    bool
 	reloadRateLimiter        flowcontrol.RateLimiter
 	eventRecorder            events.EventRecorder
 	syncQueue                workqueue.Interface
@@ -166,6 +167,8 @@ type Config struct {
 	HealthzPort int32
 	// InternalDefaultBackend, if true, instructs the controller to use internal default backend instead of an external one.
 	InternalDefaultBackend bool
+	// HTTP3, if true, enables HTTP/3.
+	HTTP3 bool
 	// Pod is the Pod where this controller runs.
 	Pod *v1.Pod
 	// EventRecorder is the event recorder.
@@ -198,6 +201,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		deferredShutdownPeriod:   config.DeferredShutdownPeriod,
 		healthzPort:              config.HealthzPort,
 		internalDefaultBackend:   config.InternalDefaultBackend,
+		http3:                    config.HTTP3,
 		eventRecorder:            config.EventRecorder,
 		syncQueue:                workqueue.New(),
 		reloadRateLimiter:        flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
@@ -911,6 +915,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 	ingConfig.HTTPSPort = lbc.nghttpxHTTPSPort
 	ingConfig.FetchOCSPRespFromSecret = lbc.fetchOCSPRespFromSecret
 	ingConfig.ProxyProto = lbc.proxyProto
+	ingConfig.HTTP3 = lbc.http3
 
 	var (
 		upstreams []*nghttpx.Upstream

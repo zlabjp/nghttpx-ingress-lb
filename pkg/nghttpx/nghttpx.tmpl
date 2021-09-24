@@ -11,6 +11,9 @@ frontend=127.0.0.1,{{ .APIPort }};api;no-tls
 
 {{ if and .HTTPSPort .TLS }}
 frontend=*,{{ .HTTPSPort }}{{ if .ProxyProto }};proxyproto{{ end }}
+{{ if .HTTP3 }}
+frontend=*,{{ .HTTPSPort }};quic
+{{ end }}
 
 {{ $defaultCred := .DefaultTLSCred }}
 # checksum is required to detect changes in the generated configuration and force a reload

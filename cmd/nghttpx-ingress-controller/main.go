@@ -86,6 +86,7 @@ var (
 	deferredShutdownPeriod   time.Duration
 	configOverrides          clientcmd.ConfigOverrides
 	internalDefaultBackend   = false
+	http3                    = false
 )
 
 func main() {
@@ -166,6 +167,8 @@ func main() {
 
 	rootCmd.Flags().BoolVar(&internalDefaultBackend, "internal-default-backend", internalDefaultBackend,
 		`Use the internal default backend instead of an external service specified by --default-backend-service flag.  The internal default backend responds with 200 status code when /healthz is requested.  It responds with 404 status code to the other requests.  The internal default backend can still be overridden by Ingress resource unless --no-default-backend-override flag is given.`)
+
+	rootCmd.Flags().BoolVar(&http3, "http3", http3, `Enable HTTP/3.  This makes nghttpx listen to UDP port specified by nghttpx-https-port for HTTP/3 traffic.`)
 
 	if err := rootCmd.Execute(); err != nil {
 		klog.Exitf("Exiting due to command-line error: %v", err)
@@ -296,6 +299,7 @@ func run(cmd *cobra.Command, args []string) {
 		DeferredShutdownPeriod:   deferredShutdownPeriod,
 		HealthzPort:              healthzPort,
 		InternalDefaultBackend:   internalDefaultBackend,
+		HTTP3:                    http3,
 		Pod:                      thisPod,
 		EventRecorder:            eventRecorder,
 	}

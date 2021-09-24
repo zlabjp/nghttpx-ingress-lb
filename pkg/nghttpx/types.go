@@ -72,6 +72,8 @@ type IngressConfig struct {
 	FetchOCSPRespFromSecret bool
 	// ProxyProto toggles the use of PROXY protocol for all public-facing frontends.
 	ProxyProto bool
+	// HTTP3 enables HTTP/3.
+	HTTP3 bool
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.
