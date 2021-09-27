@@ -27,6 +27,7 @@ package controller
 import (
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -37,6 +38,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
 	networking "k8s.io/api/networking/v1"
@@ -63,59 +65,71 @@ const (
 	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
 	// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
 	syncKey = "ingress"
+	// quicSecretKey is a key to put into quicSecretQueue.
+	quicSecretKey = "quic-secret"
+	// quicSecretTimeout is the timeout for the last QUIC keying material.
+	quicSecretTimeout = time.Hour
 
 	noResyncPeriod = 0
 
 	annotationIsDefaultIngressClass = "ingressclass.kubernetes.io/is-default-class"
+
+	// nghttpxQUICKeyingMaterialsSecretKey is a field name of QUIC keying materials in Secret.
+	nghttpxQUICKeyingMaterialsSecretKey = "nghttpx-quic-keying-materials"
+	// quicSecretTimestampKey is an annotation key which is associated to the value that contains the timestamp when QUIC secret is last
+	// updated.
+	quicSecretTimestampKey = "ingress.zlab.co.jp/update-timestamp"
 )
 
 // LoadBalancerController watches the kubernetes api and adds/removes services from the loadbalancer
 type LoadBalancerController struct {
-	clientset                clientset.Interface
-	ingInformer              cache.SharedIndexInformer
-	ingClassInformer         cache.SharedIndexInformer
-	epInformer               cache.SharedIndexInformer
-	epSliceInformer          cache.SharedIndexInformer
-	svcInformer              cache.SharedIndexInformer
-	secretInformer           cache.SharedIndexInformer
-	cmInformer               cache.SharedIndexInformer
-	podInformer              cache.SharedIndexInformer
-	nodeInformer             cache.SharedIndexInformer
-	ingLister                listersnetworking.IngressLister
-	ingClassLister           listersnetworking.IngressClassLister
-	svcLister                listerscore.ServiceLister
-	epLister                 listerscore.EndpointsLister
-	epSliceLister            listersdiscovery.EndpointSliceLister
-	secretLister             listerscore.SecretLister
-	cmLister                 listerscore.ConfigMapLister
-	podLister                listerscore.PodLister
-	nodeLister               listerscore.NodeLister
-	nghttpx                  nghttpx.Interface
-	pod                      *v1.Pod
-	defaultSvc               *types.NamespacedName
-	nghttpxConfigMap         *types.NamespacedName
-	defaultTLSSecret         *types.NamespacedName
-	publishService           *types.NamespacedName
-	nghttpxHealthPort        int32
-	nghttpxAPIPort           int32
-	nghttpxConfDir           string
-	nghttpxExecPath          string
-	nghttpxHTTPPort          int32
-	nghttpxHTTPSPort         int32
-	watchNamespace           string
-	ingressClassController   string
-	allowInternalIP          bool
-	ocspRespKey              string
-	fetchOCSPRespFromSecret  bool
-	proxyProto               bool
-	noDefaultBackendOverride bool
-	deferredShutdownPeriod   time.Duration
-	healthzPort              int32
-	internalDefaultBackend   bool
-	http3                    bool
-	reloadRateLimiter        flowcontrol.RateLimiter
-	eventRecorder            events.EventRecorder
-	syncQueue                workqueue.Interface
+	clientset                 clientset.Interface
+	ingInformer               cache.SharedIndexInformer
+	ingClassInformer          cache.SharedIndexInformer
+	epInformer                cache.SharedIndexInformer
+	epSliceInformer           cache.SharedIndexInformer
+	svcInformer               cache.SharedIndexInformer
+	secretInformer            cache.SharedIndexInformer
+	cmInformer                cache.SharedIndexInformer
+	podInformer               cache.SharedIndexInformer
+	nodeInformer              cache.SharedIndexInformer
+	ingLister                 listersnetworking.IngressLister
+	ingClassLister            listersnetworking.IngressClassLister
+	svcLister                 listerscore.ServiceLister
+	epLister                  listerscore.EndpointsLister
+	epSliceLister             listersdiscovery.EndpointSliceLister
+	secretLister              listerscore.SecretLister
+	cmLister                  listerscore.ConfigMapLister
+	podLister                 listerscore.PodLister
+	nodeLister                listerscore.NodeLister
+	nghttpx                   nghttpx.Interface
+	pod                       *v1.Pod
+	defaultSvc                *types.NamespacedName
+	nghttpxConfigMap          *types.NamespacedName
+	defaultTLSSecret          *types.NamespacedName
+	publishService            *types.NamespacedName
+	nghttpxHealthPort         int32
+	nghttpxAPIPort            int32
+	nghttpxConfDir            string
+	nghttpxExecPath           string
+	nghttpxHTTPPort           int32
+	nghttpxHTTPSPort          int32
+	watchNamespace            string
+	ingressClassController    string
+	allowInternalIP           bool
+	ocspRespKey               string
+	fetchOCSPRespFromSecret   bool
+	proxyProto                bool
+	noDefaultBackendOverride  bool
+	deferredShutdownPeriod    time.Duration
+	healthzPort               int32
+	internalDefaultBackend    bool
+	http3                     bool
+	quicKeyingMaterialsSecret *types.NamespacedName
+	reloadRateLimiter         flowcontrol.RateLimiter
+	eventRecorder             events.EventRecorder
+	syncQueue                 workqueue.Interface
+	quicSecretQueue           workqueue.RateLimitingInterface
 
 	// shutdownMu protects shutdown from the concurrent read/write.
 	shutdownMu sync.RWMutex
@@ -169,6 +183,8 @@ type Config struct {
 	InternalDefaultBackend bool
 	// HTTP3, if true, enables HTTP/3.
 	HTTP3 bool
+	// QUICKeyingMaterialsSecret is the Secret resource which contains QUIC keying materials used by nghttpx.
+	QUICKeyingMaterialsSecret *types.NamespacedName
 	// Pod is the Pod where this controller runs.
 	Pod *v1.Pod
 	// EventRecorder is the event recorder.
@@ -178,33 +194,38 @@ type Config struct {
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
 func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config Config) *LoadBalancerController {
 	lbc := LoadBalancerController{
-		clientset:                clientset,
-		pod:                      config.Pod,
-		nghttpx:                  manager,
-		nghttpxConfigMap:         config.NghttpxConfigMap,
-		nghttpxHealthPort:        config.NghttpxHealthPort,
-		nghttpxAPIPort:           config.NghttpxAPIPort,
-		nghttpxConfDir:           config.NghttpxConfDir,
-		nghttpxExecPath:          config.NghttpxExecPath,
-		nghttpxHTTPPort:          config.NghttpxHTTPPort,
-		nghttpxHTTPSPort:         config.NghttpxHTTPSPort,
-		defaultSvc:               config.DefaultBackendService,
-		defaultTLSSecret:         config.DefaultTLSSecret,
-		watchNamespace:           config.WatchNamespace,
-		ingressClassController:   config.IngressClassController,
-		allowInternalIP:          config.AllowInternalIP,
-		ocspRespKey:              config.OCSPRespKey,
-		fetchOCSPRespFromSecret:  config.FetchOCSPRespFromSecret,
-		proxyProto:               config.ProxyProto,
-		publishService:           config.PublishService,
-		noDefaultBackendOverride: config.NoDefaultBackendOverride,
-		deferredShutdownPeriod:   config.DeferredShutdownPeriod,
-		healthzPort:              config.HealthzPort,
-		internalDefaultBackend:   config.InternalDefaultBackend,
-		http3:                    config.HTTP3,
-		eventRecorder:            config.EventRecorder,
-		syncQueue:                workqueue.New(),
-		reloadRateLimiter:        flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
+		clientset:                 clientset,
+		pod:                       config.Pod,
+		nghttpx:                   manager,
+		nghttpxConfigMap:          config.NghttpxConfigMap,
+		nghttpxHealthPort:         config.NghttpxHealthPort,
+		nghttpxAPIPort:            config.NghttpxAPIPort,
+		nghttpxConfDir:            config.NghttpxConfDir,
+		nghttpxExecPath:           config.NghttpxExecPath,
+		nghttpxHTTPPort:           config.NghttpxHTTPPort,
+		nghttpxHTTPSPort:          config.NghttpxHTTPSPort,
+		defaultSvc:                config.DefaultBackendService,
+		defaultTLSSecret:          config.DefaultTLSSecret,
+		watchNamespace:            config.WatchNamespace,
+		ingressClassController:    config.IngressClassController,
+		allowInternalIP:           config.AllowInternalIP,
+		ocspRespKey:               config.OCSPRespKey,
+		fetchOCSPRespFromSecret:   config.FetchOCSPRespFromSecret,
+		proxyProto:                config.ProxyProto,
+		publishService:            config.PublishService,
+		noDefaultBackendOverride:  config.NoDefaultBackendOverride,
+		deferredShutdownPeriod:    config.DeferredShutdownPeriod,
+		healthzPort:               config.HealthzPort,
+		internalDefaultBackend:    config.InternalDefaultBackend,
+		http3:                     config.HTTP3,
+		quicKeyingMaterialsSecret: config.QUICKeyingMaterialsSecret,
+		eventRecorder:             config.EventRecorder,
+		syncQueue:                 workqueue.New(),
+		quicSecretQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		)),
+		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
 	}
 
 	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace))
@@ -586,6 +607,7 @@ func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
 	}
 
 	klog.V(4).Infof("Secret %v/%v added", s.Namespace, s.Name)
+	lbc.dealWithQUICSecret(s)
 	lbc.enqueue()
 }
 
@@ -597,6 +619,7 @@ func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}
 	}
 
 	klog.V(4).Infof("Secret %v/%v updated", curS.Namespace, curS.Name)
+	lbc.dealWithQUICSecret(curS)
 	lbc.enqueue()
 }
 
@@ -618,6 +641,7 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
+	lbc.dealWithQUICSecret(s)
 	lbc.enqueue()
 }
 
@@ -803,6 +827,20 @@ func (lbc *LoadBalancerController) getConfigMap(cmKey *types.NamespacedName) (*v
 	return cm, nil
 }
 
+func (lbc *LoadBalancerController) getQUICKeyingMaterials(key types.NamespacedName) ([]byte, error) {
+	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	km, ok := secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
+	if !ok {
+		return nil, fmt.Errorf("Secret %v does not contain %v key", key, nghttpxQUICKeyingMaterialsSecretKey)
+	}
+
+	return km, nil
+}
+
 func (lbc *LoadBalancerController) sync(key string) error {
 	lbc.reloadRateLimiter.Accept()
 
@@ -825,6 +863,15 @@ func (lbc *LoadBalancerController) sync(key string) error {
 	}
 
 	nghttpx.ReadConfig(ingConfig, cm)
+
+	if lbc.http3 {
+		quicKM, err := lbc.getQUICKeyingMaterials(*lbc.quicKeyingMaterialsSecret)
+		if err != nil {
+			return err
+		}
+
+		ingConfig.QUICSecretFile = nghttpx.CreateQUICSecretFile(ingConfig.ConfDir, quicKM)
+	}
 
 	reloaded, err := lbc.nghttpx.CheckAndReload(ingConfig)
 	if err != nil {
@@ -1267,6 +1314,10 @@ func (lbc *LoadBalancerController) secretReferenced(s *v1.Secret) bool {
 		return true
 	}
 
+	if lbc.http3 && s.Namespace == lbc.quicKeyingMaterialsSecret.Namespace && s.Name == lbc.quicKeyingMaterialsSecret.Name {
+		return true
+	}
+
 	ings, err := lbc.ingLister.Ingresses(s.Namespace).List(labels.Everything())
 	if err != nil {
 		klog.Errorf("Could not list Ingress namespace=%v: %v", s.Namespace, err)
@@ -1284,6 +1335,16 @@ func (lbc *LoadBalancerController) secretReferenced(s *v1.Secret) bool {
 		}
 	}
 	return false
+}
+
+func (lbc *LoadBalancerController) dealWithQUICSecret(s *v1.Secret) {
+	if !lbc.http3 || s.Namespace != lbc.quicKeyingMaterialsSecret.Namespace || s.Name != lbc.quicKeyingMaterialsSecret.Name {
+		return
+	}
+
+	if lbc.quicSecretQueue.NumRequeues(quicSecretKey) == 0 {
+		lbc.quicSecretQueue.AddRateLimited(quicSecretKey)
+	}
 }
 
 // getEndpoints returns a list of UpstreamServer for a given service.  portBackendConfig is additional per-port configuration for backend,
@@ -1557,6 +1618,16 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		return
 	}
 
+	if lbc.http3 {
+		lbc.quicSecretQueue.Add(quicSecretKey)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lbc.quicSecretWorker()
+		}()
+	}
+
 	go lbc.worker()
 
 	wg.Add(1)
@@ -1588,6 +1659,9 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	klog.Infof("Shutting down nghttpx loadbalancer controller")
 
 	lbc.syncQueue.ShutDown()
+	if lbc.http3 {
+		lbc.quicSecretQueue.ShutDown()
+	}
 
 	wg.Wait()
 }
@@ -1863,6 +1937,112 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 			klog.Errorf("Could not remove address from LoadBalancerIngress from Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 		}
 	}
+
+	return nil
+}
+
+func (lbc *LoadBalancerController) quicSecretWorker() {
+	work := func() bool {
+		key, quit := lbc.quicSecretQueue.Get()
+		if quit {
+			return true
+		}
+
+		defer lbc.quicSecretQueue.Done(key)
+		if err := lbc.syncQUICKeyingMaterials(time.Now()); err != nil {
+			klog.Error(err)
+			lbc.quicSecretQueue.AddRateLimited(key)
+		} else {
+			lbc.quicSecretQueue.Forget(key)
+		}
+
+		return false
+	}
+
+	for {
+		if quit := work(); quit {
+			return
+		}
+	}
+}
+
+func (lbc *LoadBalancerController) syncQUICKeyingMaterials(now time.Time) error {
+	key := *lbc.quicKeyingMaterialsSecret
+	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			klog.Errorf("Could not get Secret %v: %v", key, err)
+			return err
+		}
+
+		secret = &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      key.Name,
+				Namespace: key.Namespace,
+				Annotations: map[string]string{
+					quicSecretTimestampKey: now.Format(time.RFC3339),
+				},
+			},
+			Data: map[string][]byte{
+				nghttpxQUICKeyingMaterialsSecretKey: []byte(hex.EncodeToString(newQUICKeyingMaterial())),
+			},
+		}
+
+		if _, err := lbc.clientset.CoreV1().Secrets(secret.Namespace).Create(context.Background(), secret, metav1.CreateOptions{}); err != nil {
+			klog.Errorf("Could not create Secret %v/%v: %v", secret.Namespace, secret.Name, err)
+			return err
+		}
+
+		klog.Infof("QUIC keying materials Secret %v/%v was created", secret.Namespace, secret.Name)
+
+		// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
+		lbc.quicSecretQueue.AddAfter(quicSecretKey, quicSecretTimeout)
+
+		return nil
+	}
+
+	var km []byte
+
+	if t, err := time.Parse(time.RFC3339, secret.Annotations[quicSecretTimestampKey]); err == nil {
+		km = secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
+
+		if err := verifyQUICKeyingMaterials(km); err != nil {
+			klog.Errorf("QUIC keying materials are malformed: %v", err)
+			km = nil
+		} else {
+			d := t.Add(quicSecretTimeout).Sub(now)
+			if d > 0 {
+				klog.Infof("QUIC keying materials are not expired and in a good shape.  Retry after %v", d)
+				// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
+				lbc.quicSecretQueue.AddAfter(quicSecretKey, d)
+
+				return nil
+			}
+		}
+	}
+
+	updatedSecret := secret.DeepCopy()
+	if updatedSecret.Annotations == nil {
+		updatedSecret.Annotations = make(map[string]string)
+	}
+
+	updatedSecret.Annotations[quicSecretTimestampKey] = now.Format(time.RFC3339)
+
+	if updatedSecret.Data == nil {
+		updatedSecret.Data = make(map[string][]byte)
+	}
+
+	updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey] = updateQUICKeyingMaterials(km)
+
+	if _, err := lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(context.Background(), updatedSecret, metav1.UpdateOptions{}); err != nil {
+		klog.Errorf("Could not update Secret %v/%v: %v", updatedSecret.Namespace, updatedSecret.Name, err)
+		return err
+	}
+
+	klog.Infof("QUIC keying materials Secret %v/%v was updated", updatedSecret.Namespace, updatedSecret.Name)
+
+	// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
+	lbc.quicSecretQueue.AddAfter(quicSecretKey, quicSecretTimeout)
 
 	return nil
 }

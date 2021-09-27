@@ -120,6 +120,9 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		if err := writePerPatternMrubyFile(ingressCfg); err != nil {
 			return false, err
 		}
+		if err := writeQUICSecretFile(ingressCfg); err != nil {
+			return false, err
+		}
 
 		klog.Info("change in configuration detected. Reloading...")
 		if err := mgr.cmd.Process.Signal(syscall.SIGHUP); err != nil {

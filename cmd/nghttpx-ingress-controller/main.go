@@ -59,34 +59,35 @@ var (
 	gitRepo = ""
 
 	// Command-line flags
-	defaultSvc               string
-	ngxConfigMap             string
-	kubeconfig               string
-	watchNamespace           = metav1.NamespaceAll
-	healthzPort              = int32(11249)
-	nghttpxHealthPort        = int32(10901)
-	nghttpxAPIPort           = int32(10902)
-	profiling                = true
-	allowInternalIP          = false
-	defaultTLSSecret         string
-	ingressClass             = "nghttpx"
-	ingressClassController   = "zlab.co.jp/nghttpx"
-	nghttpxConfDir           = "/etc/nghttpx"
-	nghttpxExecPath          = "/usr/local/bin/nghttpx"
-	nghttpxHTTPPort          = int32(80)
-	nghttpxHTTPSPort         = int32(443)
-	fetchOCSPRespFromSecret  = false
-	proxyProto               = false
-	ocspRespKey              = "tls.ocsp-resp"
-	publishSvc               string
-	endpointSlices           = false
-	reloadRate               = 1.0
-	reloadBurst              = 1
-	noDefaultBackendOverride = false
-	deferredShutdownPeriod   time.Duration
-	configOverrides          clientcmd.ConfigOverrides
-	internalDefaultBackend   = false
-	http3                    = false
+	defaultSvc                string
+	ngxConfigMap              string
+	kubeconfig                string
+	watchNamespace            = metav1.NamespaceAll
+	healthzPort               = int32(11249)
+	nghttpxHealthPort         = int32(10901)
+	nghttpxAPIPort            = int32(10902)
+	profiling                 = true
+	allowInternalIP           = false
+	defaultTLSSecret          string
+	ingressClass              = "nghttpx"
+	ingressClassController    = "zlab.co.jp/nghttpx"
+	nghttpxConfDir            = "/etc/nghttpx"
+	nghttpxExecPath           = "/usr/local/bin/nghttpx"
+	nghttpxHTTPPort           = int32(80)
+	nghttpxHTTPSPort          = int32(443)
+	fetchOCSPRespFromSecret   = false
+	proxyProto                = false
+	ocspRespKey               = "tls.ocsp-resp"
+	publishSvc                string
+	endpointSlices            = false
+	reloadRate                = 1.0
+	reloadBurst               = 1
+	noDefaultBackendOverride  = false
+	deferredShutdownPeriod    time.Duration
+	configOverrides           clientcmd.ConfigOverrides
+	internalDefaultBackend    = false
+	http3                     = false
+	quicKeyingMaterialsSecret = "nghttpx-quic-km"
 )
 
 func main() {
@@ -169,6 +170,8 @@ func main() {
 		`Use the internal default backend instead of an external service specified by --default-backend-service flag.  The internal default backend responds with 200 status code when /healthz is requested.  It responds with 404 status code to the other requests.  The internal default backend can still be overridden by Ingress resource unless --no-default-backend-override flag is given.`)
 
 	rootCmd.Flags().BoolVar(&http3, "http3", http3, `Enable HTTP/3.  This makes nghttpx listen to UDP port specified by nghttpx-https-port for HTTP/3 traffic.`)
+
+	rootCmd.Flags().StringVar(&quicKeyingMaterialsSecret, "quic-keying-materials-secret", quicKeyingMaterialsSecret, `The name of Secret resource which contains QUIC keying materials for nghttpx.  The resource must belong to the same namespace as the controller Pod.`)
 
 	if err := rootCmd.Execute(); err != nil {
 		klog.Exitf("Exiting due to command-line error: %v", err)
@@ -276,32 +279,33 @@ func run(cmd *cobra.Command, args []string) {
 	eventRecorder := eventBroadcaster.NewRecorder(scheme.Scheme, "nghttpx-ingress-controller")
 
 	controllerConfig := controller.Config{
-		DefaultBackendService:    defaultSvcKey,
-		WatchNamespace:           watchNamespace,
-		NghttpxConfigMap:         nghttpxConfigMapKey,
-		NghttpxHealthPort:        nghttpxHealthPort,
-		NghttpxAPIPort:           nghttpxAPIPort,
-		NghttpxConfDir:           nghttpxConfDir,
-		NghttpxExecPath:          nghttpxExecPath,
-		NghttpxHTTPPort:          nghttpxHTTPPort,
-		NghttpxHTTPSPort:         nghttpxHTTPSPort,
-		DefaultTLSSecret:         defaultTLSSecretKey,
-		IngressClassController:   ingressClassController,
-		AllowInternalIP:          allowInternalIP,
-		OCSPRespKey:              ocspRespKey,
-		FetchOCSPRespFromSecret:  fetchOCSPRespFromSecret,
-		ProxyProto:               proxyProto,
-		PublishService:           publishSvcKey,
-		EnableEndpointSlice:      endpointSlices,
-		ReloadRate:               reloadRate,
-		ReloadBurst:              reloadBurst,
-		NoDefaultBackendOverride: noDefaultBackendOverride,
-		DeferredShutdownPeriod:   deferredShutdownPeriod,
-		HealthzPort:              healthzPort,
-		InternalDefaultBackend:   internalDefaultBackend,
-		HTTP3:                    http3,
-		Pod:                      thisPod,
-		EventRecorder:            eventRecorder,
+		DefaultBackendService:     defaultSvcKey,
+		WatchNamespace:            watchNamespace,
+		NghttpxConfigMap:          nghttpxConfigMapKey,
+		NghttpxHealthPort:         nghttpxHealthPort,
+		NghttpxAPIPort:            nghttpxAPIPort,
+		NghttpxConfDir:            nghttpxConfDir,
+		NghttpxExecPath:           nghttpxExecPath,
+		NghttpxHTTPPort:           nghttpxHTTPPort,
+		NghttpxHTTPSPort:          nghttpxHTTPSPort,
+		DefaultTLSSecret:          defaultTLSSecretKey,
+		IngressClassController:    ingressClassController,
+		AllowInternalIP:           allowInternalIP,
+		OCSPRespKey:               ocspRespKey,
+		FetchOCSPRespFromSecret:   fetchOCSPRespFromSecret,
+		ProxyProto:                proxyProto,
+		PublishService:            publishSvcKey,
+		EnableEndpointSlice:       endpointSlices,
+		ReloadRate:                reloadRate,
+		ReloadBurst:               reloadBurst,
+		NoDefaultBackendOverride:  noDefaultBackendOverride,
+		DeferredShutdownPeriod:    deferredShutdownPeriod,
+		HealthzPort:               healthzPort,
+		InternalDefaultBackend:    internalDefaultBackend,
+		HTTP3:                     http3,
+		QUICKeyingMaterialsSecret: &types.NamespacedName{Name: quicKeyingMaterialsSecret, Namespace: thisPod.Namespace},
+		Pod:                       thisPod,
+		EventRecorder:             eventRecorder,
 	}
 
 	mgrConfig := nghttpx.ManagerConfig{

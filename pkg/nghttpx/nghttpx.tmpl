@@ -51,3 +51,12 @@ fetch-ocsp-response-file=/cat-ocsp-resp
 {{ else }}
 fetch-ocsp-response-file=/fetch-ocsp-response
 {{ end}}
+
+{{ if .QUICSecretFile }}
+# checksum: {{ encodeHex .QUICSecretFile.Checksum }}
+frontend-quic-secret-file={{ .QUICSecretFile.Path }}
+{{ end }}
+
+{{ if .HTTP3 }}
+rlimit-memlock=26214400
+{{ end }}
