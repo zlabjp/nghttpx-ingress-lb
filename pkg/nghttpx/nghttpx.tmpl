@@ -18,6 +18,11 @@ frontend=*,{{ .HTTPSPort }};quic
 frontend-quic-secret-file={{ .QUICSecretFile.Path }}
 
 rlimit-memlock=26214400
+
+altsvc=h3,{{ .HTTPSPort }},,,ma=3600
+altsvc=h3-29,{{ .HTTPSPort }},,,ma=3600
+http2-altsvc=h3,{{ .HTTPSPort }},,,ma=3600
+http2-altsvc=h3-29,{{ .HTTPSPort }},,,ma=3600
 {{ end }}
 
 {{ $defaultCred := .DefaultTLSCred }}
