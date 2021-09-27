@@ -162,6 +162,15 @@ The key for OCSP response in TLS Secret is `tls.ocsp-resp` by default.
 It can be changed by `--ocsp-resp-key` flag.  The value of OCSP
 response in TLS Secret must be DER encoded.
 
+## HTTP/3 (Experimental)
+
+In order to enable the experimental HTTP/3 feature, run the controller
+with `--http3` flag.  The controller will create and maintain a
+Secret, specified by `--quic-keying-materials-secret` flag, which
+contains QUIC keying materials in the same namespace as the controller
+Pod.  nghttpx listens on UDP port specified by `--nghttpx-https-port`
+flag.
+
 ## PROXY protocol support - preserving ClientIP addresses
 
 In case you are running nghttpx-ingress-lb behind a LoadBalancer you might

@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
@@ -119,6 +120,11 @@ var (
 
 	defaultIngPodLables = map[string]string{
 		"k8s-app": "ingress",
+	}
+
+	defaultQUICSecret = types.NamespacedName{
+		Name:      "nghttpx-quic-secret",
+		Namespace: "kube-system",
 	}
 )
 
@@ -1694,5 +1700,119 @@ func TestSyncDoNotForward(t *testing.T) {
 	backend := upstream.Backends[0]
 	if got, want := backend.Port, "8181"; got != want {
 		t.Errorf("backend.Port = %v, want %v", got, want)
+	}
+}
+
+// TestSyncQUICKeyingMaterials verifies syncQUICKeyingMaterials.
+func TestSyncQUICKeyingMaterials(t *testing.T) {
+	now := time.Now().Round(time.Second)
+	expiredTimestamp := now.Add(-quicSecretTimeout)
+	notExpiredTimestamp := now.Add(-quicSecretTimeout + time.Second)
+
+	tests := []struct {
+		desc              string
+		secret            *v1.Secret
+		wantKeepTimestamp bool
+	}{
+		{
+			desc: "No existing QUIC keying materials secret",
+		},
+		{
+			desc: "QUIC secret is up to date",
+			secret: &v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      defaultQUICSecret.Name,
+					Namespace: defaultQUICSecret.Namespace,
+					Annotations: map[string]string{
+						quicSecretTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
+					},
+				},
+				Data: map[string][]byte{
+					nghttpxQUICKeyingMaterialsSecretKey: []byte(`c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233`),
+				},
+			},
+			wantKeepTimestamp: true,
+		},
+		{
+			desc: "QUIC secret has been expired",
+			secret: &v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      defaultQUICSecret.Name,
+					Namespace: defaultQUICSecret.Namespace,
+					Annotations: map[string]string{
+						quicSecretTimestampKey: expiredTimestamp.Format(time.RFC3339),
+					},
+				},
+				Data: map[string][]byte{
+					nghttpxQUICKeyingMaterialsSecretKey: []byte(`c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233`),
+				},
+			},
+		},
+		{
+			desc: "QUIC secret timestamp is not expired, but data is malformed",
+			secret: &v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      defaultQUICSecret.Name,
+					Namespace: defaultQUICSecret.Namespace,
+					Annotations: map[string]string{
+						quicSecretTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
+					},
+				},
+				Data: map[string][]byte{
+					nghttpxQUICKeyingMaterialsSecretKey: []byte(`foo`),
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+
+			if tt.secret != nil {
+				f.secretStore = append(f.secretStore, tt.secret)
+
+				f.objects = append(f.objects, tt.secret)
+			}
+
+			f.prepare()
+			f.setupStore()
+
+			f.lbc.http3 = true
+			f.lbc.quicKeyingMaterialsSecret = &defaultQUICSecret
+
+			err := f.lbc.syncQUICKeyingMaterials(now)
+			if err != nil {
+				t.Fatalf("f.lbc.syncQUICKeyingMaterials(...): %v", err)
+			}
+
+			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultQUICSecret.Namespace).Get(context.Background(), defaultQUICSecret.Name, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("Could not get Secret %v/%v: %v", defaultQUICSecret.Namespace, defaultQUICSecret.Name, err)
+			}
+
+			if tt.wantKeepTimestamp {
+				if got, want := updatedSecret.Annotations[quicSecretTimestampKey], tt.secret.Annotations[quicSecretTimestampKey]; got != want {
+					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", quicSecretTimestampKey, got, want)
+				}
+
+				if got, want := updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey], tt.secret.Data[nghttpxQUICKeyingMaterialsSecretKey]; !bytes.Equal(got, want) {
+					t.Errorf("updatedSecret.Data[%q] = %s, want %s", nghttpxQUICKeyingMaterialsSecretKey, got, want)
+				}
+			} else {
+				if got, want := updatedSecret.Annotations[quicSecretTimestampKey], now.Format(time.RFC3339); got != want {
+					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", quicSecretTimestampKey, got, want)
+				}
+
+				km := updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey]
+				if len(km) < 136 {
+					t.Fatal("updatedSecret does not contain QUIC keying materials")
+				}
+
+				if err := verifyQUICKeyingMaterials(km); err != nil {
+					t.Fatalf("verifyQUICKeyingMaterials(...): %v", err)
+				}
+			}
+		})
 	}
 }
