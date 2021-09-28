@@ -171,6 +171,56 @@ contains QUIC keying materials in the same namespace as the controller
 Pod.  nghttpx listens on UDP port specified by `--nghttpx-https-port`
 flag.
 
+HTTP/3 requires writing Secret and extra capabilities to load eBPF
+program.  For writing Secret, you might need to add the following
+entry to ClusterRole:
+
+```yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+...
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "update", "patch"]
+...
+```
+
+Add the following capabilities to the nghttpx-ingress-controller
+container:
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+...
+spec:
+  template:
+    spec:
+      containers:
+      - image: zlabjp/nghttpx-ingress-controller:latest
+        ...
+        securityContext:
+          capabilities:
+            add:
+            - SYS_ADMIN
+            - SYS_RESOURCE
+        ...
+```
+
+If you use PodSecurityPolicy, grant these capabilities:
+
+```yaml
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+...
+spec:
+  ...
+  allowedCapabilities:
+  - SYS_ADMIN
+  - SYS_RESOURCE
+  ...
+```
+
 ## PROXY protocol support - preserving ClientIP addresses
 
 In case you are running nghttpx-ingress-lb behind a LoadBalancer you might

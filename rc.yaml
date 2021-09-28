@@ -80,6 +80,11 @@ rules:
 - apiGroups: ["events.k8s.io"]
   resources: ["events"]
   verbs: ["create", "patch"]
+# Permission to write Secret is required for HTTP/3.
+# You can remove it if HTTP/3 is not used.
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "update", "patch"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -143,3 +148,10 @@ spec:
         - /nghttpx-ingress-controller
         - --default-backend-service=default/default-http-backend
         - --healthz-port=11249
+        securityContext:
+          # These capabilities are required to load eBPF program which is used by HTTP/3.
+          # They can be removed if HTTP/3 is not used.
+          capabilities:
+            add:
+            - SYS_ADMIN
+            - SYS_RESOURCE
