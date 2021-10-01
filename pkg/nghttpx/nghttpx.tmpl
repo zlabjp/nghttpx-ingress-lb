@@ -17,7 +17,7 @@ frontend=*,{{ .HTTPSPort }};quic
 # checksum: {{ encodeHex .QUICSecretFile.Checksum }}
 frontend-quic-secret-file={{ .QUICSecretFile.Path }}
 
-rlimit-memlock=26214400
+rlimit-memlock=524288
 
 altsvc=h3,{{ .HTTPSPort }},,,ma=3600
 altsvc=h3-29,{{ .HTTPSPort }},,,ma=3600
