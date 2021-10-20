@@ -18,9 +18,9 @@ const (
 )
 
 // CreateQUICSecretFile creates given QUIC keying materials file.
-func CreateQUICSecretFile(dir string, quicKeyingMaterials []byte) *ChecksumFile {
+func CreateQUICSecretFile(dir string, quicKeyingMaterials []byte) *PrivateChecksumFile {
 	checksum := Checksum(quicKeyingMaterials)
-	return &ChecksumFile{
+	return &PrivateChecksumFile{
 		Path:     filepath.Join(dir, "quic-secret.txt"),
 		Content:  quicKeyingMaterials,
 		Checksum: checksum,

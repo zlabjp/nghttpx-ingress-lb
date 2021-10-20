@@ -86,29 +86,34 @@ func TestRemoveDuplicatePems(t *testing.T) {
 		{
 			desc: "Single entry",
 			in: []*TLSCred{
-				{Key: ChecksumFile{Path: "alpha"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}},
 			},
 			out: []*TLSCred{
-				{Key: ChecksumFile{Path: "alpha"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}},
 			},
 		},
 		{
 			desc: "Multiple entries and no duplicates",
 			in: []*TLSCred{
-				{Key: ChecksumFile{Path: "alpha"}}, {Key: ChecksumFile{Path: "bravo"}}, {Key: ChecksumFile{Path: "charlie"}}, {Key: ChecksumFile{Path: "delta"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}}, {Key: PrivateChecksumFile{Path: "bravo"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}}, {Key: PrivateChecksumFile{Path: "delta"}},
 			},
 			out: []*TLSCred{
-				{Key: ChecksumFile{Path: "alpha"}}, {Key: ChecksumFile{Path: "bravo"}}, {Key: ChecksumFile{Path: "charlie"}}, {Key: ChecksumFile{Path: "delta"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}}, {Key: PrivateChecksumFile{Path: "bravo"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}}, {Key: PrivateChecksumFile{Path: "delta"}},
 			},
 		},
 		{
 			desc: "Duplicates must be removed",
 			in: []*TLSCred{
-				{Key: ChecksumFile{Path: "alpha"}}, {Key: ChecksumFile{Path: "alpha"}}, {Key: ChecksumFile{Path: "bravo"}}, {Key: ChecksumFile{Path: "charlie"}},
-				{Key: ChecksumFile{Path: "charlie"}}, {Key: ChecksumFile{Path: "delta"}}, {Key: ChecksumFile{Path: "delta"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}}, {Key: PrivateChecksumFile{Path: "alpha"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}}, {Key: PrivateChecksumFile{Path: "charlie"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}}, {Key: PrivateChecksumFile{Path: "delta"}},
+				{Key: PrivateChecksumFile{Path: "delta"}},
 			},
 			out: []*TLSCred{
-				{Key: ChecksumFile{Path: "alpha"}}, {Key: ChecksumFile{Path: "bravo"}}, {Key: ChecksumFile{Path: "charlie"}}, {Key: ChecksumFile{Path: "delta"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}}, {Key: PrivateChecksumFile{Path: "bravo"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}}, {Key: PrivateChecksumFile{Path: "delta"}},
 			},
 		},
 	}

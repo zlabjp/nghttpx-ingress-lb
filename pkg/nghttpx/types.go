@@ -25,7 +25,9 @@ limitations under the License.
 package nghttpx
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"runtime"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,7 +77,7 @@ type IngressConfig struct {
 	// HTTP3 enables HTTP/3.
 	HTTP3 bool
 	// QUICSecretFile is the file which contains QUIC keying materials.
-	QUICSecretFile *ChecksumFile
+	QUICSecretFile *PrivateChecksumFile
 }
 
 // NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.
@@ -156,7 +158,7 @@ type UpstreamServer struct {
 // TLSCred stores TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte
 // string.
 type TLSCred struct {
-	Key      ChecksumFile
+	Key      PrivateChecksumFile
 	Cert     ChecksumFile
 	OCSPResp *ChecksumFile
 }
@@ -380,4 +382,31 @@ type ChecksumFile struct {
 	Path     string
 	Content  []byte
 	Checksum []byte
+}
+
+// PrivateChecksumFile is a kind of ChecksumFile and it contains private data which should not be spilled out into log.
+type PrivateChecksumFile ChecksumFile
+
+func (c PrivateChecksumFile) MarshalJSON() ([]byte, error) {
+	var b bytes.Buffer
+
+	b.WriteString(`{"Path":`)
+
+	a, err := json.Marshal(c.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	b.Write(a)
+	b.WriteString(`,"Content":"[redacted]","Checksum":`)
+
+	a, err = json.Marshal(c.Checksum)
+	if err != nil {
+		return nil, err
+	}
+
+	b.Write(a)
+	b.WriteString(`}`)
+
+	return b.Bytes(), nil
 }

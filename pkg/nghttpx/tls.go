@@ -60,7 +60,7 @@ func CreateTLSOCSPRespPath(dir, name string) string {
 // CreateTLSCred creates TLSCred for given private key and certificate.  ocspResp is optional, and could be nil.
 func CreateTLSCred(dir, name string, cert, key, ocspResp []byte) *TLSCred {
 	return &TLSCred{
-		Key: ChecksumFile{
+		Key: PrivateChecksumFile{
 			Path:     CreateTLSKeyPath(dir, name),
 			Content:  key,
 			Checksum: Checksum(key),
