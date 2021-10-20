@@ -1984,7 +1984,7 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(now time.Time) error 
 				},
 			},
 			Data: map[string][]byte{
-				nghttpxQUICKeyingMaterialsSecretKey: []byte(hex.EncodeToString(newQUICKeyingMaterial())),
+				nghttpxQUICKeyingMaterialsSecretKey: []byte(hex.EncodeToString(nghttpx.NewQUICKeyingMaterial())),
 			},
 		}
 
@@ -2006,7 +2006,7 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(now time.Time) error 
 	if t, err := time.Parse(time.RFC3339, secret.Annotations[quicSecretTimestampKey]); err == nil {
 		km = secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
 
-		if err := verifyQUICKeyingMaterials(km); err != nil {
+		if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {
 			klog.Errorf("QUIC keying materials are malformed: %v", err)
 			km = nil
 		} else {
@@ -2032,7 +2032,7 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(now time.Time) error 
 		updatedSecret.Data = make(map[string][]byte)
 	}
 
-	updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey] = updateQUICKeyingMaterials(km)
+	updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey] = nghttpx.UpdateQUICKeyingMaterials(km)
 
 	if _, err := lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(context.Background(), updatedSecret, metav1.UpdateOptions{}); err != nil {
 		klog.Errorf("Could not update Secret %v/%v: %v", updatedSecret.Namespace, updatedSecret.Name, err)

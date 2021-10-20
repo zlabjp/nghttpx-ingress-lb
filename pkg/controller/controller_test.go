@@ -1809,7 +1809,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 					t.Fatal("updatedSecret does not contain QUIC keying materials")
 				}
 
-				if err := verifyQUICKeyingMaterials(km); err != nil {
+				if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {
 					t.Fatalf("verifyQUICKeyingMaterials(...): %v", err)
 				}
 			}
