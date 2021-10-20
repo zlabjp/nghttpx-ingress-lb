@@ -168,8 +168,9 @@ In order to enable the experimental HTTP/3 feature, run the controller
 with `--http3` flag.  The controller will create and maintain a
 Secret, specified by `--quic-keying-materials-secret` flag, which
 contains QUIC keying materials in the same namespace as the controller
-Pod.  nghttpx listens on UDP port specified by `--nghttpx-https-port`
-flag.
+Pod.  The controller maintains the secret as a whole, and it should
+not be altered by an external tool or user. nghttpx listens on UDP
+port specified by `--nghttpx-https-port` flag.
 
 HTTP/3 requires writing Secret and extra capabilities to load eBPF
 program.  For writing Secret, you might need to add the following
