@@ -1805,8 +1805,9 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 				}
 
 				km := updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey]
-				if len(km) < 136 {
-					t.Fatal("updatedSecret does not contain QUIC keying materials")
+				if len(km) < nghttpx.QUICKeyingMaterialsEncodedSize ||
+					len(km) != len(km)/nghttpx.QUICKeyingMaterialsEncodedSize*nghttpx.QUICKeyingMaterialsEncodedSize+(len(km)/nghttpx.QUICKeyingMaterialsEncodedSize-1) {
+					t.Fatal("updatedSecret does not contain QUIC keying materials", len(km))
 				}
 
 				if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {

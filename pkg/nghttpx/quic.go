@@ -10,6 +10,13 @@ import (
 	"strings"
 )
 
+const (
+	// QUICKeyingMaterialsSize is the size of QUIC keying materials in a binary form.
+	QUICKeyingMaterialsSize = 68
+	// QUICKeyingMaterialsEncodedSize is the size of QUIC keying materials in a hex encoded form.
+	QUICKeyingMaterialsEncodedSize = QUICKeyingMaterialsSize * 2
+)
+
 // CreateQUICSecretFile creates given QUIC keying materials file.
 func CreateQUICSecretFile(dir string, quicKeyingMaterials []byte) *ChecksumFile {
 	checksum := Checksum(quicKeyingMaterials)
@@ -44,8 +51,8 @@ func VerifyQUICKeyingMaterials(km []byte) error {
 			continue
 		}
 
-		if ln := len(l); ln != 136 {
-			return fmt.Errorf("each line of QUIC keying materials must be 136 bytes long: %v", ln)
+		if ln := len(l); ln != QUICKeyingMaterialsEncodedSize {
+			return fmt.Errorf("each line of QUIC keying materials must be %v bytes long: %v", QUICKeyingMaterialsEncodedSize, ln)
 		}
 
 		if _, err := hex.DecodeString(l); err != nil {
@@ -62,7 +69,7 @@ func VerifyQUICKeyingMaterials(km []byte) error {
 
 // NewQUICKeyingMaterial returns new QUIC keying material.
 func NewQUICKeyingMaterial() []byte {
-	b := make([]byte, 32+32+4)
+	b := make([]byte, QUICKeyingMaterialsSize)
 	if _, err := rand.Read(b); err != nil {
 		panic(err)
 	}
@@ -86,8 +93,8 @@ func updateQUICKeyingMaterialsFunc(km []byte, newKeyingMaterialFunc func() []byt
 			continue
 		}
 
-		if len(l) != 136 {
-			panic("not 136 bytes long")
+		if len(l) != QUICKeyingMaterialsEncodedSize {
+			panic(fmt.Sprintf("not %v bytes long", QUICKeyingMaterialsEncodedSize))
 		}
 
 		if _, err := hex.DecodeString(l); err != nil {
