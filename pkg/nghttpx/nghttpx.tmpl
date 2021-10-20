@@ -61,3 +61,6 @@ fetch-ocsp-response-file=/cat-ocsp-resp
 {{ else }}
 fetch-ocsp-response-file=/fetch-ocsp-response
 {{ end}}
+
+worker-process-grace-shutdown-period=60s
+max-worker-processes=100
