@@ -82,7 +82,7 @@ RUN git clone --depth 1 -b v1.46.0 https://github.com/nghttp2/nghttp2.git && \
     cd .. && \
     rm -rf nghttp2
 
-FROM gcr.io/distroless/cc-debian11:latest-amd64
+FROM gcr.io/distroless/cc-debian11:latest
 
 COPY --from=build /usr/local/bin/nghttpx /usr/local/bin/
 COPY --from=build /usr/local/lib/nghttp2/reuseport_kern.o \
