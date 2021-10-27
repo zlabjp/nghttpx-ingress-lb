@@ -1703,6 +1703,69 @@ func TestSyncDoNotForward(t *testing.T) {
 	}
 }
 
+// TestSyncNormalizePath verifies that a substring which starts with '#' or '?' is removed from path.
+func TestSyncNormalizePath(t *testing.T) {
+	tests := []struct {
+		desc string
+		path string
+		want string
+	}{
+		{
+			desc: "Path includes neither # nor ?",
+			path: "/foo",
+			want: "/foo",
+		},
+		{
+			desc: "Path includes #",
+			path: "/foo#bar#bar",
+			want: "/foo",
+		},
+		{
+			desc: "Path includes ?",
+			path: "/baz?bar?bar",
+			want: "/baz",
+		},
+		{
+			desc: "Path includes both # and ?",
+			path: "/foo?bar#bar",
+			want: "/foo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+
+			svc, eps, _ := newDefaultBackend()
+
+			bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+			ing1 := newIngress(metav1.NamespaceDefault, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
+			ing1.Spec.Rules[0].HTTP.Paths[0].Path = tt.path
+
+			f.svcStore = append(f.svcStore, svc, bs1)
+			f.epStore = append(f.epStore, eps, be1)
+			f.ingStore = append(f.ingStore, ing1)
+
+			f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+
+			f.prepare()
+			f.run()
+
+			fm := f.lbc.nghttpx.(*fakeManager)
+			ingConfig := fm.ingConfig
+
+			if got, want := len(ingConfig.Upstreams), 2; got != want {
+				t.Fatalf("len(ingConfig.Upstream) = %v want %v", got, want)
+			}
+
+			upstream := ingConfig.Upstreams[0]
+			if got, want := upstream.Path, tt.want; got != want {
+				t.Errorf("upstream.Path = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
 // TestSyncQUICKeyingMaterials verifies syncQUICKeyingMaterials.
 func TestSyncQUICKeyingMaterials(t *testing.T) {
 	now := time.Now().Round(time.Second)

@@ -1024,7 +1024,17 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
 
-				if lbc.noDefaultBackendOverride && (rule.Host == "" && (path.Path == "" || path.Path == "/")) {
+				reqPath := path.Path
+				if idx := strings.Index(reqPath, "#"); idx != -1 {
+					klog.Warningf("Path includes '#': %v", path.Path)
+					reqPath = reqPath[:idx]
+				}
+				if idx := strings.Index(reqPath, "?"); idx != -1 {
+					klog.Warningf("Path includes '?': %v", path.Path)
+					reqPath = reqPath[:idx]
+				}
+
+				if lbc.noDefaultBackendOverride && (rule.Host == "" && (reqPath == "" || reqPath == "/")) {
 					klog.Warningf("Ignore rule in Ingress %v/%v which overrides default backend", ing.Namespace, ing.Name)
 					continue
 				}
@@ -1035,7 +1045,7 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networking.Ingress
 					continue
 				}
 
-				if ups, err := lbc.createUpstream(ing, rule.Host, path.Path, isb, requireTLS,
+				if ups, err := lbc.createUpstream(ing, rule.Host, reqPath, isb, requireTLS,
 					defaultPathConfig, pathConfig, defaultPortBackendConfig, backendConfig); err != nil {
 					klog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 					continue
