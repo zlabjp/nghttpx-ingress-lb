@@ -27,9 +27,8 @@ RUN apt-get update && \
         git clang make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison libelf-dev patch
 
-RUN git clone -b OpenSSL_1_1_1l+quic https://github.com/quictls/openssl && \
+RUN git clone --depth 1 -b OpenSSL_1_1_1l+quic https://github.com/quictls/openssl && \
     cd openssl && \
-    git checkout 5b312bf1bd1361216a817f338eca3830b7c15d85 && \
     ./config --openssldir=/etc/ssl && \
     make -j$(nproc) && \
     make install_sw && \
