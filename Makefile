@@ -37,7 +37,7 @@ clean:
 
 .PHONY: vet
 vet:
-	go vet -printfuncs Infof,Warningf,Errorf,Fatalf,Exitf github.com/zlabjp/nghttpx-ingress-lb/pkg/... github.com/zlabjp/nghttpx-ingress-lb/cmd/...
+	go vet -printfuncs Infof,Warningf,Errorf,Fatalf,Exitf,Eventf github.com/zlabjp/nghttpx-ingress-lb/pkg/... github.com/zlabjp/nghttpx-ingress-lb/cmd/...
 
 .PHONY: fmt
 fmt:
