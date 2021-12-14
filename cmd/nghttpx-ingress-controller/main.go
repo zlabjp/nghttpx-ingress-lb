@@ -47,6 +47,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/component-base/cli"
 	"k8s.io/klog/v2"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
@@ -91,9 +92,6 @@ var (
 )
 
 func main() {
-	klog.InitFlags(flag.CommandLine)
-	defer klog.Flush()
-
 	// We use math/rand to choose interval of resync
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -173,9 +171,8 @@ func main() {
 
 	rootCmd.Flags().StringVar(&quicKeyingMaterialsSecret, "quic-keying-materials-secret", quicKeyingMaterialsSecret, `The name of Secret resource which contains QUIC keying materials for nghttpx.  The resource must belong to the same namespace as the controller Pod.`)
 
-	if err := rootCmd.Execute(); err != nil {
-		klog.Exitf("Exiting due to command-line error: %v", err)
-	}
+	code := cli.Run(rootCmd)
+	os.Exit(code)
 }
 
 func run(cmd *cobra.Command, args []string) {
