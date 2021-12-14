@@ -19,7 +19,7 @@
 
 FROM debian:11 as build
 
-COPY patches/extra-mrbgem.patch /
+COPY patches/extra-mrbgem.patch patches/0001-Compile-with-the-latest-ngtcp2.patch patches/0002-nghttpx-Use-nghttp3-error-code.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
@@ -65,6 +65,8 @@ RUN git clone --depth 1 -b v0.4.0 https://github.com/libbpf/libbpf && \
 RUN git clone --depth 1 -b v1.46.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
+    patch -p1 < /0001-Compile-with-the-latest-ngtcp2.patch && \
+    patch -p1 < /0002-nghttpx-Use-nghttp3-error-code.patch && \
     git submodule update --init && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed \
