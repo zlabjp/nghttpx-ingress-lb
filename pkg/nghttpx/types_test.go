@@ -1,8 +1,9 @@
 package nghttpx
 
 import (
-	"encoding/json"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/util/json"
 )
 
 // TestPrivateChecksumFileMarshalJSON verifies PrivateChecksumFile.MarshalJSON.

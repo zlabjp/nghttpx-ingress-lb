@@ -27,10 +27,10 @@ package nghttpx
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"runtime"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/json"
 )
 
 // Interface is the API to update underlying load balancer.
