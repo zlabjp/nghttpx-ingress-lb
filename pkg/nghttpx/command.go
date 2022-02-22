@@ -40,6 +40,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	kjson "sigs.k8s.io/json"
 )
 
 // Start starts a nghttpx process using nghttpx executable at path, and wait.
@@ -289,7 +290,7 @@ type apiResult struct {
 }
 
 // getNghttpxConfigRevision returns the current nghttpx configRevision through configrevision API call.
-func (mgr *Manager) getNghttpxConfigRevision() (string, error) {
+func (mgr *Manager) getNghttpxConfigRevision() (int64, error) {
 	klog.V(4).Infof("Issuing API request %v", mgr.configrevisionURI)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -297,45 +298,44 @@ func (mgr *Manager) getNghttpxConfigRevision() (string, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mgr.configrevisionURI, nil)
 	if err != nil {
-		return "", fmt.Errorf("could not create API request: %v", err)
+		return 0, fmt.Errorf("could not create API request: %v", err)
 	}
 
 	resp, err := mgr.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("could not get nghttpx configRevision: %v", err)
+		return 0, fmt.Errorf("could not get nghttpx configRevision: %v", err)
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("configrevision API endpoint returned unsuccessful status code %v", resp.StatusCode)
+		return 0, fmt.Errorf("configrevision API endpoint returned unsuccessful status code %v", resp.StatusCode)
 	}
 
-	d := json.NewDecoder(resp.Body)
-	d.UseNumber()
+	d := kjson.NewDecoderCaseSensitivePreserveInts(resp.Body)
 
 	var r apiResult
 	if err := d.Decode(&r); err != nil {
-		return "", fmt.Errorf("could not parse nghttpx configuration API result: %v", err)
+		return 0, fmt.Errorf("could not parse nghttpx configuration API result: %v", err)
 	}
 
 	if r.Data == nil {
-		return "", errors.New("nghttpx configuration API result has nil Data field")
+		return 0, errors.New("nghttpx configuration API result has nil Data field")
 	}
 
 	s := r.Data["configRevision"]
-	confRev, ok := s.(json.Number)
+	confRev, ok := s.(int64)
 	if !ok {
-		return "", errors.New("nghttpx configuration API result has non json.Number configRevision")
+		return 0, errors.New("nghttpx configuration API result has non int64 configRevision")
 	}
 
 	klog.V(4).Infof("nghttpx configRevision is %v", confRev)
 
-	return confRev.String(), nil
+	return confRev, nil
 }
 
 // waitUntilConfigRevisionChanges waits for the current nghttpx configuration to change from old value, oldConfRev.
-func (mgr *Manager) waitUntilConfigRevisionChanges(oldConfRev string) error {
+func (mgr *Manager) waitUntilConfigRevisionChanges(oldConfRev int64) error {
 	klog.Infof("Waiting for nghttpx to finish reloading configuration")
 
 	if err := wait.Poll(time.Second, 30*time.Second, func() (bool, error) {
