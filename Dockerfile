@@ -35,7 +35,7 @@ RUN git clone --depth 1 -b OpenSSL_1_1_1m+quic https://github.com/quictls/openss
     cd .. && \
     rm -rf openssl
 
-RUN git clone --depth 1 https://github.com/ngtcp2/nghttp3 && \
+RUN git clone --depth 1 -b v0.2.0 https://github.com/ngtcp2/nghttp3 && \
     cd nghttp3 && \
     autoreconf -i && \
     ./configure --enable-lib-only && \
@@ -44,7 +44,7 @@ RUN git clone --depth 1 https://github.com/ngtcp2/nghttp3 && \
     cd .. && \
     rm -rf nghttp3
 
-RUN git clone --depth 1 https://github.com/ngtcp2/ngtcp2 && \
+RUN git clone --depth 1 -b v0.2.0 https://github.com/ngtcp2/ngtcp2 && \
     cd ngtcp2 && \
     autoreconf -i && \
     ./configure --enable-lib-only \
@@ -56,17 +56,15 @@ RUN git clone --depth 1 https://github.com/ngtcp2/ngtcp2 && \
     cd .. && \
     rm -rf ngtcp2
 
-RUN git clone --depth 1 -b v0.4.0 https://github.com/libbpf/libbpf && \
+RUN git clone --depth 1 -b v0.7.0 https://github.com/libbpf/libbpf && \
     cd libbpf && \
     PREFIX=/usr/local make -C src install && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --depth 1 -b v1.46.0 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --depth 1 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
-    patch -p1 < /0001-Compile-with-the-latest-ngtcp2.patch && \
-    patch -p1 < /0002-nghttpx-Use-nghttp3-error-code.patch && \
     git submodule update --init && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed \
