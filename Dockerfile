@@ -62,7 +62,7 @@ RUN git clone --depth 1 -b v0.7.0 https://github.com/libbpf/libbpf && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --depth 1 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --depth 1 -b v1.47.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     git submodule update --init && \
