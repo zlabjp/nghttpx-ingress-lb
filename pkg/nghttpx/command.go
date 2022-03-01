@@ -91,7 +91,7 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 
 	changed, err := mgr.checkAndWriteCfg(ingressCfg, mainConfig, backendConfig)
 	if err != nil {
-		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %v", err)
+		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %w", err)
 	}
 
 	if changed == configNotChanged {
@@ -127,7 +127,7 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 
 		klog.Info("change in configuration detected. Reloading...")
 		if err := mgr.cmd.Process.Signal(syscall.SIGHUP); err != nil {
-			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %v", mgr.cmd.Process.Pid, err)
+			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %w", mgr.cmd.Process.Pid, err)
 		}
 
 		if err := mgr.waitUntilConfigRevisionChanges(oldConfRev); err != nil {
@@ -147,7 +147,7 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 		}
 
 		if err := mgr.issueBackendReplaceRequest(ingressCfg); err != nil {
-			return false, fmt.Errorf("failed to issue backend replace request: %v", err)
+			return false, fmt.Errorf("failed to issue backend replace request: %w", err)
 		}
 
 		mgr.eventRecorder.Eventf(mgr.pod, nil, v1.EventTypeNormal, "ReplaceBackend", "ReplaceBackend", "nghttpx replaced its backend servers")
@@ -163,10 +163,10 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 // deleteStaleAssets deletes asset files which are no longer used.
 func deleteStaleAssets(ingConfig *IngressConfig) error {
 	if err := deleteStaleTLSAssets(ingConfig); err != nil {
-		return fmt.Errorf("could not delete stale TLS assets: %v", err)
+		return fmt.Errorf("could not delete stale TLS assets: %w", err)
 	}
 	if err := deleteStaleMrubyAssets(ingConfig); err != nil {
-		return fmt.Errorf("could not delete stale mruby assets: %v", err)
+		return fmt.Errorf("could not delete stale mruby assets: %w", err)
 	}
 	return nil
 }
@@ -241,7 +241,7 @@ func (mgr *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 
 	in, err := os.Open(backendConfigPath)
 	if err != nil {
-		return fmt.Errorf("could not open backend configuration file %v: %v", backendConfigPath, err)
+		return fmt.Errorf("could not open backend configuration file %v: %w", backendConfigPath, err)
 	}
 
 	defer in.Close()
@@ -251,7 +251,7 @@ func (mgr *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, mgr.backendconfigURI, in)
 	if err != nil {
-		return fmt.Errorf("could not create API request: %v", err)
+		return fmt.Errorf("could not create API request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "text/plain")
@@ -259,7 +259,7 @@ func (mgr *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 	resp, err := mgr.httpClient.Do(req)
 
 	if err != nil {
-		return fmt.Errorf("could not issue API request: %v", err)
+		return fmt.Errorf("could not issue API request: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -270,7 +270,7 @@ func (mgr *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("could not read API response body: %v", err)
+		return fmt.Errorf("could not read API response body: %w", err)
 	}
 
 	if klog.V(3).Enabled() {
@@ -298,12 +298,12 @@ func (mgr *Manager) getNghttpxConfigRevision() (int64, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mgr.configrevisionURI, nil)
 	if err != nil {
-		return 0, fmt.Errorf("could not create API request: %v", err)
+		return 0, fmt.Errorf("could not create API request: %w", err)
 	}
 
 	resp, err := mgr.httpClient.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("could not get nghttpx configRevision: %v", err)
+		return 0, fmt.Errorf("could not get nghttpx configRevision: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -316,7 +316,7 @@ func (mgr *Manager) getNghttpxConfigRevision() (int64, error) {
 
 	var r apiResult
 	if err := d.Decode(&r); err != nil {
-		return 0, fmt.Errorf("could not parse nghttpx configuration API result: %v", err)
+		return 0, fmt.Errorf("could not parse nghttpx configuration API result: %w", err)
 	}
 
 	if r.Data == nil {
@@ -351,7 +351,7 @@ func (mgr *Manager) waitUntilConfigRevisionChanges(oldConfRev int64) error {
 
 		return true, nil
 	}); err != nil {
-		return fmt.Errorf("could not get new nghttpx configRevision: %v", err)
+		return fmt.Errorf("could not get new nghttpx configRevision: %w", err)
 	}
 
 	return nil

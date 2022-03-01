@@ -86,7 +86,7 @@ func CreateTLSCred(dir, name string, cert, key, ocspResp []byte) *TLSCred {
 // writeTLSKeyCert writes TLS private keys and certificates to their files.
 func writeTLSKeyCert(ingConfig *IngressConfig) error {
 	if err := MkdirAll(filepath.Join(ingConfig.ConfDir, tlsDir)); err != nil {
-		return fmt.Errorf("failed to create TLS directory: %v", err)
+		return fmt.Errorf("failed to create TLS directory: %w", err)
 	}
 
 	if ingConfig.DefaultTLSCred != nil {
@@ -107,16 +107,16 @@ func writeTLSKeyCert(ingConfig *IngressConfig) error {
 // writeTLSCred writes TLS private key, certificate, and optionally OCSP response to tlsCred in their files.
 func writeTLSCred(tlsCred *TLSCred) error {
 	if err := WriteFile(tlsCred.Key.Path, tlsCred.Key.Content); err != nil {
-		return fmt.Errorf("failed to write TLS private key: %v", err)
+		return fmt.Errorf("failed to write TLS private key: %w", err)
 	}
 
 	if err := WriteFile(tlsCred.Cert.Path, tlsCred.Cert.Content); err != nil {
-		return fmt.Errorf("failed to write TLS certificate: %v", err)
+		return fmt.Errorf("failed to write TLS certificate: %w", err)
 	}
 
 	if tlsCred.OCSPResp != nil {
 		if err := WriteFile(tlsCred.OCSPResp.Path, tlsCred.OCSPResp.Content); err != nil {
-			return fmt.Errorf("failed to write TLS OCSP response: %v", err)
+			return fmt.Errorf("failed to write TLS OCSP response: %w", err)
 		}
 	}
 

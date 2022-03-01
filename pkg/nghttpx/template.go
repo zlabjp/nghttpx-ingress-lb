@@ -142,11 +142,11 @@ func (mgr *Manager) writeDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHeal
 		"HealthPort": nghttpxHealthPort,
 		"APIPort":    nghttpxAPIPort,
 	}); err != nil {
-		return fmt.Errorf("could not create default configuration file for nghttpx: %v", err)
+		return fmt.Errorf("could not create default configuration file for nghttpx: %w", err)
 	}
 
 	if err := WriteFile(ConfigPath(nghttpxConfDir), buf.Bytes()); err != nil {
-		return fmt.Errorf("could not write default configuration file for nghttpx: %v", err)
+		return fmt.Errorf("could not write default configuration file for nghttpx: %w", err)
 	}
 
 	return nil
