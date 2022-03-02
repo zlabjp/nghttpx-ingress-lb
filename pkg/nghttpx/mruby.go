@@ -29,7 +29,7 @@ func writeMrubyFile(ingConfig *IngressConfig) error {
 
 	f := ingConfig.MrubyFile
 	if err := WriteFile(f.Path, f.Content); err != nil {
-		return fmt.Errorf("failed to write mruby file: %v", err)
+		return fmt.Errorf("failed to write mruby file: %w", err)
 	}
 
 	return nil
@@ -45,13 +45,13 @@ func writePerPatternMrubyFile(ingConfig *IngressConfig) error {
 			continue
 		}
 		if err := WriteFile(upstream.Mruby.Path, upstream.Mruby.Content); err != nil {
-			return fmt.Errorf("failed to write per-pattern mruby file: %v", err)
+			return fmt.Errorf("failed to write per-pattern mruby file: %w", err)
 		}
 	}
 
 	if f := ingConfig.HealthzMruby; f != nil {
 		if err := WriteFile(f.Path, f.Content); err != nil {
-			return fmt.Errorf("failed to write healthz mruby file: %v", err)
+			return fmt.Errorf("failed to write healthz mruby file: %w", err)
 		}
 	}
 

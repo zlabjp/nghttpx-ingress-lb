@@ -140,7 +140,7 @@ func unmarshal(data []byte, dest interface{}) error {
 	klog.Infof("Could not unmarshal YAML string; fall back to JSON: %v", err)
 
 	if err := json.Unmarshal(data, dest); err != nil {
-		return fmt.Errorf("could not unmarshal JSON string: %v", err)
+		return fmt.Errorf("could not unmarshal JSON string: %w", err)
 	}
 
 	return nil
