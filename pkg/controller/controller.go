@@ -40,7 +40,7 @@ import (
 
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1beta1"
+	discovery "k8s.io/api/discovery/v1"
 	networking "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,7 +49,7 @@ import (
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	listerscore "k8s.io/client-go/listers/core/v1"
-	listersdiscovery "k8s.io/client-go/listers/discovery/v1beta1"
+	listersdiscovery "k8s.io/client-go/listers/discovery/v1"
 	listersnetworking "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
@@ -260,7 +260,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 					discovery.LabelManagedBy + "=endpointslice-controller.k8s.io," + discovery.LabelServiceName
 			}))
 
-		f := epSliceInformers.Discovery().V1beta1().EndpointSlices()
+		f := epSliceInformers.Discovery().V1().EndpointSlices()
 		lbc.epSliceLister = f.Lister()
 		lbc.epSliceInformer = f.Informer()
 		lbc.epSliceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
