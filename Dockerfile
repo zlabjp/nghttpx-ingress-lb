@@ -19,7 +19,7 @@
 
 FROM debian:11 as build
 
-COPY patches/extra-mrbgem.patch patches/0001-Compile-with-the-latest-ngtcp2.patch patches/0002-nghttpx-Use-nghttp3-error-code.patch /
+COPY patches/extra-mrbgem.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
