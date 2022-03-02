@@ -80,7 +80,7 @@ var (
 	proxyProto                = false
 	ocspRespKey               = "tls.ocsp-resp"
 	publishSvc                string
-	endpointSlices            = false
+	endpointSlices            = true
 	reloadRate                = 1.0
 	reloadBurst               = 1
 	noDefaultBackendOverride  = false
@@ -151,7 +151,7 @@ func main() {
 	rootCmd.Flags().StringVar(&publishSvc, "publish-service", publishSvc,
 		`Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
 
-	rootCmd.Flags().BoolVar(&endpointSlices, "endpoint-slices", endpointSlices, `Get endpoints from EndpointSlice resource instead of Endpoints resource.`)
+	rootCmd.Flags().BoolVar(&endpointSlices, "endpoint-slices", endpointSlices, `Get endpoints from EndpointSlice resource instead of Endpoints resource.  Endpoints resource usage is now deprecated and will be removed in the future release.`)
 
 	rootCmd.Flags().Float64Var(&reloadRate, "reload-rate", reloadRate,
 		`Rate (QPS) of reloading nghttpx configuration to deal with frequent backend updates in a single batch.`)
