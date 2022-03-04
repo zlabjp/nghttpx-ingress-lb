@@ -126,6 +126,7 @@ type LoadBalancerController struct {
 	internalDefaultBackend    bool
 	http3                     bool
 	quicKeyingMaterialsSecret *types.NamespacedName
+	reconcileTimeout          time.Duration
 	reloadRateLimiter         flowcontrol.RateLimiter
 	eventRecorder             events.EventRecorder
 	syncQueue                 workqueue.Interface
@@ -183,6 +184,9 @@ type Config struct {
 	InternalDefaultBackend bool
 	// HTTP3, if true, enables HTTP/3.
 	HTTP3 bool
+	// ReconcileTimeout is a timeout for a single reconciliation.  It is a safe guard to prevent a reconciliation from getting stuck
+	// indefinitely.
+	ReconcileTimeout time.Duration
 	// QUICKeyingMaterialsSecret is the Secret resource which contains QUIC keying materials used by nghttpx.
 	QUICKeyingMaterialsSecret *types.NamespacedName
 	// Pod is the Pod where this controller runs.
@@ -219,6 +223,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		internalDefaultBackend:    config.InternalDefaultBackend,
 		http3:                     config.HTTP3,
 		quicKeyingMaterialsSecret: config.QUICKeyingMaterialsSecret,
+		reconcileTimeout:          config.ReconcileTimeout,
 		eventRecorder:             config.EventRecorder,
 		syncQueue:                 workqueue.New(),
 		quicSecretQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
@@ -795,7 +800,13 @@ func (lbc *LoadBalancerController) worker() {
 		}
 
 		defer lbc.syncQueue.Done(key)
-		if err := lbc.sync(key.(string)); err != nil {
+
+		lbc.reloadRateLimiter.Accept()
+
+		ctx, cancel := context.WithTimeout(context.Background(), lbc.reconcileTimeout)
+		defer cancel()
+
+		if err := lbc.sync(ctx, key.(string)); err != nil {
 			klog.Error(err)
 		}
 
@@ -841,9 +852,7 @@ func (lbc *LoadBalancerController) getQUICKeyingMaterials(key types.NamespacedNa
 	return km, nil
 }
 
-func (lbc *LoadBalancerController) sync(key string) error {
-	lbc.reloadRateLimiter.Accept()
-
+func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
 	retry := false
 
 	defer func() { lbc.retryOrForget(key, retry) }()
@@ -873,7 +882,7 @@ func (lbc *LoadBalancerController) sync(key string) error {
 		ingConfig.QUICSecretFile = nghttpx.CreateQUICSecretFile(ingConfig.ConfDir, quicKM)
 	}
 
-	reloaded, err := lbc.nghttpx.CheckAndReload(ingConfig)
+	reloaded, err := lbc.nghttpx.CheckAndReload(ctx, ingConfig)
 	if err != nil {
 		return err
 	}
@@ -1634,7 +1643,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			lbc.quicSecretWorker()
+			lbc.quicSecretWorker(ctrlCtx)
 		}()
 	}
 
@@ -1743,6 +1752,9 @@ func (lbc *LoadBalancerController) syncIngress(ctx context.Context) {
 
 // getLoadBalancerIngressAndUpdateIngress gets addresses to set in Ingress resource, and updates Ingress Status with them.
 func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, lbc.reconcileTimeout)
+	defer cancel()
+
 	var lbIngs []v1.LoadBalancerIngress
 
 	if lbc.publishService == nil {
@@ -1895,6 +1907,9 @@ func (lbc *LoadBalancerController) getPodNodeAddress(pod *v1.Pod) (string, error
 func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error {
 	klog.Infof("Remove this address from all Ingress.Status.LoadBalancer.Ingress.")
 
+	ctx, cancel := context.WithTimeout(context.Background(), lbc.reconcileTimeout)
+	defer cancel()
+
 	var (
 		addr string
 		err  error
@@ -1938,7 +1953,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 			newIng := ing.DeepCopy()
 			newIng.Status.LoadBalancer.Ingress = lbIngs
 
-			if _, err := lbc.clientset.NetworkingV1().Ingresses(newIng.Namespace).UpdateStatus(context.TODO(), newIng, metav1.UpdateOptions{}); err != nil {
+			if _, err := lbc.clientset.NetworkingV1().Ingresses(newIng.Namespace).UpdateStatus(ctx, newIng, metav1.UpdateOptions{}); err != nil {
 				return err
 			}
 			return nil
@@ -1950,7 +1965,7 @@ func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error 
 	return nil
 }
 
-func (lbc *LoadBalancerController) quicSecretWorker() {
+func (lbc *LoadBalancerController) quicSecretWorker(ctx context.Context) {
 	work := func() bool {
 		key, quit := lbc.quicSecretQueue.Get()
 		if quit {
@@ -1958,7 +1973,11 @@ func (lbc *LoadBalancerController) quicSecretWorker() {
 		}
 
 		defer lbc.quicSecretQueue.Done(key)
-		if err := lbc.syncQUICKeyingMaterials(time.Now()); err != nil {
+
+		ctx, cancel := context.WithTimeout(ctx, lbc.reconcileTimeout)
+		defer cancel()
+
+		if err := lbc.syncQUICKeyingMaterials(ctx, time.Now()); err != nil {
 			klog.Error(err)
 			lbc.quicSecretQueue.AddRateLimited(key)
 		} else {
@@ -1975,7 +1994,7 @@ func (lbc *LoadBalancerController) quicSecretWorker() {
 	}
 }
 
-func (lbc *LoadBalancerController) syncQUICKeyingMaterials(now time.Time) error {
+func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, now time.Time) error {
 	key := *lbc.quicKeyingMaterialsSecret
 	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
 	if err != nil {
@@ -1997,7 +2016,7 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(now time.Time) error 
 			},
 		}
 
-		if _, err := lbc.clientset.CoreV1().Secrets(secret.Namespace).Create(context.Background(), secret, metav1.CreateOptions{}); err != nil {
+		if _, err := lbc.clientset.CoreV1().Secrets(secret.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
 			klog.Errorf("Could not create Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 			return err
 		}
@@ -2043,7 +2062,7 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(now time.Time) error 
 
 	updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey] = nghttpx.UpdateQUICKeyingMaterials(km)
 
-	if _, err := lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(context.Background(), updatedSecret, metav1.UpdateOptions{}); err != nil {
+	if _, err := lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(ctx, updatedSecret, metav1.UpdateOptions{}); err != nil {
 		klog.Errorf("Could not update Secret %v/%v: %v", updatedSecret.Namespace, updatedSecret.Name, err)
 		return err
 	}

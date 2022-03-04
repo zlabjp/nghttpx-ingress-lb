@@ -89,6 +89,7 @@ var (
 	internalDefaultBackend    = false
 	http3                     = false
 	quicKeyingMaterialsSecret = "nghttpx-quic-km"
+	reconcileTimeout          = 10 * time.Minute
 )
 
 func main() {
@@ -170,6 +171,9 @@ func main() {
 	rootCmd.Flags().BoolVar(&http3, "http3", http3, `Enable HTTP/3.  This makes nghttpx listen to UDP port specified by nghttpx-https-port for HTTP/3 traffic.`)
 
 	rootCmd.Flags().StringVar(&quicKeyingMaterialsSecret, "quic-keying-materials-secret", quicKeyingMaterialsSecret, `The name of Secret resource which contains QUIC keying materials for nghttpx.  The resource must belong to the same namespace as the controller Pod.`)
+
+	rootCmd.Flags().DurationVar(&reconcileTimeout, "reconcile-timeout", reconcileTimeout,
+		`A timeout for a single reconciliation.  It is a safe guard to prevent a reconciliation from getting stuck indefinitely.`)
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
@@ -301,6 +305,7 @@ func run(cmd *cobra.Command, args []string) {
 		InternalDefaultBackend:    internalDefaultBackend,
 		HTTP3:                     http3,
 		QUICKeyingMaterialsSecret: &types.NamespacedName{Name: quicKeyingMaterialsSecret, Namespace: thisPod.Namespace},
+		ReconcileTimeout:          reconcileTimeout,
 		Pod:                       thisPod,
 		EventRecorder:             eventRecorder,
 	}

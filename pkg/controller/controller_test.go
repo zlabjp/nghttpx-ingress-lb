@@ -153,7 +153,7 @@ func (f *fixture) preparePod(pod *v1.Pod) {
 func (f *fixture) run() {
 	f.setupStore()
 
-	if err := f.lbc.sync(syncKey); err != nil {
+	if err := f.lbc.sync(context.Background(), syncKey); err != nil {
 		f.t.Errorf("Failed to sync: %v", err)
 	}
 
@@ -163,7 +163,7 @@ func (f *fixture) run() {
 func (f *fixture) runShouldFail() {
 	f.setupStore()
 
-	if err := f.lbc.sync(syncKey); err == nil {
+	if err := f.lbc.sync(context.Background(), syncKey); err == nil {
 		f.t.Errorf("sync should fail")
 	}
 
@@ -261,7 +261,7 @@ func (fm *fakeManager) Start(ctx context.Context, path, confPath string) error {
 	return nil
 }
 
-func (fm *fakeManager) CheckAndReload(ingConfig *nghttpx.IngressConfig) (bool, error) {
+func (fm *fakeManager) CheckAndReload(ctx context.Context, ingConfig *nghttpx.IngressConfig) (bool, error) {
 	return fm.checkAndReloadHandler(ingConfig)
 }
 
@@ -1844,7 +1844,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 			f.lbc.http3 = true
 			f.lbc.quicKeyingMaterialsSecret = &defaultQUICSecret
 
-			err := f.lbc.syncQUICKeyingMaterials(now)
+			err := f.lbc.syncQUICKeyingMaterials(context.Background(), now)
 			if err != nil {
 				t.Fatalf("f.lbc.syncQUICKeyingMaterials(...): %v", err)
 			}

@@ -41,7 +41,7 @@ type Interface interface {
 	// CheckAndReload checks whether the nghttpx configuration changed, and if so, make nghttpx reload its configuration.  If reloading
 	// is required, and it successfully issues reloading, returns true.  If there is no need to reloading, it returns false.  On error,
 	// it returns false, and non-nil error.
-	CheckAndReload(ingressCfg *IngressConfig) (bool, error)
+	CheckAndReload(ctx context.Context, ingressCfg *IngressConfig) (bool, error)
 }
 
 // IngressConfig describes an nghttpx configuration
