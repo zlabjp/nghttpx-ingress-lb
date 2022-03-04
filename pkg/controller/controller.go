@@ -1796,7 +1796,7 @@ func (lbc *LoadBalancerController) updateIngressStatus(ctx context.Context, lbIn
 		newIng := ing.DeepCopy()
 		newIng.Status.LoadBalancer.Ingress = lbIngs
 
-		if _, err := lbc.clientset.NetworkingV1().Ingresses(ing.Namespace).UpdateStatus(context.TODO(), newIng, metav1.UpdateOptions{}); err != nil {
+		if _, err := lbc.clientset.NetworkingV1().Ingresses(ing.Namespace).UpdateStatus(ctx, newIng, metav1.UpdateOptions{}); err != nil {
 			klog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
 		}
 	}
