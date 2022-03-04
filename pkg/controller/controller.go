@@ -1768,7 +1768,6 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx co
 
 // updateIngressStatus updates LoadBalancerIngress field of all Ingresses.
 func (lbc *LoadBalancerController) updateIngressStatus(ctx context.Context, lbIngs []v1.LoadBalancerIngress) error {
-
 	ings, err := lbc.ingLister.List(labels.Everything())
 	if err != nil {
 		return fmt.Errorf("could not list Ingress: %w", err)
