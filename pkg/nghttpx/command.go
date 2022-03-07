@@ -83,7 +83,7 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) error {
 //
 // The current running nghttpx master process executes new nghttpx with new configuration.  If its invocation succeeds, current nghttpx is
 // going to shutdown gracefully.  The invocation of new process may fail due to invalid configurations.
-func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
+func (mgr *Manager) CheckAndReload(ctx context.Context, ingressCfg *IngressConfig) (bool, error) {
 	mainConfig, backendConfig, err := mgr.generateCfg(ingressCfg)
 	if err != nil {
 		return false, err
@@ -108,7 +108,7 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 
 	switch changed {
 	case mainConfigChanged:
-		oldConfRev, err := mgr.getNghttpxConfigRevision()
+		oldConfRev, err := mgr.getNghttpxConfigRevision(ctx)
 		if err != nil {
 			return false, err
 		}
@@ -130,7 +130,7 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %w", mgr.cmd.Process.Pid, err)
 		}
 
-		if err := mgr.waitUntilConfigRevisionChanges(oldConfRev); err != nil {
+		if err := mgr.waitUntilConfigRevisionChanges(ctx, oldConfRev); err != nil {
 			return false, err
 		}
 
@@ -146,7 +146,7 @@ func (mgr *Manager) CheckAndReload(ingressCfg *IngressConfig) (bool, error) {
 			return false, err
 		}
 
-		if err := mgr.issueBackendReplaceRequest(ingressCfg); err != nil {
+		if err := mgr.issueBackendReplaceRequest(ctx, ingressCfg); err != nil {
 			return false, fmt.Errorf("failed to issue backend replace request: %w", err)
 		}
 
@@ -234,7 +234,7 @@ func deleteAssetFiles(dir string, keep map[string]bool) error {
 	return nil
 }
 
-func (mgr *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
+func (mgr *Manager) issueBackendReplaceRequest(ctx context.Context, ingConfig *IngressConfig) error {
 	klog.Infof("Issuing API request %v", mgr.backendconfigURI)
 
 	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
@@ -246,7 +246,7 @@ func (mgr *Manager) issueBackendReplaceRequest(ingConfig *IngressConfig) error {
 
 	defer in.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, mgr.backendconfigURI, in)
@@ -290,10 +290,10 @@ type apiResult struct {
 }
 
 // getNghttpxConfigRevision returns the current nghttpx configRevision through configrevision API call.
-func (mgr *Manager) getNghttpxConfigRevision() (int64, error) {
+func (mgr *Manager) getNghttpxConfigRevision(ctx context.Context) (int64, error) {
 	klog.V(4).Infof("Issuing API request %v", mgr.configrevisionURI)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mgr.configrevisionURI, nil)
@@ -335,11 +335,11 @@ func (mgr *Manager) getNghttpxConfigRevision() (int64, error) {
 }
 
 // waitUntilConfigRevisionChanges waits for the current nghttpx configuration to change from old value, oldConfRev.
-func (mgr *Manager) waitUntilConfigRevisionChanges(oldConfRev int64) error {
+func (mgr *Manager) waitUntilConfigRevisionChanges(ctx context.Context, oldConfRev int64) error {
 	klog.Infof("Waiting for nghttpx to finish reloading configuration")
 
 	if err := wait.Poll(time.Second, 30*time.Second, func() (bool, error) {
-		newConfRev, err := mgr.getNghttpxConfigRevision()
+		newConfRev, err := mgr.getNghttpxConfigRevision(ctx)
 		if err != nil {
 			klog.Error(err)
 			return false, nil
