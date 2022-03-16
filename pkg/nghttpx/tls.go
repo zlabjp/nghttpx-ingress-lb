@@ -34,7 +34,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -143,7 +143,7 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 }
 
 // TLSCredPrefix returns prefix of TLS certificate/private key files.
-func TLSCredPrefix(secret *v1.Secret) string {
+func TLSCredPrefix(secret *corev1.Secret) string {
 	return strings.Join([]string{secret.Namespace, secret.Name}, "_")
 }
 

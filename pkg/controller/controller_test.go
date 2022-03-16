@@ -32,9 +32,9 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1"
-	networking "k8s.io/api/networking/v1"
+	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -55,15 +55,15 @@ type fixture struct {
 
 	lbc *LoadBalancerController
 
-	ingStore      []*networking.Ingress
-	ingClassStore []*networking.IngressClass
-	epStore       []*v1.Endpoints
-	svcStore      []*v1.Service
-	secretStore   []*v1.Secret
-	cmStore       []*v1.ConfigMap
-	podStore      []*v1.Pod
-	nodeStore     []*v1.Node
-	epSliceStore  []*discovery.EndpointSlice
+	ingStore      []*networkingv1.Ingress
+	ingClassStore []*networkingv1.IngressClass
+	epStore       []*corev1.Endpoints
+	svcStore      []*corev1.Service
+	secretStore   []*corev1.Secret
+	cmStore       []*corev1.ConfigMap
+	podStore      []*corev1.Pod
+	nodeStore     []*corev1.Node
+	epSliceStore  []*discoveryv1.EndpointSlice
 
 	objects []runtime.Object
 
@@ -133,7 +133,7 @@ func (f *fixture) prepare() {
 	f.preparePod(newIngPod(defaultRuntimeInfo.Name, "zulu.test"))
 }
 
-func (f *fixture) preparePod(pod *v1.Pod) {
+func (f *fixture) preparePod(pod *corev1.Pod) {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
 	config := Config{
 		DefaultBackendService:  &types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
@@ -239,7 +239,7 @@ func (f *fixture) verifyActions() {
 }
 
 // expectUpdateIngAction adds an expectation that update for ing should occur.
-func (f *fixture) expectUpdateIngAction(ing *networking.Ingress) {
+func (f *fixture) expectUpdateIngAction(ing *networkingv1.Ingress) {
 	f.actions = append(f.actions, core.NewUpdateAction(schema.GroupVersionResource{Resource: "ingresses"}, ing.Namespace, ing))
 }
 
@@ -279,8 +279,8 @@ func int32Ptr(n int32) *int32 {
 }
 
 // newEmptyConfigMap returns empty ConfigMap.
-func newEmptyConfigMap() *v1.ConfigMap {
-	return &v1.ConfigMap{
+func newEmptyConfigMap() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      defaultConfigMapName,
 			Namespace: defaultConfigMapNamespace,
@@ -290,33 +290,33 @@ func newEmptyConfigMap() *v1.ConfigMap {
 }
 
 // newDefaultBackend returns Service and Endpoints for default backend.
-func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice) {
-	svc := &v1.Service{
+func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.EndpointSlice) {
+	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      defaultBackendName,
 			Namespace: defaultBackendNamespace,
 		},
-		Spec: v1.ServiceSpec{
-			Ports: []v1.ServicePort{
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
 				{
 					Port:       8181,
 					TargetPort: intstr.FromInt(8080),
-					Protocol:   v1.ProtocolTCP,
+					Protocol:   corev1.ProtocolTCP,
 				},
 			},
 		},
 	}
-	eps := &v1.Endpoints{
+	eps := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      defaultBackendName,
 			Namespace: defaultBackendNamespace,
 		},
-		Subsets: []v1.EndpointSubset{
+		Subsets: []corev1.EndpointSubset{
 			{
-				Addresses: []v1.EndpointAddress{
+				Addresses: []corev1.EndpointAddress{
 					{
 						IP: "192.168.100.1",
-						TargetRef: &v1.ObjectReference{
+						TargetRef: &corev1.ObjectReference{
 							Kind:      "Pod",
 							Name:      defaultBackendName + "-pod-1",
 							Namespace: defaultBackendNamespace,
@@ -324,20 +324,20 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 					},
 					{
 						IP: "192.168.100.2",
-						TargetRef: &v1.ObjectReference{
+						TargetRef: &corev1.ObjectReference{
 							Kind:      "Pod",
 							Name:      defaultBackendName + "-pod-2",
 							Namespace: defaultBackendNamespace,
 						},
 					},
 				},
-				Ports: []v1.EndpointPort{
+				Ports: []corev1.EndpointPort{
 					{
-						Protocol: v1.ProtocolTCP,
+						Protocol: corev1.ProtocolTCP,
 						Port:     8081,
 					},
 					{
-						Protocol: v1.ProtocolTCP,
+						Protocol: corev1.ProtocolTCP,
 						Port:     8080,
 					},
 				},
@@ -345,17 +345,17 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 		},
 	}
 
-	ess := []*discovery.EndpointSlice{
+	ess := []*discoveryv1.EndpointSlice{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      defaultBackendName + "-a",
 				Namespace: defaultBackendNamespace,
 				Labels: map[string]string{
-					discovery.LabelServiceName: defaultBackendName,
+					discoveryv1.LabelServiceName: defaultBackendName,
 				},
 			},
 			AddressType: "IPv4",
-			Ports: []discovery.EndpointPort{
+			Ports: []discoveryv1.EndpointPort{
 				{
 					Port: int32Ptr(8081),
 				},
@@ -363,12 +363,12 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 					Port: int32Ptr(8080),
 				},
 			},
-			Endpoints: []discovery.Endpoint{
+			Endpoints: []discoveryv1.Endpoint{
 				{
 					Addresses: []string{
 						"192.168.100.1",
 					},
-					TargetRef: &v1.ObjectReference{
+					TargetRef: &corev1.ObjectReference{
 						Kind:      "Pod",
 						Name:      defaultBackendName + "-pod-1",
 						Namespace: defaultBackendNamespace,
@@ -381,11 +381,11 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 				Name:      defaultBackendName + "-b",
 				Namespace: defaultBackendNamespace,
 				Labels: map[string]string{
-					discovery.LabelServiceName: defaultBackendName,
+					discoveryv1.LabelServiceName: defaultBackendName,
 				},
 			},
 			AddressType: "IPv4",
-			Ports: []discovery.EndpointPort{
+			Ports: []discoveryv1.EndpointPort{
 				{
 					Port: int32Ptr(8081),
 				},
@@ -393,12 +393,12 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 					Port: int32Ptr(8080),
 				},
 			},
-			Endpoints: []discovery.Endpoint{
+			Endpoints: []discoveryv1.Endpoint{
 				{
 					Addresses: []string{
 						"192.168.100.2",
 					},
-					TargetRef: &v1.ObjectReference{
+					TargetRef: &corev1.ObjectReference{
 						Kind:      "Pod",
 						Name:      defaultBackendName + "-pod-2",
 						Namespace: defaultBackendNamespace,
@@ -413,7 +413,7 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 				Namespace: defaultBackendNamespace,
 			},
 			AddressType: "FQDN",
-			Ports: []discovery.EndpointPort{
+			Ports: []discoveryv1.EndpointPort{
 				{
 					Port: int32Ptr(8081),
 				},
@@ -421,7 +421,7 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 					Port: int32Ptr(8080),
 				},
 			},
-			Endpoints: []discovery.Endpoint{
+			Endpoints: []discoveryv1.Endpoint{
 				{
 					Addresses: []string{
 						"192.168.100.3",
@@ -431,7 +431,7 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 					Addresses: []string{
 						"192.168.100.4",
 					},
-					TargetRef: &v1.ObjectReference{
+					TargetRef: &corev1.ObjectReference{
 						Kind:      "Foo",
 						Name:      "something",
 						Namespace: defaultBackendNamespace,
@@ -444,18 +444,18 @@ func newDefaultBackend() (*v1.Service, *v1.Endpoints, []*discovery.EndpointSlice
 	return svc, eps, ess
 }
 
-func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoints, *discovery.EndpointSlice) {
-	svc := &v1.Service{
+func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
+	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: v1.ServiceSpec{
-			Ports: []v1.ServicePort{
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
 				{
 					Port:       8281,
 					TargetPort: intstr.FromInt(80),
-					Protocol:   v1.ProtocolTCP,
+					Protocol:   corev1.ProtocolTCP,
 				},
 			},
 			Selector: map[string]string{
@@ -463,20 +463,20 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 			},
 		},
 	}
-	eps := &v1.Endpoints{
+	eps := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Subsets: []v1.EndpointSubset{
+		Subsets: []corev1.EndpointSubset{
 			{
-				Ports: []v1.EndpointPort{
+				Ports: []corev1.EndpointPort{
 					{
-						Protocol: v1.ProtocolTCP,
+						Protocol: corev1.ProtocolTCP,
 						Port:     81,
 					},
 					{
-						Protocol: v1.ProtocolTCP,
+						Protocol: corev1.ProtocolTCP,
 						Port:     80,
 					},
 				},
@@ -484,11 +484,11 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 		},
 	}
 
-	endpointAddrs := make([]v1.EndpointAddress, len(addrs))
+	endpointAddrs := make([]corev1.EndpointAddress, len(addrs))
 	for i, addr := range addrs {
-		endpointAddrs[i] = v1.EndpointAddress{
+		endpointAddrs[i] = corev1.EndpointAddress{
 			IP: addr,
-			TargetRef: &v1.ObjectReference{
+			TargetRef: &corev1.ObjectReference{
 				Kind:      "Pod",
 				Name:      fmt.Sprintf("%v-pod-%v", name, i+1),
 				Namespace: namespace,
@@ -498,18 +498,18 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 
 	eps.Subsets[0].Addresses = endpointAddrs
 
-	proto := v1.ProtocolTCP
+	proto := corev1.ProtocolTCP
 
-	es := &discovery.EndpointSlice{
+	es := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name + "-aaaa",
 			Namespace: namespace,
 			Labels: map[string]string{
-				discovery.LabelServiceName: name,
+				discoveryv1.LabelServiceName: name,
 			},
 		},
 		AddressType: "IPv4",
-		Ports: []discovery.EndpointPort{
+		Ports: []discoveryv1.EndpointPort{
 			{
 				Protocol: &proto,
 				Port:     int32Ptr(81),
@@ -522,9 +522,9 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 	}
 
 	for i, addr := range addrs {
-		es.Endpoints = append(es.Endpoints, discovery.Endpoint{
+		es.Endpoints = append(es.Endpoints, discoveryv1.Endpoint{
 			Addresses: []string{addr},
-			TargetRef: &v1.ObjectReference{
+			TargetRef: &corev1.ObjectReference{
 				Kind:      "Pod",
 				Name:      fmt.Sprintf("%v-pod-%v", name, i+1),
 				Namespace: namespace,
@@ -535,43 +535,43 @@ func newBackend(namespace, name string, addrs []string) (*v1.Service, *v1.Endpoi
 	return svc, eps, es
 }
 
-func newIngressTLS(namespace, name, svcName string, svcPort networking.ServiceBackendPort, tlsSecretName string) *networking.Ingress {
+func newIngressTLS(namespace, name, svcName string, svcPort networkingv1.ServiceBackendPort, tlsSecretName string) *networkingv1.Ingress {
 	ing := newIngress(namespace, name, svcName, svcPort)
-	ing.Spec.TLS = []networking.IngressTLS{
+	ing.Spec.TLS = []networkingv1.IngressTLS{
 		{SecretName: tlsSecretName},
 	}
 	return ing
 }
 
-func serviceBackendPortNumber(port int32) networking.ServiceBackendPort {
-	return networking.ServiceBackendPort{
+func serviceBackendPortNumber(port int32) networkingv1.ServiceBackendPort {
+	return networkingv1.ServiceBackendPort{
 		Number: port,
 	}
 }
 
-func serviceBackendPortName(name string) networking.ServiceBackendPort {
-	return networking.ServiceBackendPort{
+func serviceBackendPortName(name string) networkingv1.ServiceBackendPort {
+	return networkingv1.ServiceBackendPort{
 		Name: name,
 	}
 }
 
-func newIngress(namespace, name, svcName string, svcPort networking.ServiceBackendPort) *networking.Ingress {
-	return &networking.Ingress{
+func newIngress(namespace, name, svcName string, svcPort networkingv1.ServiceBackendPort) *networkingv1.Ingress {
+	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: networking.IngressSpec{
-			Rules: []networking.IngressRule{
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
 				{
 					Host: fmt.Sprintf("%v.%v.test", name, namespace),
-					IngressRuleValue: networking.IngressRuleValue{
-						HTTP: &networking.HTTPIngressRuleValue{
-							Paths: []networking.HTTPIngressPath{
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
 								{
 									Path: "/",
-									Backend: networking.IngressBackend{
-										Service: &networking.IngressServiceBackend{
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
 											Name: svcName,
 											Port: svcPort,
 										},
@@ -586,15 +586,15 @@ func newIngress(namespace, name, svcName string, svcPort networking.ServiceBacke
 	}
 }
 
-func newTLSSecret(namespace, name string, tlsCrt, tlsKey []byte) *v1.Secret {
-	return &v1.Secret{
+func newTLSSecret(namespace, name string, tlsCrt, tlsKey []byte) *corev1.Secret {
+	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
 		Data: map[string][]byte{
-			v1.TLSCertKey:       tlsCrt,
-			v1.TLSPrivateKeyKey: tlsKey,
+			corev1.TLSCertKey:       tlsCrt,
+			corev1.TLSPrivateKeyKey: tlsKey,
 		},
 	}
 }
@@ -888,27 +888,27 @@ func TestSyncStringNamedPort(t *testing.T) {
 			svc, eps, ess := newDefaultBackend()
 
 			bs1, be1, bes1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1", "192.168.10.2"})
-			bs1.Spec.Ports[0] = v1.ServicePort{
+			bs1.Spec.Ports[0] = corev1.ServicePort{
 				Port:       1234,
 				TargetPort: intstr.FromString("my-port"),
-				Protocol:   v1.ProtocolTCP,
+				Protocol:   corev1.ProtocolTCP,
 			}
 			ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
 
-			bp1 := &v1.Pod{
+			bp1 := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "alpha-pod-1",
 					Namespace: bs1.Namespace,
 					Labels:    bs1.Spec.Selector,
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
 						{
-							Ports: []v1.ContainerPort{
+							Ports: []corev1.ContainerPort{
 								{
 									Name:          "my-port",
 									ContainerPort: 80,
-									Protocol:      v1.ProtocolTCP,
+									Protocol:      corev1.ProtocolTCP,
 								},
 							},
 						},
@@ -916,20 +916,20 @@ func TestSyncStringNamedPort(t *testing.T) {
 				},
 			}
 
-			bp2 := &v1.Pod{
+			bp2 := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "alpha-pod-2",
 					Namespace: bs1.Namespace,
 					Labels:    bs1.Spec.Selector,
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
 						{
-							Ports: []v1.ContainerPort{
+							Ports: []corev1.ContainerPort{
 								{
 									Name:          "my-port",
 									ContainerPort: 81,
-									Protocol:      v1.ProtocolTCP,
+									Protocol:      corev1.ProtocolTCP,
 								},
 							},
 						},
@@ -977,10 +977,10 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 	svc, eps, _ := newDefaultBackend()
 
 	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	bs1.Spec.Ports[0] = v1.ServicePort{
+	bs1.Spec.Ports[0] = corev1.ServicePort{
 		Port:       80,
 		TargetPort: intstr.FromString(""),
-		Protocol:   v1.ProtocolTCP,
+		Protocol:   corev1.ProtocolTCP,
 	}
 	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
 
@@ -1010,13 +1010,13 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 func TestValidateIngressClass(t *testing.T) {
 	tests := []struct {
 		desc     string
-		ing      networking.Ingress
-		ingClass *networking.IngressClass
+		ing      networkingv1.Ingress
+		ingClass *networkingv1.IngressClass
 		want     bool
 	}{
 		{
 			desc: "no IngressClass",
-			ing: networking.Ingress{
+			ing: networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "default",
@@ -1026,20 +1026,20 @@ func TestValidateIngressClass(t *testing.T) {
 		},
 		{
 			desc: "IngressClass targets this controller",
-			ing: networking.Ingress{
+			ing: networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "default",
 				},
-				Spec: networking.IngressSpec{
+				Spec: networkingv1.IngressSpec{
 					IngressClassName: stringPtr("bar"),
 				},
 			},
-			ingClass: &networking.IngressClass{
+			ingClass: &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
 				},
-				Spec: networking.IngressClassSpec{
+				Spec: networkingv1.IngressClassSpec{
 					Controller: defaultIngressClassController,
 				},
 			},
@@ -1047,52 +1047,52 @@ func TestValidateIngressClass(t *testing.T) {
 		},
 		{
 			desc: "IngressClass does not target this controller",
-			ing: networking.Ingress{
+			ing: networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "default",
 				},
-				Spec: networking.IngressSpec{
+				Spec: networkingv1.IngressSpec{
 					IngressClassName: stringPtr("bar"),
 				},
 			},
-			ingClass: &networking.IngressClass{
+			ingClass: &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
 				},
-				Spec: networking.IngressClassSpec{
+				Spec: networkingv1.IngressClassSpec{
 					Controller: "example.com/ingress",
 				},
 			},
 		},
 		{
 			desc: "The specified IngressClass is not found",
-			ing: networking.Ingress{
+			ing: networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "default",
 				},
-				Spec: networking.IngressSpec{
+				Spec: networkingv1.IngressSpec{
 					IngressClassName: stringPtr("bar"),
 				},
 			},
 		},
 		{
 			desc: "IngressClass which targets this controller is marked default",
-			ing: networking.Ingress{
+			ing: networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "default",
 				},
 			},
-			ingClass: &networking.IngressClass{
+			ingClass: &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
 					Annotations: map[string]string{
 						annotationIsDefaultIngressClass: "true",
 					},
 				},
-				Spec: networking.IngressClassSpec{
+				Spec: networkingv1.IngressClassSpec{
 					Controller: defaultIngressClassController,
 				},
 			},
@@ -1100,20 +1100,20 @@ func TestValidateIngressClass(t *testing.T) {
 		},
 		{
 			desc: "IngressClass which does not target this controller is marked default",
-			ing: networking.Ingress{
+			ing: networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "default",
 				},
 			},
-			ingClass: &networking.IngressClass{
+			ingClass: &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
 					Annotations: map[string]string{
 						annotationIsDefaultIngressClass: "true",
 					},
 				},
-				Spec: networking.IngressClassSpec{
+				Spec: networkingv1.IngressClassSpec{
 					Controller: "example.com/ingress",
 				},
 			},
@@ -1148,8 +1148,8 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
 	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "bravo", []string{"192.168.10.2"})
 	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
-	ing1.Spec.DefaultBackend = &networking.IngressBackend{
-		Service: &networking.IngressServiceBackend{
+	ing1.Spec.DefaultBackend = &networkingv1.IngressBackend{
+		Service: &networkingv1.IngressServiceBackend{
 			Name: "bravo",
 			Port: serviceBackendPortNumber(bs2.Spec.Ports[0].Port),
 		},
@@ -1191,15 +1191,15 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 
 	tests := []struct {
 		desc     string
-		ing      *networking.Ingress
+		ing      *networkingv1.Ingress
 		wantName string
 	}{
 		{
 			desc: ".Spec.DefaultBackend must be ignored",
-			ing: func() *networking.Ingress {
+			ing: func() *networkingv1.Ingress {
 				ing := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
-				ing.Spec.DefaultBackend = &networking.IngressBackend{
-					Service: &networking.IngressServiceBackend{
+				ing.Spec.DefaultBackend = &networkingv1.IngressBackend{
+					Service: &networkingv1.IngressServiceBackend{
 						Name: bs2.Name,
 						Port: serviceBackendPortNumber(bs2.Spec.Ports[0].Port),
 					},
@@ -1209,17 +1209,17 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 		},
 		{
 			desc: "Any rules which override default backend must be ignored",
-			ing: func() *networking.Ingress {
+			ing: func() *networkingv1.Ingress {
 				ing := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
 				ing.Spec.Rules = append(ing.Spec.Rules,
-					networking.IngressRule{
-						IngressRuleValue: networking.IngressRuleValue{
-							HTTP: &networking.HTTPIngressRuleValue{
-								Paths: []networking.HTTPIngressPath{
+					networkingv1.IngressRule{
+						IngressRuleValue: networkingv1.IngressRuleValue{
+							HTTP: &networkingv1.HTTPIngressRuleValue{
+								Paths: []networkingv1.HTTPIngressPath{
 									{
 										Path: "/",
-										Backend: networking.IngressBackend{
-											Service: &networking.IngressServiceBackend{
+										Backend: networkingv1.IngressBackend{
+											Service: &networkingv1.IngressServiceBackend{
 												Name: bs2.Name,
 												Port: serviceBackendPortNumber(bs2.Spec.Ports[0].Port),
 											},
@@ -1241,8 +1241,8 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 
 			svc, eps, ess := newDefaultBackend()
 
-			f.svcStore = append(f.svcStore, svc, bs1.DeepCopyObject().(*v1.Service), bs2.DeepCopyObject().(*v1.Service))
-			f.epStore = append(f.epStore, eps, be1.DeepCopyObject().(*v1.Endpoints), be2.DeepCopyObject().(*v1.Endpoints))
+			f.svcStore = append(f.svcStore, svc, bs1.DeepCopyObject().(*corev1.Service), bs2.DeepCopyObject().(*corev1.Service))
+			f.epStore = append(f.epStore, eps, be1.DeepCopyObject().(*corev1.Endpoints), be2.DeepCopyObject().(*corev1.Endpoints))
 			f.epSliceStore = append(f.epSliceStore, ess...)
 			f.ingStore = append(f.ingStore, tt.ing)
 
@@ -1265,22 +1265,22 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 }
 
 // newIngPod creates Ingress controller pod.
-func newIngPod(name, nodeName string) *v1.Pod {
-	return &v1.Pod{
+func newIngPod(name, nodeName string) *corev1.Pod {
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: defaultRuntimeInfo.Namespace,
 			Labels:    defaultIngPodLables,
 		},
-		Spec: v1.PodSpec{
+		Spec: corev1.PodSpec{
 			NodeName: nodeName,
-			Containers: []v1.Container{
+			Containers: []corev1.Container{
 				{
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							Name:          "my-port",
 							ContainerPort: 80,
-							Protocol:      v1.ProtocolTCP,
+							Protocol:      corev1.ProtocolTCP,
 						},
 					},
 				},
@@ -1290,12 +1290,12 @@ func newIngPod(name, nodeName string) *v1.Pod {
 }
 
 // newNode creates new Node.
-func newNode(name string, addrs ...v1.NodeAddress) *v1.Node {
-	return &v1.Node{
+func newNode(name string, addrs ...corev1.NodeAddress) *corev1.Node {
+	return &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Status: v1.NodeStatus{
+		Status: corev1.NodeStatus{
 			Addresses: addrs,
 		},
 	}
@@ -1323,10 +1323,10 @@ func TestGetLoadBalancerIngress(t *testing.T) {
 			po1 := newIngPod(defaultRuntimeInfo.Name, "alpha.test")
 			po1.Spec.HostNetwork = tt.hostNetwork
 
-			var node1 *v1.Node
+			var node1 *corev1.Node
 
 			if tt.hostNetwork {
-				node1 = newNode("alpha.test", v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.1"})
+				node1 = newNode("alpha.test", corev1.NodeAddress{Type: corev1.NodeExternalIP, Address: "192.168.0.1"})
 			} else {
 				po1.Status.PodIP = "192.168.0.1"
 			}
@@ -1334,8 +1334,8 @@ func TestGetLoadBalancerIngress(t *testing.T) {
 			po2 := newIngPod("bravo", "bravo.test")
 			po2.Spec.HostNetwork = true
 			node2 := newNode("bravo.test",
-				v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
-				v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.2"})
+				corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.1"},
+				corev1.NodeAddress{Type: corev1.NodeExternalIP, Address: "192.168.0.2"})
 
 			f.podStore = append(f.podStore, po1, po2)
 			f.nodeStore = append(f.nodeStore, node2)
@@ -1364,7 +1364,7 @@ func TestGetLoadBalancerIngress(t *testing.T) {
 
 			sortLoadBalancerIngress(lbIngs)
 
-			ans := []v1.LoadBalancerIngress{
+			ans := []corev1.LoadBalancerIngress{
 				{IP: "192.168.0.1"}, {IP: "192.168.0.2"},
 			}
 
@@ -1379,12 +1379,12 @@ func TestGetLoadBalancerIngress(t *testing.T) {
 func TestUpdateIngressStatus(t *testing.T) {
 	f := newFixture(t)
 
-	lbIngs := []v1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
+	lbIngs := []corev1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
 
 	ing1 := newIngress(metav1.NamespaceDefault, "delta-ing", "delta", serviceBackendPortNumber(80))
 	ing3 := newIngress(metav1.NamespaceDefault, "foxtrot-ing", "foxtrot", serviceBackendPortNumber(80))
 	ing3.Spec.IngressClassName = stringPtr("not-nghttpx")
-	ing3.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}}
+	ing3.Status.LoadBalancer.Ingress = []corev1.LoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}}
 	ing4 := newIngress(metav1.NamespaceDefault, "golf-ing", "golf", serviceBackendPortNumber(80))
 	ing4.Status.LoadBalancer.Ingress = lbIngs
 	ing2 := newIngress(metav1.NamespaceDefault, "echo-ing", "echo", serviceBackendPortNumber(80))
@@ -1448,15 +1448,15 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 			po := newIngPod(defaultRuntimeInfo.Name, "alpha.test")
 			po.Spec.HostNetwork = tt.hostNetwork
 
-			var node *v1.Node
+			var node *corev1.Node
 
 			if tt.hostNetwork {
-				node = newNode("alpha.test", v1.NodeAddress{Type: v1.NodeExternalIP, Address: "192.168.0.1"})
+				node = newNode("alpha.test", corev1.NodeAddress{Type: corev1.NodeExternalIP, Address: "192.168.0.1"})
 			} else {
 				po.Status.PodIP = "192.168.0.1"
 			}
 
-			lbIngs := []v1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
+			lbIngs := []corev1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
 
 			ing1 := newIngress(metav1.NamespaceDefault, "delta-ing", "delta", serviceBackendPortNumber(80))
 			ing1.Status.LoadBalancer.Ingress = lbIngs
@@ -1493,7 +1493,7 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 			if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing1.Namespace).Get(context.TODO(), ing1.Name, metav1.GetOptions{}); err != nil {
 				t.Errorf("Could not get Ingress %v/%v: %v", ing1.Namespace, ing1.Name, err)
 			} else {
-				ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
+				ans := []corev1.LoadBalancerIngress{{IP: "192.168.0.2"}}
 				if got, want := updatedIng.Status.LoadBalancer.Ingress, ans; !reflect.DeepEqual(got, want) {
 					t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
 				}
@@ -1502,7 +1502,7 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 			if updatedIng, err := f.lbc.clientset.NetworkingV1().Ingresses(ing4.Namespace).Get(context.TODO(), ing4.Name, metav1.GetOptions{}); err != nil {
 				t.Errorf("Could not get Ingress %v/%v: %v", ing4.Namespace, ing4.Name, err)
 			} else {
-				ans := []v1.LoadBalancerIngress{{IP: "192.168.0.2"}}
+				ans := []corev1.LoadBalancerIngress{{IP: "192.168.0.2"}}
 				if got, want := updatedIng.Status.LoadBalancer.Ingress, ans; !reflect.DeepEqual(got, want) {
 					t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
 				}
@@ -1523,17 +1523,17 @@ func TestRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 func TestGetLoadBalancerIngressFromService(t *testing.T) {
 	f := newFixture(t)
 
-	svc := &v1.Service{
-		Spec: v1.ServiceSpec{
+	svc := &corev1.Service{
+		Spec: corev1.ServiceSpec{
 			ExternalIPs: []string{
 				"192.168.0.2",
 				"192.168.0.1",
 				"192.168.0.3",
 			},
 		},
-		Status: v1.ServiceStatus{
-			LoadBalancer: v1.LoadBalancerStatus{
-				Ingress: []v1.LoadBalancerIngress{
+		Status: corev1.ServiceStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{
+				Ingress: []corev1.LoadBalancerIngress{
 					{
 						Hostname: "charlie.example.com",
 					},
@@ -1545,7 +1545,7 @@ func TestGetLoadBalancerIngressFromService(t *testing.T) {
 		},
 	}
 
-	want := []v1.LoadBalancerIngress{
+	want := []corev1.LoadBalancerIngress{
 		{
 			Hostname: "charlie.example.com",
 		},
@@ -1583,10 +1583,10 @@ func TestSyncNamedServicePort(t *testing.T) {
 	svc, eps, _ := newDefaultBackend()
 
 	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	bs1.Spec.Ports[0] = v1.ServicePort{
+	bs1.Spec.Ports[0] = corev1.ServicePort{
 		Name:     "namedport",
 		Port:     80,
-		Protocol: v1.ProtocolTCP,
+		Protocol: corev1.ProtocolTCP,
 	}
 	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortName(bs1.Spec.Ports[0].Name))
 
@@ -1774,7 +1774,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 
 	tests := []struct {
 		desc              string
-		secret            *v1.Secret
+		secret            *corev1.Secret
 		wantKeepTimestamp bool
 	}{
 		{
@@ -1782,7 +1782,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 		},
 		{
 			desc: "QUIC secret is up to date",
-			secret: &v1.Secret{
+			secret: &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      defaultQUICSecret.Name,
 					Namespace: defaultQUICSecret.Namespace,
@@ -1798,7 +1798,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 		},
 		{
 			desc: "QUIC secret has been expired",
-			secret: &v1.Secret{
+			secret: &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      defaultQUICSecret.Name,
 					Namespace: defaultQUICSecret.Namespace,
@@ -1813,7 +1813,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 		},
 		{
 			desc: "QUIC secret timestamp is not expired, but data is malformed",
-			secret: &v1.Secret{
+			secret: &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      defaultQUICSecret.Name,
 					Namespace: defaultQUICSecret.Namespace,
