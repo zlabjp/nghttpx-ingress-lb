@@ -28,13 +28,13 @@ import (
 	"fmt"
 	"sort"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // loadBalancerIngressesIPEqual compares a and b, and if their IP fields are equal, returns true.  a and b might not be sorted in the
 // particular order.  They just compared from first to last, and if there is a difference, this function returns false.
-func loadBalancerIngressesIPEqual(a, b []v1.LoadBalancerIngress) bool {
+func loadBalancerIngressesIPEqual(a, b []corev1.LoadBalancerIngress) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -49,14 +49,14 @@ func loadBalancerIngressesIPEqual(a, b []v1.LoadBalancerIngress) bool {
 }
 
 // sortLoadBalancerIngress sorts a by IP and Hostname in the ascending order.
-func sortLoadBalancerIngress(a []v1.LoadBalancerIngress) {
+func sortLoadBalancerIngress(a []corev1.LoadBalancerIngress) {
 	sort.Slice(a, func(i, j int) bool {
 		return a[i].IP < a[j].IP || (a[i].IP == a[j].IP && a[i].Hostname < a[j].Hostname)
 	})
 }
 
 // uniqLoadBalancerIngress removes duplicated items from a.  This function assumes a is sorted by sortLoadBalancerIngress.
-func uniqLoadBalancerIngress(a []v1.LoadBalancerIngress) []v1.LoadBalancerIngress {
+func uniqLoadBalancerIngress(a []corev1.LoadBalancerIngress) []corev1.LoadBalancerIngress {
 	if len(a) == 0 {
 		return a
 	}
@@ -75,7 +75,7 @@ func uniqLoadBalancerIngress(a []v1.LoadBalancerIngress) []v1.LoadBalancerIngres
 }
 
 // removeAddressFromLoadBalancerIngress removes addr from a.  addr may match IP or Hostname.
-func removeAddressFromLoadBalancerIngress(a []v1.LoadBalancerIngress, addr string) []v1.LoadBalancerIngress {
+func removeAddressFromLoadBalancerIngress(a []corev1.LoadBalancerIngress, addr string) []corev1.LoadBalancerIngress {
 	var cnt int
 	for i := range a {
 		if a[i].IP == addr || a[i].Hostname == addr {
@@ -90,7 +90,7 @@ func removeAddressFromLoadBalancerIngress(a []v1.LoadBalancerIngress, addr strin
 		return nil
 	}
 
-	dst := make([]v1.LoadBalancerIngress, len(a)-cnt)
+	dst := make([]corev1.LoadBalancerIngress, len(a)-cnt)
 
 	p := 0
 	for i := range a {
@@ -109,7 +109,7 @@ func removeAddressFromLoadBalancerIngress(a []v1.LoadBalancerIngress, addr strin
 
 // podFindPort locates the container port for the given pod and portName.  If the targetPort is a number, use that.  If the targetPort is a
 // string, look that string up in all named ports in all containers in the target pod.  If no match is found, fail.
-func podFindPort(pod *v1.Pod, svcPort *v1.ServicePort) (int32, error) {
+func podFindPort(pod *corev1.Pod, svcPort *corev1.ServicePort) (int32, error) {
 	portName := svcPort.TargetPort
 	switch portName.Type {
 	case intstr.String:

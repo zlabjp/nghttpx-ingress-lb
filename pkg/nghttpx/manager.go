@@ -30,7 +30,7 @@ import (
 	"os/exec"
 	"text/template"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/events"
 )
 
@@ -38,7 +38,7 @@ type ManagerConfig struct {
 	NghttpxHealthPort int32
 	NghttpxAPIPort    int32
 	NghttpxConfDir    string
-	Pod               *v1.Pod
+	Pod               *corev1.Pod
 	EventRecorder     events.EventRecorder
 }
 
@@ -46,7 +46,7 @@ type ManagerConfig struct {
 type Manager struct {
 	// httpClient is used to issue backend API request to nghttpx
 	httpClient    *http.Client
-	pod           *v1.Pod
+	pod           *corev1.Pod
 	eventRecorder events.EventRecorder
 
 	// template loaded ready to be used to generate the nghttpx configuration file

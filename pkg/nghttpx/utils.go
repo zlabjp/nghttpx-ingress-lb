@@ -35,7 +35,7 @@ import (
 	"time"
 
 	"github.com/pmezard/go-difflib/difflib"
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -47,7 +47,7 @@ const (
 )
 
 // ReadConfig obtains the configuration defined by the user merged with the defaults.
-func ReadConfig(ingConfig *IngressConfig, config *v1.ConfigMap) {
+func ReadConfig(ingConfig *IngressConfig, config *corev1.ConfigMap) {
 	ingConfig.ExtraConfig = config.Data[NghttpxExtraConfigKey]
 	if mrubyFileContent, ok := config.Data[NghttpxMrubyFileContentKey]; ok {
 		b := []byte(mrubyFileContent)

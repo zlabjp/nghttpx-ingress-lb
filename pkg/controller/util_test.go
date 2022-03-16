@@ -12,19 +12,19 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // TestSortLoadBalancerIngress verifies that sortLoadBalancerIngress sorts given items.
 func TestSortLoadBalancerIngress(t *testing.T) {
-	input := []v1.LoadBalancerIngress{
+	input := []corev1.LoadBalancerIngress{
 		{IP: "delta", Hostname: "alpha"},
 		{IP: "alpha", Hostname: "delta"},
 		{IP: "alpha", Hostname: "charlie"},
 		{IP: "bravo", Hostname: ""},
 	}
 
-	ans := []v1.LoadBalancerIngress{
+	ans := []corev1.LoadBalancerIngress{
 		{IP: "alpha", Hostname: "charlie"},
 		{IP: "alpha", Hostname: "delta"},
 		{IP: "bravo", Hostname: ""},
@@ -42,22 +42,22 @@ func TestSortLoadBalancerIngress(t *testing.T) {
 func TestUniqLoadBalancerIngress(t *testing.T) {
 	tests := []struct {
 		desc  string
-		input []v1.LoadBalancerIngress
-		ans   []v1.LoadBalancerIngress
+		input []corev1.LoadBalancerIngress
+		ans   []corev1.LoadBalancerIngress
 	}{
 		{
 			desc: "Emptry input",
 		},
 		{
 			desc: "With duplicates",
-			input: []v1.LoadBalancerIngress{
+			input: []corev1.LoadBalancerIngress{
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "bravo", Hostname: "alpha"},
 				{IP: "delta", Hostname: ""},
 				{IP: "delta", Hostname: ""},
 			},
-			ans: []v1.LoadBalancerIngress{
+			ans: []corev1.LoadBalancerIngress{
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "bravo", Hostname: "alpha"},
 				{IP: "delta", Hostname: ""},
@@ -79,8 +79,8 @@ func TestUtilRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 	tests := []struct {
 		desc  string
 		addr  string
-		input []v1.LoadBalancerIngress
-		ans   []v1.LoadBalancerIngress
+		input []corev1.LoadBalancerIngress
+		ans   []corev1.LoadBalancerIngress
 	}{
 		{
 			desc: "Empty input",
@@ -89,14 +89,14 @@ func TestUtilRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		{
 			desc: "Remove specified address",
 			addr: "alpha",
-			input: []v1.LoadBalancerIngress{
+			input: []corev1.LoadBalancerIngress{
 				{IP: "alpha"},
 				{IP: "bravo"},
 				{Hostname: "alpha"},
 				{IP: "charlie"},
 				{IP: "alpha"},
 			},
-			ans: []v1.LoadBalancerIngress{
+			ans: []corev1.LoadBalancerIngress{
 				{IP: "bravo"},
 				{IP: "charlie"},
 			},
@@ -104,11 +104,11 @@ func TestUtilRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		{
 			desc: "No change is made if address is not found",
 			addr: "alpha",
-			input: []v1.LoadBalancerIngress{
+			input: []corev1.LoadBalancerIngress{
 				{IP: "bravo"},
 				{IP: "charlie"},
 			},
-			ans: []v1.LoadBalancerIngress{
+			ans: []corev1.LoadBalancerIngress{
 				{IP: "bravo"},
 				{IP: "charlie"},
 			},
@@ -116,7 +116,7 @@ func TestUtilRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 		{
 			desc: "Removing address creates empty array",
 			addr: "alpha",
-			input: []v1.LoadBalancerIngress{
+			input: []corev1.LoadBalancerIngress{
 				{IP: "alpha"},
 			},
 			ans: nil,
