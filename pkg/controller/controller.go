@@ -77,8 +77,11 @@ const (
 	// nghttpxQUICKeyingMaterialsSecretKey is a field name of QUIC keying materials in Secret.
 	nghttpxQUICKeyingMaterialsSecretKey = "nghttpx-quic-keying-materials"
 	// quicSecretTimestampKey is an annotation key which is associated to the value that contains the timestamp when QUIC secret is last
-	// updated.
+	// updated.  Deprecated.  Use quicKeyingMaterialsUpdateTimestampKey instead.
 	quicSecretTimestampKey = "ingress.zlab.co.jp/update-timestamp"
+	// quicKeyingMaterialsUpdateTimestampKey is an annotation key which is associated to the value that contains the timestamp when QUIC
+	// secret is last updated.
+	quicKeyingMaterialsUpdateTimestampKey = "ingress.zlab.co.jp/quic-keying-materials-update-timestamp"
 )
 
 // LoadBalancerController watches the kubernetes api and adds/removes services from the loadbalancer
@@ -2008,7 +2011,7 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, 
 				Name:      key.Name,
 				Namespace: key.Namespace,
 				Annotations: map[string]string{
-					quicSecretTimestampKey: now.Format(time.RFC3339),
+					quicKeyingMaterialsUpdateTimestampKey: now.Format(time.RFC3339),
 				},
 			},
 			Data: map[string][]byte{
@@ -2029,22 +2032,43 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, 
 		return nil
 	}
 
-	var km []byte
+	var (
+		km                               []byte
+		quicKeyingMaterialsAnnotationKey string
+	)
 
-	if t, err := time.Parse(time.RFC3339, secret.Annotations[quicSecretTimestampKey]); err == nil {
-		km = secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
+	if _, ok := secret.Annotations[quicKeyingMaterialsUpdateTimestampKey]; ok {
+		quicKeyingMaterialsAnnotationKey = quicKeyingMaterialsUpdateTimestampKey
+	} else if _, ok := secret.Annotations[quicSecretTimestampKey]; ok {
+		quicKeyingMaterialsAnnotationKey = quicSecretTimestampKey
+	}
 
-		if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {
-			klog.Errorf("QUIC keying materials are malformed: %v", err)
-			km = nil
-		} else {
-			d := t.Add(quicSecretTimeout).Sub(now)
-			if d > 0 {
-				klog.Infof("QUIC keying materials are not expired and in a good shape.  Retry after %v", d)
-				// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
-				lbc.quicSecretQueue.AddAfter(quicSecretKey, d)
+	if quicKeyingMaterialsAnnotationKey != "" {
+		if t, err := time.Parse(time.RFC3339, secret.Annotations[quicKeyingMaterialsAnnotationKey]); err == nil {
+			km = secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
 
-				return nil
+			if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {
+				klog.Errorf("QUIC keying materials are malformed: %v", err)
+				km = nil
+			} else {
+				d := t.Add(quicSecretTimeout).Sub(now)
+				if d > 0 {
+					klog.Infof("QUIC keying materials are not expired and in a good shape.  Retry after %v", d)
+					// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
+					lbc.quicSecretQueue.AddAfter(quicSecretKey, d)
+
+					if quicKeyingMaterialsAnnotationKey == quicSecretTimestampKey {
+						updatedSecret := secret.DeepCopy()
+						updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = secret.Annotations[quicSecretTimestampKey]
+
+						if _, err := lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(ctx, updatedSecret, metav1.UpdateOptions{}); err != nil {
+							klog.Errorf("Could not update Secret %v/%v: %v", updatedSecret.Namespace, updatedSecret.Name, err)
+							return err
+						}
+					}
+
+					return nil
+				}
 			}
 		}
 	}
@@ -2054,7 +2078,10 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, 
 		updatedSecret.Annotations = make(map[string]string)
 	}
 
-	updatedSecret.Annotations[quicSecretTimestampKey] = now.Format(time.RFC3339)
+	updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = now.Format(time.RFC3339)
+	if _, ok := updatedSecret.Annotations[quicSecretTimestampKey]; ok {
+		updatedSecret.Annotations[quicSecretTimestampKey] = updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey]
+	}
 
 	if updatedSecret.Data == nil {
 		updatedSecret.Data = make(map[string][]byte)

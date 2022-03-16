@@ -1787,7 +1787,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 					Name:      defaultQUICSecret.Name,
 					Namespace: defaultQUICSecret.Namespace,
 					Annotations: map[string]string{
-						quicSecretTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
+						quicKeyingMaterialsUpdateTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
 					},
 				},
 				Data: map[string][]byte{
@@ -1803,7 +1803,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 					Name:      defaultQUICSecret.Name,
 					Namespace: defaultQUICSecret.Namespace,
 					Annotations: map[string]string{
-						quicSecretTimestampKey: expiredTimestamp.Format(time.RFC3339),
+						quicKeyingMaterialsUpdateTimestampKey: expiredTimestamp.Format(time.RFC3339),
 					},
 				},
 				Data: map[string][]byte{
@@ -1818,7 +1818,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 					Name:      defaultQUICSecret.Name,
 					Namespace: defaultQUICSecret.Namespace,
 					Annotations: map[string]string{
-						quicSecretTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
+						quicKeyingMaterialsUpdateTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
 					},
 				},
 				Data: map[string][]byte{
@@ -1855,16 +1855,16 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 			}
 
 			if tt.wantKeepTimestamp {
-				if got, want := updatedSecret.Annotations[quicSecretTimestampKey], tt.secret.Annotations[quicSecretTimestampKey]; got != want {
-					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", quicSecretTimestampKey, got, want)
+				if got, want := updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey], tt.secret.Annotations[quicKeyingMaterialsUpdateTimestampKey]; got != want {
+					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", quicKeyingMaterialsUpdateTimestampKey, got, want)
 				}
 
 				if got, want := updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey], tt.secret.Data[nghttpxQUICKeyingMaterialsSecretKey]; !bytes.Equal(got, want) {
 					t.Errorf("updatedSecret.Data[%q] = %s, want %s", nghttpxQUICKeyingMaterialsSecretKey, got, want)
 				}
 			} else {
-				if got, want := updatedSecret.Annotations[quicSecretTimestampKey], now.Format(time.RFC3339); got != want {
-					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", quicSecretTimestampKey, got, want)
+				if got, want := updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey], now.Format(time.RFC3339); got != want {
+					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", quicKeyingMaterialsUpdateTimestampKey, got, want)
 				}
 
 				km := updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey]
