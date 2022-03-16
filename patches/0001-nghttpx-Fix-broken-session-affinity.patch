@@ -1,0 +1,29 @@
+From 470f06e5f6deab5284ffe93f15cc4ce8b16ee2ec Mon Sep 17 00:00:00 2001
+From: Tatsuhiro Tsujikawa <tatsuhiro.t@gmail.com>
+Date: Tue, 15 Mar 2022 19:35:49 +0900
+Subject: [PATCH] nghttpx: Fix broken session affinity
+
+Session affinity has been broken since
+fdcdb21c38ef7acf23853d47d1dc5bda69d5398f.  This commit reverts the
+relevant part of the commit to fix the session affinity.
+---
+ src/shrpx_worker.cc | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/src/shrpx_worker.cc b/src/shrpx_worker.cc
+index 03c4919d..74a1d8bb 100644
+--- a/src/shrpx_worker.cc
++++ b/src/shrpx_worker.cc
+@@ -333,9 +333,6 @@ void Worker::replace_downstream_config(
+     auto it = addr_groups_indexer.find(dkey);
+ 
+     if (it == std::end(addr_groups_indexer)) {
+-      std::shuffle(std::begin(shared_addr->addrs), std::end(shared_addr->addrs),
+-                   randgen_);
+-
+       auto shared_addr_ptr = shared_addr.get();
+ 
+       for (auto &addr : shared_addr->addrs) {
+-- 
+2.25.1
+
