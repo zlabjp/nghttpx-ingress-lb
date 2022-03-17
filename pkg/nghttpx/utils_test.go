@@ -212,6 +212,14 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			}(),
 		},
 		{
+			desc: "Set affinity cookie stickiness",
+			defaultConf: func() *PathConfig {
+				a := &PathConfig{}
+				a.SetAffinityCookieStickiness(AffinityCookieStickinessStrict)
+				return a
+			}(),
+		},
+		{
 			desc: "Set read timeout",
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
@@ -264,6 +272,9 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			}
 			if got, want := a.GetAffinityCookieSecure(), tt.defaultConf.GetAffinityCookieSecure(); got != want {
 				t.Errorf("a.GetAffinityCookieSecure() = %v, want %v", got, want)
+			}
+			if got, want := a.GetAffinityCookieStickiness(), tt.defaultConf.GetAffinityCookieStickiness(); got != want {
+				t.Errorf("a.GetAffinityCookieStickiness() = %v, want %v", got, want)
 			}
 			if got, want := a.GetReadTimeout(), tt.defaultConf.GetReadTimeout(); !((got != nil && want != nil && *got == *want) || (got == nil && want == nil)) {
 				t.Errorf("a.GetReadTimeout() = %v, want %v", got, want)

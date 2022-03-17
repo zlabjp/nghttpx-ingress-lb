@@ -572,14 +572,15 @@ backend=127.0.0.1,9999;/nghttpx-healthz;mruby=/healthz.rb;dnf
 			ingConfig: &IngressConfig{
 				Upstreams: []*Upstream{
 					{
-						Name:                 "foo",
-						Host:                 "example.com",
-						Path:                 "/",
-						Affinity:             AffinityCookie,
-						AffinityCookieName:   "sticky",
-						AffinityCookiePath:   "/",
-						AffinityCookieSecure: AffinityCookieSecureAuto,
-						RedirectIfNotTLS:     true,
+						Name:                     "foo",
+						Host:                     "example.com",
+						Path:                     "/",
+						Affinity:                 AffinityCookie,
+						AffinityCookieName:       "sticky",
+						AffinityCookiePath:       "/",
+						AffinityCookieSecure:     AffinityCookieSecureAuto,
+						AffinityCookieStickiness: AffinityCookieStickinessStrict,
+						RedirectIfNotTLS:         true,
 						Mruby: &ChecksumFile{
 							Path:     "/mruby.rb",
 							Content:  []byte("mruby"),
@@ -623,8 +624,8 @@ worker-process-grace-shutdown-period=60s
 max-worker-processes=100
 `,
 			wantBackendConfig: `# foo
-backend=192.168.0.1,8080;example.com/;proto=h2;tls;sni=foo.example.com;dns;group=group1;group-weight=100;affinity=cookie;affinity-cookie-name=sticky;affinity-cookie-path=/;affinity-cookie-secure=auto;redirect-if-not-tls;mruby=/mruby.rb;read-timeout=180;write-timeout=300;dnf
-backend=192.168.0.2,80;example.com/;proto=h2;affinity=cookie;affinity-cookie-name=sticky;affinity-cookie-path=/;affinity-cookie-secure=auto;redirect-if-not-tls;mruby=/mruby.rb;read-timeout=180;write-timeout=300;dnf
+backend=192.168.0.1,8080;example.com/;proto=h2;tls;sni=foo.example.com;dns;group=group1;group-weight=100;affinity=cookie;affinity-cookie-name=sticky;affinity-cookie-path=/;affinity-cookie-secure=auto;affinity-cookie-stickiness=strict;redirect-if-not-tls;mruby=/mruby.rb;read-timeout=180;write-timeout=300;dnf
+backend=192.168.0.2,80;example.com/;proto=h2;affinity=cookie;affinity-cookie-name=sticky;affinity-cookie-path=/;affinity-cookie-secure=auto;affinity-cookie-stickiness=strict;redirect-if-not-tls;mruby=/mruby.rb;read-timeout=180;write-timeout=300;dnf
 `,
 		},
 	}

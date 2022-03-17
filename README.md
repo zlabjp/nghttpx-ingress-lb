@@ -479,6 +479,14 @@ is the dictionary and can contain the following key value pairs:
   encrypted.  If "yes" is specified, Secure attribute is always added.
   If "no" is specified, Secure attribute is always omitted.
 
+* `affinityCookieStickiness`: Specify the stickiness of session
+  cookie.  If `loose` is given, which is default, the affinity might
+  break if an existing backend server is removed, or new backend
+  server is added.  If `strict` is given, if the designated backend
+  server is removed, the request is forwarded to a new server as if it
+  is a new request.  However, adding new backend server does not cause
+  breakage.
+
 * `readTimeout`: Specify read timeout.  If specified, it overrides
   global backend read timeout set by
   [--backend-read-timeout](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-backend-read-timeout).

@@ -181,6 +181,9 @@ func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
 	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
 		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
 	}
+	if defaultConfig.AffinityCookieStickiness != nil && config.AffinityCookieStickiness == nil {
+		config.SetAffinityCookieStickiness(*defaultConfig.AffinityCookieStickiness)
+	}
 	if defaultConfig.ReadTimeout != nil && config.ReadTimeout == nil {
 		config.SetReadTimeout(*defaultConfig.ReadTimeout)
 	}

@@ -1178,17 +1178,18 @@ func (lbc *LoadBalancerController) createUpstream(ing *networkingv1.Ingress, hos
 	// The format of upsName is similar to backend option syntax of nghttpx.
 	upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, isb.Name, portStr, host, normalizedPath)
 	ups := &nghttpx.Upstream{
-		Name:                 upsName,
-		Host:                 host,
-		Path:                 normalizedPath,
-		RedirectIfNotTLS:     pc.GetRedirectIfNotTLS() && (requireTLS || lbc.defaultTLSSecret != nil),
-		DoNotForward:         pc.GetDoNotForward(),
-		Affinity:             pc.GetAffinity(),
-		AffinityCookieName:   pc.GetAffinityCookieName(),
-		AffinityCookiePath:   pc.GetAffinityCookiePath(),
-		AffinityCookieSecure: pc.GetAffinityCookieSecure(),
-		ReadTimeout:          pc.GetReadTimeout(),
-		WriteTimeout:         pc.GetWriteTimeout(),
+		Name:                     upsName,
+		Host:                     host,
+		Path:                     normalizedPath,
+		RedirectIfNotTLS:         pc.GetRedirectIfNotTLS() && (requireTLS || lbc.defaultTLSSecret != nil),
+		DoNotForward:             pc.GetDoNotForward(),
+		Affinity:                 pc.GetAffinity(),
+		AffinityCookieName:       pc.GetAffinityCookieName(),
+		AffinityCookiePath:       pc.GetAffinityCookiePath(),
+		AffinityCookieSecure:     pc.GetAffinityCookieSecure(),
+		AffinityCookieStickiness: pc.GetAffinityCookieStickiness(),
+		ReadTimeout:              pc.GetReadTimeout(),
+		WriteTimeout:             pc.GetWriteTimeout(),
 	}
 
 	if mruby := pc.GetMruby(); mruby != "" {
