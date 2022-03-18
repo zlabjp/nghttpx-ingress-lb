@@ -3,7 +3,6 @@ module github.com/zlabjp/nghttpx-ingress-lb
 go 1.17
 
 require (
-	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/spf13/cobra v1.2.1
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
@@ -14,6 +13,7 @@ require (
 	k8s.io/client-go v0.23.0
 	k8s.io/component-base v0.23.0
 	k8s.io/klog/v2 v2.30.0
+	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6
 )
 
 require (
@@ -55,7 +55,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65 // indirect
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b // indirect
-	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
