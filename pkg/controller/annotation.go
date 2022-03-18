@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ghodss/yaml"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
