@@ -92,7 +92,7 @@ type Upstream struct {
 	Name                 string
 	Host                 string
 	Path                 string
-	Backends             []UpstreamServer
+	Backends             []Backend
 	RedirectIfNotTLS     bool
 	Mruby                *ChecksumFile
 	Affinity             Affinity
@@ -135,8 +135,8 @@ const (
 	ProtocolH1 Protocol = "http/1.1"
 )
 
-// UpstreamServer describes a server in an nghttpx upstream
-type UpstreamServer struct {
+// Backend describes a server in an nghttpx upstream
+type Backend struct {
 	Address  string
 	Port     string
 	Protocol Protocol
@@ -155,9 +155,9 @@ type TLSCred struct {
 	OCSPResp *ChecksumFile
 }
 
-// NewDefaultServer return an UpstreamServer to be use as default server that returns 503.
-func NewDefaultServer() UpstreamServer {
-	return UpstreamServer{
+// NewDefaultBackend return a Backend to be use as default server that returns 503.
+func NewDefaultBackend() Backend {
+	return Backend{
 		Address:  "127.0.0.1",
 		Port:     "8181",
 		Protocol: ProtocolH1,

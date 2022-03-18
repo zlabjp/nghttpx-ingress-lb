@@ -864,7 +864,7 @@ func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
-	ingConfig, err := lbc.getUpstreamServers(ings)
+	ingConfig, err := lbc.createIngressConfig(ings)
 	if err != nil {
 		return err
 	}
@@ -923,7 +923,7 @@ App.new
 			Affinity:         nghttpx.AffinityNone,
 			Mruby:            nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, script),
 			DoNotForward:     true,
-			Backends: []nghttpx.UpstreamServer{
+			Backends: []nghttpx.Backend{
 				{
 					Address:  "127.0.0.1",
 					Port:     "9999",
@@ -942,20 +942,20 @@ App.new
 	svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name)
 	if err != nil {
 		klog.Warningf("unable to get Service %v: %v", svcKey, err)
-		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
+		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
 		return upstream
 	}
 
 	if len(svc.Spec.Ports) == 0 {
 		klog.Warningf("Service %v/%v has no ports", svc.Namespace, svc.Name)
-		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
+		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
 		return upstream
 	}
 
 	eps := lbc.getEndpoints(svc, &svc.Spec.Ports[0], &nghttpx.PortBackendConfig{})
 	if len(eps) == 0 {
 		klog.Warningf("service %v does not have any active endpoints", svcKey)
-		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultServer())
+		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
 	} else {
 		upstream.Backends = append(upstream.Backends, eps...)
 	}
@@ -963,8 +963,8 @@ App.new
 	return upstream
 }
 
-// in nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
-func (lbc *LoadBalancerController) getUpstreamServers(ings []*networkingv1.Ingress) (*nghttpx.IngressConfig, error) {
+// createIngressConfig creates nghttpx.IngressConfig.  In nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
+func (lbc *LoadBalancerController) createIngressConfig(ings []*networkingv1.Ingress) (*nghttpx.IngressConfig, error) {
 	ingConfig := nghttpx.NewIngressConfig()
 	ingConfig.HealthPort = lbc.nghttpxHealthPort
 	ingConfig.APIPort = lbc.nghttpxAPIPort
@@ -1110,8 +1110,8 @@ func (lbc *LoadBalancerController) getUpstreamServers(ings []*networkingv1.Ingre
 			return backends[i].Address < backends[j].Address || (backends[i].Address == backends[j].Address && backends[i].Port < backends[j].Port)
 		})
 
-		// remove duplicate UpstreamServer
-		uniqBackends := []nghttpx.UpstreamServer{backends[0]}
+		// remove duplicate Backend
+		uniqBackends := []nghttpx.Backend{backends[0]}
 		for _, sv := range backends[1:] {
 			lastBackend := &uniqBackends[len(uniqBackends)-1]
 
@@ -1200,7 +1200,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networkingv1.Ingress, hos
 	klog.V(4).Infof("Found rule for upstream name=%v, host=%v, path=%v", upsName, ups.Host, ups.Path)
 
 	if ups.DoNotForward {
-		ups.Backends = []nghttpx.UpstreamServer{nghttpx.NewDefaultServer()}
+		ups.Backends = []nghttpx.Backend{nghttpx.NewDefaultBackend()}
 		return ups, nil
 	}
 
@@ -1368,9 +1368,9 @@ func (lbc *LoadBalancerController) dealWithQUICSecret(s *corev1.Secret) {
 	}
 }
 
-// getEndpoints returns a list of UpstreamServer for a given service.  portBackendConfig is additional per-port configuration for backend,
-// which must not be nil.
-func (lbc *LoadBalancerController) getEndpoints(svc *corev1.Service, svcPort *corev1.ServicePort, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+// getEndpoints returns a list of Backend for a given service.  portBackendConfig is additional per-port configuration for backend, which
+// must not be nil.
+func (lbc *LoadBalancerController) getEndpoints(svc *corev1.Service, svcPort *corev1.ServicePort, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.Backend {
 	if svcPort.Protocol != "" && svcPort.Protocol != corev1.ProtocolTCP {
 		klog.Infof("Service %v/%v has unsupported protocol %v", svc.Namespace, svc.Name, svcPort.Protocol)
 		return nil
@@ -1389,14 +1389,14 @@ func (lbc *LoadBalancerController) getEndpoints(svc *corev1.Service, svcPort *co
 	}
 }
 
-func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *corev1.Service, svcPort *corev1.ServicePort, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *corev1.Service, svcPort *corev1.ServicePort, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.Backend {
 	ep, err := lbc.epLister.Endpoints(svc.Namespace).Get(svc.Name)
 	if err != nil {
 		klog.Warningf("unexpected error obtaining service endpoints: %v", err)
 		return nil
 	}
 
-	var upsServers []nghttpx.UpstreamServer
+	var backends []nghttpx.Backend
 
 	for i := range ep.Subsets {
 		ss := &ep.Subsets[i]
@@ -1425,23 +1425,23 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *corev1.Service
 					continue
 				}
 
-				upsServers = append(upsServers, lbc.createUpstreamServer(svc, epAddr.IP, targetPort, portBackendConfig))
+				backends = append(backends, lbc.createBackend(svc, epAddr.IP, targetPort, portBackendConfig))
 			}
 		}
 	}
 
-	klog.V(3).Infof("endpoints found: %+v", upsServers)
-	return upsServers
+	klog.V(3).Infof("endpoints found: %+v", backends)
+	return backends
 }
 
-func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *corev1.Service, svcPort *corev1.ServicePort, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.UpstreamServer {
+func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *corev1.Service, svcPort *corev1.ServicePort, portBackendConfig *nghttpx.PortBackendConfig) []nghttpx.Backend {
 	ess, err := lbc.epSliceLister.EndpointSlices(svc.Namespace).List(newEndpointSliceSelector(svc))
 	if err != nil {
 		klog.Warningf("unexpected error obtaining EndpointSlice: %v", err)
 		return nil
 	}
 
-	var upsServers []nghttpx.UpstreamServer
+	var backends []nghttpx.Backend
 
 	for _, es := range ess {
 		switch es.AddressType {
@@ -1483,14 +1483,14 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *corev1.Ser
 				// TODO We historically added all addresses in Endpoints code.  Not sure we should just pick one here
 				// instead.
 				for _, addr := range ep.Addresses {
-					upsServers = append(upsServers, lbc.createUpstreamServer(svc, addr, targetPort, portBackendConfig))
+					backends = append(backends, lbc.createBackend(svc, addr, targetPort, portBackendConfig))
 				}
 			}
 		}
 	}
 
-	klog.V(3).Infof("endpoints found: %+v", upsServers)
-	return upsServers
+	klog.V(3).Infof("endpoints found: %+v", backends)
+	return backends
 }
 
 func newEndpointSliceSelector(svc *corev1.Service) labels.Selector {
@@ -1499,8 +1499,8 @@ func newEndpointSliceSelector(svc *corev1.Service) labels.Selector {
 	})
 }
 
-func (lbc *LoadBalancerController) createUpstreamServer(svc *corev1.Service, address string, targetPort int32, portBackendConfig *nghttpx.PortBackendConfig) nghttpx.UpstreamServer {
-	ups := nghttpx.UpstreamServer{
+func (lbc *LoadBalancerController) createBackend(svc *corev1.Service, address string, targetPort int32, portBackendConfig *nghttpx.PortBackendConfig) nghttpx.Backend {
+	ups := nghttpx.Backend{
 		Address:  address,
 		Port:     strconv.Itoa(int(targetPort)),
 		Protocol: portBackendConfig.GetProto(),

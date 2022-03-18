@@ -34,7 +34,7 @@ func TestManagerGenerateCfg(t *testing.T) {
 						Host:     "example.com",
 						Path:     "/",
 						Affinity: AffinityNone,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
@@ -81,7 +81,7 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						Host:     "example.com",
 						Path:     "/",
 						Affinity: AffinityNone,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
@@ -143,7 +143,7 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						Host:     "example.com",
 						Path:     "/",
 						Affinity: AffinityNone,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
@@ -236,7 +236,7 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						Host:     "example.com",
 						Path:     "/",
 						Affinity: AffinityNone,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
@@ -296,7 +296,7 @@ foo=bar`,
 						Host:     "example.com",
 						Path:     "/",
 						Affinity: AffinityNone,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
@@ -353,7 +353,7 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						Host:     "example.com",
 						Path:     "/",
 						Affinity: AffinityNone,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
@@ -406,7 +406,7 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						Host:     "example.com",
 						Path:     "/",
 						Affinity: AffinityNone,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
@@ -474,7 +474,7 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						Host:     "example.com",
 						Path:     "/",
 						Affinity: AffinityNone,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
@@ -539,7 +539,7 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						Host:     "example.com",
 						Path:     "/",
 						Affinity: AffinityNone,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
@@ -596,7 +596,7 @@ backend=127.0.0.1,9999;/nghttpx-healthz;mruby=/healthz.rb;dnf
 						ReadTimeout:  &metav1.Duration{Duration: 3 * time.Minute},
 						WriteTimeout: &metav1.Duration{Duration: 5 * time.Minute},
 						DoNotForward: true,
-						Backends: []UpstreamServer{
+						Backends: []Backend{
 							{
 								Address:  "192.168.0.1",
 								Port:     "8080",
