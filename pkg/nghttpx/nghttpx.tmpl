@@ -1,64 +1,57 @@
 accesslog-file=/dev/stdout
-
 include={{ .ConfDir }}/nghttpx-backend.conf
-
-{{ if .HTTPPort }}
+{{ if .HTTPPort -}}
+# HTTP port
 frontend=*,{{ .HTTPPort }};no-tls{{ if .ProxyProto }};proxyproto{{ end }}
-{{ end }}
-
-# API endpoints
+{{ end -}}
+# API endpoint
 frontend=127.0.0.1,{{ .APIPort }};api;no-tls
-
-{{ if and .HTTPSPort .TLS }}
+{{ if and .HTTPSPort .TLS -}}
+# HTTPS port
 frontend=*,{{ .HTTPSPort }}{{ if .ProxyProto }};proxyproto{{ end }}
-{{ if .HTTP3 }}
+{{ if .HTTP3 -}}
+# HTTP/3
 frontend=*,{{ .HTTPSPort }};quic
-
 # checksum: {{ encodeHex .QUICSecretFile.Checksum }}
 frontend-quic-secret-file={{ .QUICSecretFile.Path }}
-
 altsvc=h3,{{ .HTTPSPort }},,,ma=3600
 altsvc=h3-29,{{ .HTTPSPort }},,,ma=3600
 http2-altsvc=h3,{{ .HTTPSPort }},,,ma=3600
 http2-altsvc=h3-29,{{ .HTTPSPort }},,,ma=3600
-{{ end }}
-
-{{ $defaultCred := .DefaultTLSCred }}
+{{ end -}}
+# Default TLS credential
+{{ $defaultCred := .DefaultTLSCred -}}
 # checksum is required to detect changes in the generated configuration and force a reload
 # checksum: {{ encodeHex $defaultCred.Key.Checksum }} {{ encodeHex $defaultCred.Cert.Checksum }}
 private-key-file={{ $defaultCred.Key.Path }}
 certificate-file={{ $defaultCred.Cert.Path }}
-
-{{ range $cred := .SubTLSCred }}
+{{ range $cred := .SubTLSCred -}}
 # checksum: {{ encodeHex $cred.Key.Checksum }} {{ encodeHex $cred.Cert.Checksum }}
 subcert={{ $cred.Key.Path }}:{{ $cred.Cert.Path }}
-{{ end }}
-
-{{ else if .HTTPSPort }}
+{{ end -}}
+{{ else if .HTTPSPort -}}
 # just listen {{ .HTTPSPort }} to gain port {{ .HTTPSPort }}, so that we can always bind that address.
 frontend=*,{{ .HTTPSPort }};no-tls{{ if .ProxyProto }};proxyproto{{ end }}
-{{ end }}
-
+{{ end -}}
 # for health check
 frontend=127.0.0.1,{{ .HealthPort }};healthmon;no-tls
-
 # default configuration by controller
 workers={{ .Workers }}
-
-# from ConfigMap
-
+{{ if .ExtraConfig -}}
+# ExtraConfig
 {{ .ExtraConfig }}
-
-{{ if .MrubyFile }}
+{{ end -}}
+{{ if .MrubyFile -}}
+# mruby file
 # checksum: {{ encodeHex .MrubyFile.Checksum }}
 mruby-file={{ .MrubyFile.Path }}
-{{ end }}
-
-{{ if .FetchOCSPRespFromSecret }}
+{{ end -}}
+# OCSP
+{{ if .FetchOCSPRespFromSecret -}}
 fetch-ocsp-response-file=/cat-ocsp-resp
-{{ else }}
+{{ else -}}
 fetch-ocsp-response-file=/fetch-ocsp-response
-{{ end}}
-
+{{ end -}}
+# configurations that cannot be overridden by ExtraConfig
 worker-process-grace-shutdown-period=60s
 max-worker-processes=100

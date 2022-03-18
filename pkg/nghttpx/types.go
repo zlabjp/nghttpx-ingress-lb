@@ -143,16 +143,8 @@ type UpstreamServer struct {
 	TLS      bool
 	SNI      string
 	DNS      bool
-	// Deprecated.  Use Upstream instead.
-	Affinity Affinity
-	// Deprecated.  Use Upstream instead.
-	AffinityCookieName string
-	// Deprecated.  Use Upstream instead.
-	AffinityCookiePath string
-	// Deprecated.  Use Upstream instead.
-	AffinityCookieSecure AffinityCookieSecure
-	Group                string
-	Weight               uint32
+	Group    string
+	Weight   uint32
 }
 
 // TLSCred stores TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte
@@ -169,7 +161,6 @@ func NewDefaultServer() UpstreamServer {
 		Address:  "127.0.0.1",
 		Port:     "8181",
 		Protocol: ProtocolH1,
-		Affinity: AffinityNone,
 	}
 }
 
