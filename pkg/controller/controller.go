@@ -928,7 +928,6 @@ App.new
 					Address:  "127.0.0.1",
 					Port:     "9999",
 					Protocol: nghttpx.ProtocolH1,
-					Affinity: nghttpx.AffinityNone,
 				},
 			},
 		}
@@ -1514,11 +1513,6 @@ func (lbc *LoadBalancerController) createUpstreamServer(svc *corev1.Service, add
 	// Set Protocol and Affinity here if they are empty.  Template expects them.
 	if ups.Protocol == "" {
 		ups.Protocol = nghttpx.ProtocolH1
-	}
-	if ups.Affinity == "" {
-		ups.Affinity = nghttpx.AffinityNone
-	} else if ups.Affinity == nghttpx.AffinityCookie && ups.AffinityCookieSecure == "" {
-		ups.AffinityCookieSecure = nghttpx.AffinityCookieSecureAuto
 	}
 
 	return ups
