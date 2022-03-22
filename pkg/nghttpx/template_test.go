@@ -167,8 +167,6 @@ frontend=127.0.0.1,0;api;no-tls
 # HTTPS port
 frontend=*,443
 # Default TLS credential
-# checksum is required to detect changes in the generated configuration and force a reload
-# checksum: 2c70e12b7a0646f92279f427c7b38e7334d8e5389cff167a1dc30e73f826b683 06298432e8066b29e2223bcc23aa9504b56ae508fabf3435508869b9c3190e22
 private-key-file=/tls/server.key
 certificate-file=/tls/server.crt
 # for health check
@@ -260,13 +258,9 @@ frontend=127.0.0.1,0;api;no-tls
 # HTTPS port
 frontend=*,443
 # Default TLS credential
-# checksum is required to detect changes in the generated configuration and force a reload
-# checksum: 2c70e12b7a0646f92279f427c7b38e7334d8e5389cff167a1dc30e73f826b683 06298432e8066b29e2223bcc23aa9504b56ae508fabf3435508869b9c3190e22
 private-key-file=/tls/server.key
 certificate-file=/tls/server.crt
-# checksum: b10253764c8b233fb37542e23401c7b450e5a6f9751f3b5a014f6f67e8bc999d cdf9e092139ce78806e2fbabc732bd2d322e964fa93a10a8e0155e673aa96737
 subcert=/tls/server2.key:/tls/server2.crt
-# checksum: f576104eebeab09651d83acffc77c8b8c6eaa4b767aeab24d7da80f83f51d865 9bffb43d004b76efd8c8bb6086d37b28737b85b455021ba0f20210062dda59ed
 subcert=/tls/server3.key:/tls/server3.crt
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
@@ -506,8 +500,6 @@ altsvc=h3-29,443,,,ma=3600
 http2-altsvc=h3,443,,,ma=3600
 http2-altsvc=h3-29,443,,,ma=3600
 # Default TLS credential
-# checksum is required to detect changes in the generated configuration and force a reload
-# checksum: 2c70e12b7a0646f92279f427c7b38e7334d8e5389cff167a1dc30e73f826b683 06298432e8066b29e2223bcc23aa9504b56ae508fabf3435508869b9c3190e22
 private-key-file=/tls/server.key
 certificate-file=/tls/server.crt
 # for health check

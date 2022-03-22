@@ -27,11 +27,10 @@ package nghttpx
 import (
 	"crypto/tls"
 	"encoding/base64"
-	"fmt"
+	"encoding/hex"
 	"path/filepath"
 	"reflect"
 	"testing"
-	"time"
 )
 
 const (
@@ -55,21 +54,77 @@ func TestCreateTLSCred(t *testing.T) {
 		t.Fatalf("Unexpected error: %+v", err)
 	}
 
-	name := fmt.Sprintf("test-%v", time.Now().UnixNano())
-	tlsCred := CreateTLSCred(defaultConfDir, name, dCrt, dKey, []byte(tlsOCSPResp))
+	tlsCred := CreateTLSCred(defaultConfDir, "tls", dCrt, dKey, []byte(tlsOCSPResp))
 
-	if got, want := tlsCred.Key.Path, filepath.Join(defaultConfDir, tlsDir, name+".key"); got != want {
+	if got, want := tlsCred.Name, "tls"; got != want {
+		t.Errorf("tlsCred.Name = %v, want %v", got, want)
+	}
+	if got, want := tlsCred.Key.Path, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dKey))+".key"); got != want {
 		t.Errorf("tlsCred.Key.Path = %v, want %v", got, want)
 	}
-	if got, want := tlsCred.Cert.Path, filepath.Join(defaultConfDir, tlsDir, name+".crt"); got != want {
+	if got, want := tlsCred.Cert.Path, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dCrt))+".crt"); got != want {
 		t.Errorf("tlsCred.Cert.Path = %v, want %v", got, want)
 	}
-	if got, want := tlsCred.OCSPResp.Path, filepath.Join(defaultConfDir, tlsDir, name+".ocsp-resp"); got != want {
+	if got, want := tlsCred.OCSPResp.Path, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum([]byte(tlsOCSPResp)))+".ocsp-resp"); got != want {
 		t.Errorf("tlsCred.OCSPResp.Path = %v, want %v", got, want)
 	}
 
 	if _, err := tls.X509KeyPair(dCrt, dKey); err != nil {
 		t.Fatalf("unexpected error parsing TLS key pair: %v", err)
+	}
+}
+
+// TestSortPems tests SortPems.
+func TestSortPems(t *testing.T) {
+	tests := []struct {
+		desc string
+		in   []*TLSCred
+		out  []*TLSCred
+	}{
+		{
+			desc: "Empty input",
+		},
+		{
+			desc: "Sort TLSCred",
+			in: []*TLSCred{
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0011"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
+				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0020"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
+				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
+			},
+			out: []*TLSCred{
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0011"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0020"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
+				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
+				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			SortPems(tt.in)
+
+			if got, want := tt.in, tt.out; !reflect.DeepEqual(got, want) {
+				t.Errorf("tt.in = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
@@ -86,34 +141,61 @@ func TestRemoveDuplicatePems(t *testing.T) {
 		{
 			desc: "Single entry",
 			in: []*TLSCred{
-				{Key: PrivateChecksumFile{Path: "alpha"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
 			},
 			out: []*TLSCred{
-				{Key: PrivateChecksumFile{Path: "alpha"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
 			},
 		},
 		{
 			desc: "Multiple entries and no duplicates",
 			in: []*TLSCred{
-				{Key: PrivateChecksumFile{Path: "alpha"}}, {Key: PrivateChecksumFile{Path: "bravo"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}}, {Key: PrivateChecksumFile{Path: "delta"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0011"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0020"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
+				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 			},
 			out: []*TLSCred{
-				{Key: PrivateChecksumFile{Path: "alpha"}}, {Key: PrivateChecksumFile{Path: "bravo"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}}, {Key: PrivateChecksumFile{Path: "delta"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0011"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0020"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
+				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 			},
 		},
 		{
 			desc: "Duplicates must be removed",
 			in: []*TLSCred{
-				{Key: PrivateChecksumFile{Path: "alpha"}}, {Key: PrivateChecksumFile{Path: "alpha"}},
-				{Key: PrivateChecksumFile{Path: "bravo"}}, {Key: PrivateChecksumFile{Path: "charlie"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}}, {Key: PrivateChecksumFile{Path: "delta"}},
-				{Key: PrivateChecksumFile{Path: "delta"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0011"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0020"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
+				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
+				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 			},
 			out: []*TLSCred{
-				{Key: PrivateChecksumFile{Path: "alpha"}}, {Key: PrivateChecksumFile{Path: "bravo"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}}, {Key: PrivateChecksumFile{Path: "delta"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
+				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0011"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0020"}},
+				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
+				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
+				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 			},
 		},
 	}

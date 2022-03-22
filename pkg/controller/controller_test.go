@@ -27,6 +27,7 @@ package controller
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"testing"
@@ -721,17 +722,19 @@ func TestSyncDefaultSecret(t *testing.T) {
 		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
 	}
 
-	prefix := nghttpx.TLSCredPrefix(tlsSecret)
-	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, prefix); got != want {
+	dKeyChecksum := nghttpx.Checksum(dKey)
+	dCrtChecksum := nghttpx.Checksum(dCrt)
+
+	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(dKeyChecksum)); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
-	if got, want := ingConfig.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(defaultConfDir, prefix); got != want {
+	if got, want := ingConfig.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(defaultConfDir, hex.EncodeToString(dCrtChecksum)); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Cert.Path = %v, want %v", got, want)
 	}
-	if got, want := ingConfig.DefaultTLSCred.Key.Checksum, nghttpx.Checksum(dKey); !bytes.Equal(got, want) {
+	if got, want := ingConfig.DefaultTLSCred.Key.Checksum, dKeyChecksum; !bytes.Equal(got, want) {
 		t.Errorf("ingConfig.DefaultTLSCred.Key.Checksum = %x, want %x", got, want)
 	}
-	if got, want := ingConfig.DefaultTLSCred.Cert.Checksum, nghttpx.Checksum(dCrt); !bytes.Equal(got, want) {
+	if got, want := ingConfig.DefaultTLSCred.Cert.Checksum, dCrtChecksum; !bytes.Equal(got, want) {
 		t.Errorf("ingConfig.DefaultTLSCred.Cert.Checksum = %v, want %x", got, want)
 	}
 
@@ -773,8 +776,7 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
 	}
 
-	prefix := nghttpx.TLSCredPrefix(tlsSecret)
-	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, prefix); got != want {
+	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(nghttpx.Checksum(dKey))); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
 	if got, want := len(ingConfig.SubTLSCred), 0; got != want {

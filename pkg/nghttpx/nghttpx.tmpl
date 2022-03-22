@@ -20,13 +20,9 @@ http2-altsvc=h3,{{ .HTTPSPort }},,,ma=3600
 http2-altsvc=h3-29,{{ .HTTPSPort }},,,ma=3600
 {{ end -}}
 # Default TLS credential
-{{ $defaultCred := .DefaultTLSCred -}}
-# checksum is required to detect changes in the generated configuration and force a reload
-# checksum: {{ encodeHex $defaultCred.Key.Checksum }} {{ encodeHex $defaultCred.Cert.Checksum }}
-private-key-file={{ $defaultCred.Key.Path }}
-certificate-file={{ $defaultCred.Cert.Path }}
+private-key-file={{ .DefaultTLSCred.Key.Path }}
+certificate-file={{ .DefaultTLSCred.Cert.Path }}
 {{ range $cred := .SubTLSCred -}}
-# checksum: {{ encodeHex $cred.Key.Checksum }} {{ encodeHex $cred.Cert.Checksum }}
 subcert={{ $cred.Key.Path }}:{{ $cred.Cert.Path }}
 {{ end -}}
 {{ else if .HTTPSPort -}}

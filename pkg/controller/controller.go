@@ -1067,13 +1067,13 @@ func (lbc *LoadBalancerController) createIngressConfig(ings []*networkingv1.Ingr
 		}
 	}
 
-	sort.Slice(pems, func(i, j int) bool { return pems[i].Key.Path < pems[j].Key.Path })
+	nghttpx.SortPems(pems)
 	pems = nghttpx.RemoveDuplicatePems(pems)
 
 	if ingConfig.DefaultTLSCred != nil {
 		// Remove default TLS key pair from pems.
 		for i := range pems {
-			if ingConfig.DefaultTLSCred.Key.Path == pems[i].Key.Path {
+			if nghttpx.PemsShareSamePaths(ingConfig.DefaultTLSCred, pems[i]) {
 				pems = append(pems[:i], pems[i+1:]...)
 				break
 			}
@@ -1327,7 +1327,7 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *corev1.Secret
 	}
 
 	// OCSP response in TLS secret is optional feature.
-	return nghttpx.CreateTLSCred(lbc.nghttpxConfDir, nghttpx.TLSCredPrefix(secret), cert, key, secret.Data[lbc.ocspRespKey]), nil
+	return nghttpx.CreateTLSCred(lbc.nghttpxConfDir, strings.Join([]string{secret.Namespace, secret.Name}, "/"), cert, key, secret.Data[lbc.ocspRespKey]), nil
 }
 
 func (lbc *LoadBalancerController) secretReferenced(s *corev1.Secret) bool {
