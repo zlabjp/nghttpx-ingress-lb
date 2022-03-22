@@ -34,6 +34,7 @@ import (
 	"k8s.io/klog/v2"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 const (
@@ -170,7 +171,7 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 }
 
 // VerifyCertificate verifies certPEM passed in PEM format.
-func VerifyCertificate(certPEM []byte) error {
+func VerifyCertificate(certPEM []byte, currentTime time.Time) error {
 	certDER, err := readLeafCertificate(certPEM)
 	if err != nil {
 		return err
@@ -186,6 +187,12 @@ func VerifyCertificate(certPEM []byte) error {
 	switch cert.SignatureAlgorithm {
 	case x509.MD2WithRSA, x509.MD5WithRSA, x509.SHA1WithRSA, x509.DSAWithSHA1, x509.ECDSAWithSHA1:
 		return fmt.Errorf("unsupported signature algorithm: %v", cert.SignatureAlgorithm)
+	}
+
+	klog.V(4).Infof("NotBefore=%v NotAfter=%v", cert.NotBefore, cert.NotAfter)
+
+	if currentTime.Before(cert.NotBefore) || currentTime.After(cert.NotAfter) {
+		return errors.New("certificate has expired or is not valid at the given moment of time")
 	}
 
 	return nil

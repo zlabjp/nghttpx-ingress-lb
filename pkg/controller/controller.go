@@ -1322,7 +1322,7 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *corev1.Secret
 		return nil, err
 	}
 
-	if err := nghttpx.VerifyCertificate(cert); err != nil {
+	if err := nghttpx.VerifyCertificate(cert, time.Now()); err != nil {
 		return nil, err
 	}
 
