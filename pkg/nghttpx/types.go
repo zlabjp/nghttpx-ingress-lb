@@ -150,6 +150,7 @@ type Backend struct {
 // TLSCred stores TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte
 // string.
 type TLSCred struct {
+	Name     string
 	Key      PrivateChecksumFile
 	Cert     ChecksumFile
 	OCSPResp *ChecksumFile

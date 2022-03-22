@@ -27,14 +27,13 @@ package nghttpx
 import (
 	"bytes"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"k8s.io/klog/v2"
 	"path/filepath"
-	"strings"
-
-	corev1 "k8s.io/api/core/v1"
+	"sort"
 )
 
 const (
@@ -59,24 +58,30 @@ func CreateTLSOCSPRespPath(dir, name string) string {
 
 // CreateTLSCred creates TLSCred for given private key and certificate.  ocspResp is optional, and could be nil.
 func CreateTLSCred(dir, name string, cert, key, ocspResp []byte) *TLSCred {
+	keyChecksum := Checksum(key)
+	certChecksum := Checksum(cert)
+
 	c := &TLSCred{
+		Name: name,
 		Key: PrivateChecksumFile{
-			Path:     CreateTLSKeyPath(dir, name),
+			Path:     CreateTLSKeyPath(dir, hex.EncodeToString(keyChecksum)),
 			Content:  key,
-			Checksum: Checksum(key),
+			Checksum: keyChecksum,
 		},
 		Cert: ChecksumFile{
-			Path:     CreateTLSCertPath(dir, name),
+			Path:     CreateTLSCertPath(dir, hex.EncodeToString(certChecksum)),
 			Content:  cert,
-			Checksum: Checksum(cert),
+			Checksum: certChecksum,
 		},
 	}
 
 	if len(ocspResp) > 0 {
+		ocspRespChecksum := Checksum(ocspResp)
+
 		c.OCSPResp = &ChecksumFile{
-			Path:     CreateTLSOCSPRespPath(dir, name),
+			Path:     CreateTLSOCSPRespPath(dir, hex.EncodeToString(ocspRespChecksum)),
 			Content:  ocspResp,
-			Checksum: Checksum(ocspResp),
+			Checksum: ocspRespChecksum,
 		}
 	}
 
@@ -123,7 +128,26 @@ func writeTLSCred(tlsCred *TLSCred) error {
 	return nil
 }
 
-// RemoveDuplicatePems removes duplicates from pems.  It assumes that pems are sorted by TLSCred.Key.Path.
+// PemsShareSamePaths returns if a and b share the same Key.Path, Cert.path, and OCSPResp.Path.
+func PemsShareSamePaths(a, b *TLSCred) bool {
+	return a.Key.Path == b.Key.Path && a.Cert.Path == b.Cert.Path &&
+		((a.OCSPResp == nil && b.OCSPResp == nil) ||
+			(a.OCSPResp != nil && b.OCSPResp != nil && a.OCSPResp.Path == b.OCSPResp.Path))
+}
+
+// SortPems sorts pems in ascending order of Key.Path, Cert.Path, and OCSPResp.Path.
+func SortPems(pems []*TLSCred) {
+	sort.Slice(pems, func(i, j int) bool {
+		lhs, rhs := pems[i], pems[j]
+		return lhs.Key.Path < rhs.Key.Path || (lhs.Key.Path == rhs.Key.Path && lhs.Cert.Path < rhs.Cert.Path) ||
+			(lhs.Key.Path == rhs.Key.Path && lhs.Cert.Path == rhs.Cert.Path &&
+				((lhs.OCSPResp == nil && rhs.OCSPResp != nil) ||
+					(lhs.OCSPResp != nil && rhs.OCSPResp != nil && lhs.OCSPResp.Path < rhs.OCSPResp.Path)))
+	})
+}
+
+// RemoveDuplicatePems removes duplicates from pems, which share the same Key.Path, Cert.Path, and OCSPResp.Path.  It assumes that pems are
+// sorted by SortPems.
 func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 	if len(pems) == 0 {
 		return pems
@@ -131,7 +155,10 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 	left := pems[1:]
 	j := 0
 	for i := range left {
-		if pems[j].Key.Path == left[i].Key.Path {
+		a := pems[j]
+		b := left[i]
+
+		if PemsShareSamePaths(a, b) {
 			continue
 		}
 		j++
@@ -140,11 +167,6 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 		}
 	}
 	return pems[:j+1]
-}
-
-// TLSCredPrefix returns prefix of TLS certificate/private key files.
-func TLSCredPrefix(secret *corev1.Secret) string {
-	return strings.Join([]string{secret.Namespace, secret.Name}, "_")
 }
 
 // VerifyCertificate verifies certPEM passed in PEM format.
