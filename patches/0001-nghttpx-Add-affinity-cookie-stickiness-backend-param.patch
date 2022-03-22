@@ -1,0 +1,367 @@
+From 5ded01e2888b93b10e0a9b1d69e6ae97870c5529 Mon Sep 17 00:00:00 2001
+From: Tatsuhiro Tsujikawa <tatsuhiro.t@gmail.com>
+Date: Wed, 16 Mar 2022 17:39:33 +0900
+Subject: [PATCH] nghttpx: Add affinity-cookie-stickiness backend parameter
+
+---
+ doc/sources/nghttpx-howto.rst |  6 ++-
+ src/shrpx.cc                  | 13 ++++++-
+ src/shrpx_client_handler.cc   | 69 +++++++++++++++++++++++++++++++++++
+ src/shrpx_client_handler.h    |  5 +++
+ src/shrpx_config.cc           | 24 +++++++++++-
+ src/shrpx_config.h            | 19 ++++++++++
+ src/shrpx_worker.cc           | 24 +++++++-----
+ src/shrpx_worker.h            |  6 +++
+ 8 files changed, 153 insertions(+), 13 deletions(-)
+
+diff --git a/doc/sources/nghttpx-howto.rst b/doc/sources/nghttpx-howto.rst
+index 48faddd7..a9795041 100644
+--- a/doc/sources/nghttpx-howto.rst
++++ b/doc/sources/nghttpx-howto.rst
+@@ -427,7 +427,11 @@ parameter.  Optionally, a Path attribute can be specified in
+    backend=127.0.0.1,3000;;affinity=cookie;affinity-cookie-name=nghttpxlb;affinity-cookie-path=/
+ 
+ Secure attribute of cookie is set if client connection is protected by
+-TLS.
++TLS.  ``affinity-cookie-stickiness`` specifies the stickiness of this
++affinity.  If ``loose`` is given, which is the default, removing or
++adding a backend server might break affinity.  While ``strict`` is
++given, removing the designated backend server breaks affinity, but
++adding new backend server does not cause breakage.
+ 
+ PSK cipher suites
+ -----------------
+diff --git a/src/shrpx.cc b/src/shrpx.cc
+index da55c776..664edb93 100644
+--- a/src/shrpx.cc
++++ b/src/shrpx.cc
+@@ -2249,7 +2249,18 @@ Connections:
+               If a request scheme is "https", then Secure attribute is
+               set.  Otherwise, it  is not set.  If  <SECURE> is "yes",
+               the  Secure attribute  is  always set.   If <SECURE>  is
+-              "no", the Secure attribute is always omitted.
++              "no",   the   Secure   attribute  is   always   omitted.
++              "affinity-cookie-stickiness=<STICKINESS>"       controls
++              stickiness  of   this  affinity.   If   <STICKINESS>  is
++              "loose", removing or adding a backend server might break
++              the affinity  and the  request might  be forwarded  to a
++              different backend server.   If <STICKINESS> is "strict",
++              removing the designated  backend server breaks affinity,
++              but adding  new backend server does  not cause breakage.
++              If  the designated  backend server  becomes unavailable,
++              new backend server is chosen  as if the request does not
++              have  an  affinity  cookie.   <STICKINESS>  defaults  to
++              "loose".
+ 
+               By default, name resolution of backend host name is done
+               at  start  up,  or reloading  configuration.   If  "dns"
+diff --git a/src/shrpx_client_handler.cc b/src/shrpx_client_handler.cc
+index a8975cab..77177de8 100644
+--- a/src/shrpx_client_handler.cc
++++ b/src/shrpx_client_handler.cc
+@@ -847,6 +847,12 @@ DownstreamAddr *ClientHandler::get_downstream_addr(int &err,
+       hash = affinity_hash_;
+       break;
+     case SessionAffinity::COOKIE:
++      if (shared_addr->affinity.cookie.stickiness ==
++          SessionAffinityCookieStickiness::STRICT) {
++        return get_downstream_addr_strict_affinity(err, shared_addr,
++                                                   downstream);
++      }
++
+       hash = get_affinity_cookie(downstream, shared_addr->affinity.cookie.name);
+       break;
+     default:
+@@ -923,6 +929,69 @@ DownstreamAddr *ClientHandler::get_downstream_addr(int &err,
+   }
+ }
+ 
++DownstreamAddr *ClientHandler::get_downstream_addr_strict_affinity(
++    int &err, const std::shared_ptr<SharedDownstreamAddr> &shared_addr,
++    Downstream *downstream) {
++  const auto &affinity_hash = shared_addr->affinity_hash;
++
++  auto h = downstream->find_affinity_cookie(shared_addr->affinity.cookie.name);
++  if (h) {
++    auto it = shared_addr->affinity_hash_map.find(h);
++    if (it != std::end(shared_addr->affinity_hash_map)) {
++      auto addr = &shared_addr->addrs[(*it).second];
++      if (!addr->connect_blocker->blocked()) {
++        return addr;
++      }
++    }
++  } else {
++    auto d = std::uniform_int_distribution<uint32_t>(
++        1, std::numeric_limits<uint32_t>::max());
++    auto rh = d(worker_->get_randgen());
++    h = util::hash32(StringRef{reinterpret_cast<uint8_t *>(&rh),
++                               reinterpret_cast<uint8_t *>(&rh) + sizeof(rh)});
++  }
++
++  // Client is not bound to a particular backend, or the bound backend
++  // is not found, or is blocked.  Find new backend using h.  Using
++  // existing h allows us to find new server in a deterministic way.
++  // It is preferable because multiple concurrent requests with the
++  // stale cookie might be in-flight.
++  auto it = std::lower_bound(
++      std::begin(affinity_hash), std::end(affinity_hash), h,
++      [](const AffinityHash &lhs, uint32_t rhs) { return lhs.hash < rhs; });
++
++  if (it == std::end(affinity_hash)) {
++    it = std::begin(affinity_hash);
++  }
++
++  auto aff_idx =
++      static_cast<size_t>(std::distance(std::begin(affinity_hash), it));
++  auto idx = (*it).idx;
++  auto addr = &shared_addr->addrs[idx];
++
++  if (addr->connect_blocker->blocked()) {
++    size_t i;
++    for (i = aff_idx + 1; i != aff_idx; ++i) {
++      if (i == shared_addr->affinity_hash.size()) {
++        i = 0;
++      }
++      addr = &shared_addr->addrs[shared_addr->affinity_hash[i].idx];
++      if (addr->connect_blocker->blocked()) {
++        continue;
++      }
++      break;
++    }
++    if (i == aff_idx) {
++      err = -1;
++      return nullptr;
++    }
++  }
++
++  downstream->renew_affinity_cookie(addr->affinity_hash);
++
++  return addr;
++}
++
+ std::unique_ptr<DownstreamConnection>
+ ClientHandler::get_downstream_connection(int &err, Downstream *downstream) {
+   size_t group_idx;
+diff --git a/src/shrpx_client_handler.h b/src/shrpx_client_handler.h
+index c2c50c0b..85063cca 100644
+--- a/src/shrpx_client_handler.h
++++ b/src/shrpx_client_handler.h
+@@ -52,6 +52,7 @@ class Worker;
+ class Downstream;
+ struct WorkerStat;
+ struct DownstreamAddrGroup;
++struct SharedDownstreamAddr;
+ struct DownstreamAddr;
+ #ifdef ENABLE_HTTP3
+ class Http3Upstream;
+@@ -170,6 +171,10 @@ public:
+   uint32_t get_affinity_cookie(Downstream *downstream,
+                                const StringRef &cookie_name);
+ 
++  DownstreamAddr *get_downstream_addr_strict_affinity(
++      int &err, const std::shared_ptr<SharedDownstreamAddr> &shared_addr,
++      Downstream *downstream);
++
+   const UpstreamAddr *get_upstream_addr() const;
+ 
+   void repeat_read_timer();
+diff --git a/src/shrpx_config.cc b/src/shrpx_config.cc
+index d7f3a71c..a4676e2f 100644
+--- a/src/shrpx_config.cc
++++ b/src/shrpx_config.cc
+@@ -1098,6 +1098,19 @@ int parse_downstream_params(DownstreamParams &out,
+                       "auto, yes, and no";
+         return -1;
+       }
++    } else if (util::istarts_with_l(param, "affinity-cookie-stickiness=")) {
++      auto valstr =
++          StringRef{first + str_size("affinity-cookie-stickiness="), end};
++      if (util::strieq_l("loose", valstr)) {
++        out.affinity.cookie.stickiness = SessionAffinityCookieStickiness::LOOSE;
++      } else if (util::strieq_l("strict", valstr)) {
++        out.affinity.cookie.stickiness =
++            SessionAffinityCookieStickiness::STRICT;
++      } else {
++        LOG(ERROR) << "backend: affinity-cookie-stickiness: value must be "
++                      "either loose or strict";
++        return -1;
++      }
+     } else if (util::strieq_l("dns", param)) {
+       out.dns = true;
+     } else if (util::strieq_l("redirect-if-not-tls", param)) {
+@@ -1276,7 +1289,9 @@ int parse_mapping(Config *config, DownstreamAddrConfig &addr,
+         } else if (g.affinity.type != params.affinity.type ||
+                    g.affinity.cookie.name != params.affinity.cookie.name ||
+                    g.affinity.cookie.path != params.affinity.cookie.path ||
+-                   g.affinity.cookie.secure != params.affinity.cookie.secure) {
++                   g.affinity.cookie.secure != params.affinity.cookie.secure ||
++                   g.affinity.cookie.stickiness !=
++                       params.affinity.cookie.stickiness) {
+           LOG(ERROR) << "backend: affinity: multiple different affinity "
+                         "configurations found in a single group";
+           return -1;
+@@ -1350,6 +1365,7 @@ int parse_mapping(Config *config, DownstreamAddrConfig &addr,
+             make_string_ref(downstreamconf.balloc, params.affinity.cookie.path);
+       }
+       g.affinity.cookie.secure = params.affinity.cookie.secure;
++      g.affinity.cookie.stickiness = params.affinity.cookie.stickiness;
+     }
+     g.redirect_if_not_tls = params.redirect_if_not_tls;
+     g.mruby_file = make_string_ref(downstreamconf.balloc, params.mruby);
+@@ -4602,6 +4618,12 @@ int configure_downstream_group(Config *config, bool http2_proxy,
+           return -1;
+         }
+ 
++        if (g.affinity.cookie.stickiness ==
++            SessionAffinityCookieStickiness::STRICT) {
++          addr.affinity_hash = util::hash32(key);
++          g.affinity_hash_map.emplace(addr.affinity_hash, idx);
++        }
++
+         ++idx;
+       }
+ 
+diff --git a/src/shrpx_config.h b/src/shrpx_config.h
+index 29ac81e8..38becc61 100644
+--- a/src/shrpx_config.h
++++ b/src/shrpx_config.h
+@@ -43,6 +43,7 @@
+ #include <vector>
+ #include <memory>
+ #include <set>
++#include <unordered_map>
+ 
+ #include <openssl/ssl.h>
+ 
+@@ -436,6 +437,16 @@ enum class SessionAffinityCookieSecure {
+   NO,
+ };
+ 
++enum class SessionAffinityCookieStickiness {
++  // Backend server might be changed when an existing backend server
++  // is removed, or new backend server is added.
++  LOOSE,
++  // Backend server might be changed when a designated backend server
++  // is removed, but adding new backend server does not cause
++  // breakage.
++  STRICT,
++};
++
+ struct AffinityConfig {
+   // Type of session affinity.
+   SessionAffinity type;
+@@ -446,6 +457,8 @@ struct AffinityConfig {
+     StringRef path;
+     // Secure attribute
+     SessionAffinityCookieSecure secure;
++    // Affinity Stickiness
++    SessionAffinityCookieStickiness stickiness;
+   } cookie;
+ };
+ 
+@@ -528,6 +541,9 @@ struct DownstreamAddrConfig {
+   uint32_t weight;
+   // weight of the weight group.  Its range is [1, 256], inclusive.
+   uint32_t group_weight;
++  // affinity hash for this address.  It is assigned when strict
++  // stickiness is enabled.
++  uint32_t affinity_hash;
+   // Application protocol used in this group
+   Proto proto;
+   // backend port.  0 if |host_unix| is true.
+@@ -568,6 +584,9 @@ struct DownstreamAddrGroupConfig {
+   // Bunch of session affinity hash.  Only used if affinity ==
+   // SessionAffinity::IP.
+   std::vector<AffinityHash> affinity_hash;
++  // Maps affinity hash of each DownstreamAddrConfig to its index in
++  // addrs.  It is only assigned when strict stickiness is enabled.
++  std::unordered_map<uint32_t, size_t> affinity_hash_map;
+   // Cookie based session affinity configuration.
+   AffinityConfig affinity;
+   // true if this group requires that client connection must be TLS,
+diff --git a/src/shrpx_worker.cc b/src/shrpx_worker.cc
+index 74a1d8bb..72113cb3 100644
+--- a/src/shrpx_worker.cc
++++ b/src/shrpx_worker.cc
+@@ -90,12 +90,12 @@ DownstreamAddrGroup::~DownstreamAddrGroup() {}
+ 
+ // DownstreamKey is used to index SharedDownstreamAddr in order to
+ // find the same configuration.
+-using DownstreamKey =
+-    std::tuple<std::vector<std::tuple<StringRef, StringRef, StringRef, size_t,
+-                                      size_t, Proto, uint32_t, uint32_t,
+-                                      uint32_t, bool, bool, bool, bool>>,
+-               bool, SessionAffinity, StringRef, StringRef,
+-               SessionAffinityCookieSecure, int64_t, int64_t, StringRef, bool>;
++using DownstreamKey = std::tuple<
++    std::vector<
++        std::tuple<StringRef, StringRef, StringRef, size_t, size_t, Proto,
++                   uint32_t, uint32_t, uint32_t, bool, bool, bool, bool>>,
++    bool, SessionAffinity, StringRef, StringRef, SessionAffinityCookieSecure,
++    SessionAffinityCookieStickiness, int64_t, int64_t, StringRef, bool>;
+ 
+ namespace {
+ DownstreamKey
+@@ -131,11 +131,12 @@ create_downstream_key(const std::shared_ptr<SharedDownstreamAddr> &shared_addr,
+   std::get<3>(dkey) = affinity.cookie.name;
+   std::get<4>(dkey) = affinity.cookie.path;
+   std::get<5>(dkey) = affinity.cookie.secure;
++  std::get<6>(dkey) = affinity.cookie.stickiness;
+   auto &timeout = shared_addr->timeout;
+-  std::get<6>(dkey) = timeout.read;
+-  std::get<7>(dkey) = timeout.write;
+-  std::get<8>(dkey) = mruby_file;
+-  std::get<9>(dkey) = shared_addr->dnf;
++  std::get<7>(dkey) = timeout.read;
++  std::get<8>(dkey) = timeout.write;
++  std::get<9>(dkey) = mruby_file;
++  std::get<10>(dkey) = shared_addr->dnf;
+ 
+   return dkey;
+ }
+@@ -286,8 +287,10 @@ void Worker::replace_downstream_config(
+             make_string_ref(shared_addr->balloc, src.affinity.cookie.path);
+       }
+       shared_addr->affinity.cookie.secure = src.affinity.cookie.secure;
++      shared_addr->affinity.cookie.stickiness = src.affinity.cookie.stickiness;
+     }
+     shared_addr->affinity_hash = src.affinity_hash;
++    shared_addr->affinity_hash_map = src.affinity_hash_map;
+     shared_addr->redirect_if_not_tls = src.redirect_if_not_tls;
+     shared_addr->dnf = src.dnf;
+     shared_addr->timeout.read = src.timeout.read;
+@@ -306,6 +309,7 @@ void Worker::replace_downstream_config(
+       dst_addr.weight = src_addr.weight;
+       dst_addr.group = make_string_ref(shared_addr->balloc, src_addr.group);
+       dst_addr.group_weight = src_addr.group_weight;
++      dst_addr.affinity_hash = src_addr.affinity_hash;
+       dst_addr.proto = src_addr.proto;
+       dst_addr.tls = src_addr.tls;
+       dst_addr.sni = make_string_ref(shared_addr->balloc, src_addr.sni);
+diff --git a/src/shrpx_worker.h b/src/shrpx_worker.h
+index 49670630..3cc7b576 100644
+--- a/src/shrpx_worker.h
++++ b/src/shrpx_worker.h
+@@ -133,6 +133,9 @@ struct DownstreamAddr {
+   // Weight of the weight group which this address belongs to.  Its
+   // range is [1, 256], inclusive.
+   uint32_t group_weight;
++  // affinity hash for this address.  It is assigned when strict
++  // stickiness is enabled.
++  uint32_t affinity_hash;
+   // true if TLS is used in this backend
+   bool tls;
+   // true if dynamic DNS is enabled
+@@ -215,6 +218,9 @@ struct SharedDownstreamAddr {
+   // Bunch of session affinity hash.  Only used if affinity ==
+   // SessionAffinity::IP.
+   std::vector<AffinityHash> affinity_hash;
++  // Maps affinity hash of each DownstreamAddr to its index in addrs.
++  // It is only assigned when strict stickiness is enabled.
++  std::unordered_map<uint32_t, size_t> affinity_hash_map;
+ #ifdef HAVE_MRUBY
+   std::shared_ptr<mruby::MRubyContext> mruby_ctx;
+ #endif // HAVE_MRUBY
+-- 
+2.25.1
+

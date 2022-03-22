@@ -89,19 +89,20 @@ func NewIngressConfig() *IngressConfig {
 
 // Upstream describes an nghttpx upstream
 type Upstream struct {
-	Name                 string
-	Host                 string
-	Path                 string
-	Backends             []Backend
-	RedirectIfNotTLS     bool
-	Mruby                *ChecksumFile
-	Affinity             Affinity
-	AffinityCookieName   string
-	AffinityCookiePath   string
-	AffinityCookieSecure AffinityCookieSecure
-	ReadTimeout          *metav1.Duration
-	WriteTimeout         *metav1.Duration
-	DoNotForward         bool
+	Name                     string
+	Host                     string
+	Path                     string
+	Backends                 []Backend
+	RedirectIfNotTLS         bool
+	Mruby                    *ChecksumFile
+	Affinity                 Affinity
+	AffinityCookieName       string
+	AffinityCookiePath       string
+	AffinityCookieSecure     AffinityCookieSecure
+	AffinityCookieStickiness AffinityCookieStickiness
+	ReadTimeout              *metav1.Duration
+	WriteTimeout             *metav1.Duration
+	DoNotForward             bool
 }
 
 type Affinity string
@@ -124,6 +125,15 @@ const (
 	AffinityCookieSecureYes AffinityCookieSecure = "yes"
 	// AffinityCookieSecureNo indicates that secure attribute is not set.
 	AffinityCookieSecureNo AffinityCookieSecure = "no"
+)
+
+type AffinityCookieStickiness string
+
+const (
+	// AffinityCookieStickinessLoose indicates loose affinity cookie stickiness.
+	AffinityCookieStickinessLoose AffinityCookieStickiness = "loose"
+	// AffinityCookieStickinessStrict indicates strict affinity cookie stickiness.
+	AffinityCookieStickinessStrict AffinityCookieStickiness = "strict"
 )
 
 type Protocol string
@@ -251,6 +261,8 @@ type PathConfig struct {
 	AffinityCookiePath *string `json:"affinityCookiePath,omitempty"`
 	// AffinityCookieSecure controls whether Secure attribute is added to session affinity cookie.
 	AffinityCookieSecure *AffinityCookieSecure `json:"affinityCookieSecure,omitempty"`
+	// AffinityCookieStickiness controls the stickiness of affinity cookie.
+	AffinityCookieStickiness *AffinityCookieStickiness `json:"affinityCookieStickiness,omitempty"`
 	// ReadTimeout is a read timeout when this path is selected.
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty"`
 	// WriteTimeout is a write timeout when this path is selected.
@@ -319,6 +331,18 @@ func (pc *PathConfig) GetAffinityCookieSecure() AffinityCookieSecure {
 func (pc *PathConfig) SetAffinityCookieSecure(affinityCookieSecure AffinityCookieSecure) {
 	pc.AffinityCookieSecure = new(AffinityCookieSecure)
 	*pc.AffinityCookieSecure = affinityCookieSecure
+}
+
+func (pc *PathConfig) GetAffinityCookieStickiness() AffinityCookieStickiness {
+	if pc == nil || pc.AffinityCookieStickiness == nil {
+		return AffinityCookieStickinessLoose
+	}
+	return *pc.AffinityCookieStickiness
+}
+
+func (pc *PathConfig) SetAffinityCookieStickiness(affinityCookieStickiness AffinityCookieStickiness) {
+	pc.AffinityCookieStickiness = new(AffinityCookieStickiness)
+	*pc.AffinityCookieStickiness = affinityCookieStickiness
 }
 
 func (pc *PathConfig) GetReadTimeout() *metav1.Duration {
