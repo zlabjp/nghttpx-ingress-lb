@@ -15,8 +15,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// TestFixupPortBackendConfig validates fixupPortBackendConfig corrects invalid input to the correct default value.
-func TestFixupPortBackendConfig(t *testing.T) {
+// TestFixupBackendConfig validates fixupBackendConfig corrects invalid input to the correct default value.
+func TestFixupBackendConfig(t *testing.T) {
 	tests := []struct {
 		desc      string
 		inProto   Protocol
@@ -46,10 +46,10 @@ func TestFixupPortBackendConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			c := &PortBackendConfig{}
+			c := &BackendConfig{}
 			c.SetProto(tt.inProto)
 			c.SetWeight(tt.inWeight)
-			FixupPortBackendConfig(c)
+			FixupBackendConfig(c)
 			if got, want := c.GetProto(), tt.outProto; got != want {
 				t.Errorf("c.GetProto() = %q, want %q", got, want)
 			}
@@ -60,40 +60,40 @@ func TestFixupPortBackendConfig(t *testing.T) {
 	}
 }
 
-// TestApplyDefaultPortBackendConfig verifies ApplyDefaultPortBackendConfig.
-func TestApplyDefaultPortBackendConfig(t *testing.T) {
+// TestApplyDefaultBackendConfig verifies ApplyDefaultBackendConfig.
+func TestApplyDefaultBackendConfig(t *testing.T) {
 	tests := []struct {
 		desc        string
-		defaultConf *PortBackendConfig
+		defaultConf *BackendConfig
 	}{
 		{
 			desc: "Enable HTTP/2",
-			defaultConf: func() *PortBackendConfig {
-				a := &PortBackendConfig{}
+			defaultConf: func() *BackendConfig {
+				a := &BackendConfig{}
 				a.SetProto(ProtocolH2)
 				return a
 			}(),
 		},
 		{
 			desc: "Enable TLS",
-			defaultConf: func() *PortBackendConfig {
-				a := &PortBackendConfig{}
+			defaultConf: func() *BackendConfig {
+				a := &BackendConfig{}
 				a.SetTLS(true)
 				return a
 			}(),
 		},
 		{
 			desc: "Specify SNI",
-			defaultConf: func() *PortBackendConfig {
-				a := &PortBackendConfig{}
+			defaultConf: func() *BackendConfig {
+				a := &BackendConfig{}
 				a.SetSNI("example.com")
 				return a
 			}(),
 		},
 		{
 			desc: "Enable DNS",
-			defaultConf: func() *PortBackendConfig {
-				a := &PortBackendConfig{}
+			defaultConf: func() *BackendConfig {
+				a := &BackendConfig{}
 				a.SetDNS(true)
 				return a
 			}(),
@@ -102,8 +102,8 @@ func TestApplyDefaultPortBackendConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			a := &PortBackendConfig{}
-			ApplyDefaultPortBackendConfig(a, tt.defaultConf)
+			a := &BackendConfig{}
+			ApplyDefaultBackendConfig(a, tt.defaultConf)
 
 			if got, want := a.GetProto(), tt.defaultConf.GetProto(); got != want {
 				t.Errorf("a.GetProto() = %v, want %v", got, want)
@@ -165,7 +165,7 @@ func TestFixupPathConfig(t *testing.T) {
 	}
 }
 
-// TestApplyDefaultPortBackendConfig verifies ApplyDefaultPathConfig.
+// TestApplyDefaultBackendConfig verifies ApplyDefaultPathConfig.
 func TestApplyDefaultPathConfig(t *testing.T) {
 	tests := []struct {
 		desc        string
