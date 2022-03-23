@@ -175,8 +175,8 @@ func NewDefaultBackend() Backend {
 	}
 }
 
-// PortBackendConfig is a backend configuration obtained from ingress annotation, specified per service port
-type PortBackendConfig struct {
+// BackendConfig is a backend configuration obtained from ingress annotation, specified per service port
+type BackendConfig struct {
 	// backend application protocol.  At the moment, this should be either ProtocolH2 or ProtocolH1.
 	Proto *Protocol `json:"proto,omitempty"`
 	// true if backend connection requires TLS
@@ -189,62 +189,62 @@ type PortBackendConfig struct {
 	Weight *uint32 `json:"weight,omitempty"`
 }
 
-func (pbc *PortBackendConfig) GetProto() Protocol {
+func (pbc *BackendConfig) GetProto() Protocol {
 	if pbc.Proto == nil {
 		return ""
 	}
 	return *pbc.Proto
 }
 
-func (pbc *PortBackendConfig) SetProto(proto Protocol) {
+func (pbc *BackendConfig) SetProto(proto Protocol) {
 	pbc.Proto = new(Protocol)
 	*pbc.Proto = proto
 }
 
-func (pbc *PortBackendConfig) GetTLS() bool {
+func (pbc *BackendConfig) GetTLS() bool {
 	if pbc.TLS == nil {
 		return false
 	}
 	return *pbc.TLS
 }
 
-func (pbc *PortBackendConfig) SetTLS(tls bool) {
+func (pbc *BackendConfig) SetTLS(tls bool) {
 	pbc.TLS = new(bool)
 	*pbc.TLS = tls
 }
 
-func (pbc *PortBackendConfig) GetSNI() string {
+func (pbc *BackendConfig) GetSNI() string {
 	if pbc.SNI == nil {
 		return ""
 	}
 	return *pbc.SNI
 }
 
-func (pbc *PortBackendConfig) SetSNI(sni string) {
+func (pbc *BackendConfig) SetSNI(sni string) {
 	pbc.SNI = new(string)
 	*pbc.SNI = sni
 }
 
-func (pbc *PortBackendConfig) GetDNS() bool {
+func (pbc *BackendConfig) GetDNS() bool {
 	if pbc.DNS == nil {
 		return false
 	}
 	return *pbc.DNS
 }
 
-func (pbc *PortBackendConfig) SetDNS(dns bool) {
+func (pbc *BackendConfig) SetDNS(dns bool) {
 	pbc.DNS = new(bool)
 	*pbc.DNS = dns
 }
 
-func (pbc *PortBackendConfig) GetWeight() uint32 {
+func (pbc *BackendConfig) GetWeight() uint32 {
 	if pbc == nil || pbc.Weight == nil {
 		return 0
 	}
 	return *pbc.Weight
 }
 
-func (pbc *PortBackendConfig) SetWeight(weight uint32) {
+func (pbc *BackendConfig) SetWeight(weight uint32) {
 	pbc.Weight = new(uint32)
 	*pbc.Weight = weight
 }

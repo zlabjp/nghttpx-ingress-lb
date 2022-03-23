@@ -35,10 +35,10 @@ type ingressAnnotation map[string]string
 
 // getBackendConfig returns default-backend-config, and backend-config.  This function applies default-backend-config to backend-config if
 // it exists.  If invalid value is found, this function replaces them with the default value (e.g., nghttpx.ProtocolH1 for proto).
-func (ia ingressAnnotation) getBackendConfig() (*nghttpx.PortBackendConfig, map[string]map[string]*nghttpx.PortBackendConfig) {
+func (ia ingressAnnotation) getBackendConfig() (*nghttpx.BackendConfig, map[string]map[string]*nghttpx.BackendConfig) {
 	data := ia[backendConfigKey]
 	// the first key specifies service name, and secondary key specifies port name.
-	var config map[string]map[string]*nghttpx.PortBackendConfig
+	var config map[string]map[string]*nghttpx.BackendConfig
 	if data != "" {
 		if err := unmarshal([]byte(data), &config); err != nil {
 			klog.Errorf("unexpected error reading %v annotation: %v", backendConfigKey, err)
@@ -48,7 +48,7 @@ func (ia ingressAnnotation) getBackendConfig() (*nghttpx.PortBackendConfig, map[
 
 	for _, v := range config {
 		for _, vv := range v {
-			nghttpx.FixupPortBackendConfig(vv)
+			nghttpx.FixupBackendConfig(vv)
 		}
 	}
 
@@ -58,16 +58,16 @@ func (ia ingressAnnotation) getBackendConfig() (*nghttpx.PortBackendConfig, map[
 		return nil, config
 	}
 
-	var defaultConfig nghttpx.PortBackendConfig
+	var defaultConfig nghttpx.BackendConfig
 	if err := unmarshal([]byte(data), &defaultConfig); err != nil {
 		klog.Errorf("unexpected error reading %v annotation: %v", defaultBackendConfigKey, err)
 		return nil, nil
 	}
-	nghttpx.FixupPortBackendConfig(&defaultConfig)
+	nghttpx.FixupBackendConfig(&defaultConfig)
 
 	for _, v := range config {
 		for _, vv := range v {
-			nghttpx.ApplyDefaultPortBackendConfig(vv, &defaultConfig)
+			nghttpx.ApplyDefaultBackendConfig(vv, &defaultConfig)
 		}
 	}
 

@@ -16,16 +16,16 @@ func TestGetBackendConfig(t *testing.T) {
 		desc                    string
 		annotationDefaultConfig string
 		annotationConfig        string
-		wantDefaultConfig       *nghttpx.PortBackendConfig
-		wantConfig              map[string]map[string]*nghttpx.PortBackendConfig
+		wantDefaultConfig       *nghttpx.BackendConfig
+		wantConfig              map[string]map[string]*nghttpx.BackendConfig
 	}{
 		{
 			desc:             "Without default config",
 			annotationConfig: `{"svc": {"80": {"proto": "h2"}}}`,
-			wantConfig: map[string]map[string]*nghttpx.PortBackendConfig{
+			wantConfig: map[string]map[string]*nghttpx.BackendConfig{
 				"svc": {
-					"80": func() *nghttpx.PortBackendConfig {
-						a := &nghttpx.PortBackendConfig{}
+					"80": func() *nghttpx.BackendConfig {
+						a := &nghttpx.BackendConfig{}
 						a.SetProto(nghttpx.ProtocolH2)
 						return a
 					}(),
@@ -35,8 +35,8 @@ func TestGetBackendConfig(t *testing.T) {
 		{
 			desc:                    "Just default config",
 			annotationDefaultConfig: `{"sni": "example.com"}`,
-			wantDefaultConfig: func() *nghttpx.PortBackendConfig {
-				a := &nghttpx.PortBackendConfig{}
+			wantDefaultConfig: func() *nghttpx.BackendConfig {
+				a := &nghttpx.BackendConfig{}
 				a.SetSNI("example.com")
 				return a
 			}(),
@@ -45,15 +45,15 @@ func TestGetBackendConfig(t *testing.T) {
 			desc:                    "Both config and default config",
 			annotationDefaultConfig: `{"sni": "example.com"}`,
 			annotationConfig:        `{"svc": {"80": {"proto": "h2"}}}`,
-			wantDefaultConfig: func() *nghttpx.PortBackendConfig {
-				a := &nghttpx.PortBackendConfig{}
+			wantDefaultConfig: func() *nghttpx.BackendConfig {
+				a := &nghttpx.BackendConfig{}
 				a.SetSNI("example.com")
 				return a
 			}(),
-			wantConfig: map[string]map[string]*nghttpx.PortBackendConfig{
+			wantConfig: map[string]map[string]*nghttpx.BackendConfig{
 				"svc": {
-					"80": func() *nghttpx.PortBackendConfig {
-						a := &nghttpx.PortBackendConfig{}
+					"80": func() *nghttpx.BackendConfig {
+						a := &nghttpx.BackendConfig{}
 						a.SetProto(nghttpx.ProtocolH2)
 						a.SetSNI("example.com")
 						return a
@@ -68,10 +68,10 @@ svc:
   80:
     proto: h2
 `,
-			wantConfig: map[string]map[string]*nghttpx.PortBackendConfig{
+			wantConfig: map[string]map[string]*nghttpx.BackendConfig{
 				"svc": {
-					"80": func() *nghttpx.PortBackendConfig {
-						a := &nghttpx.PortBackendConfig{}
+					"80": func() *nghttpx.BackendConfig {
+						a := &nghttpx.BackendConfig{}
 						a.SetProto(nghttpx.ProtocolH2)
 						return a
 					}(),

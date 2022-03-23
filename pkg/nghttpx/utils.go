@@ -104,8 +104,8 @@ func diff(b1, b2 []byte) (string, error) {
 	return difflib.GetUnifiedDiffString(d)
 }
 
-// FixupPortBackendConfig validates config, and fixes the invalid values inside it.
-func FixupPortBackendConfig(config *PortBackendConfig) {
+// FixupBackendConfig validates config, and fixes the invalid values inside it.
+func FixupBackendConfig(config *BackendConfig) {
 	switch config.GetProto() {
 	case ProtocolH2, ProtocolH1, "":
 		// OK
@@ -126,8 +126,8 @@ func FixupPortBackendConfig(config *PortBackendConfig) {
 	}
 }
 
-// ApplyDefaultPortBackendConfig applies default field value specified in defaultConfig to config if a corresponding field is missing.
-func ApplyDefaultPortBackendConfig(config *PortBackendConfig, defaultConfig *PortBackendConfig) {
+// ApplyDefaultBackendConfig applies default field value specified in defaultConfig to config if a corresponding field is missing.
+func ApplyDefaultBackendConfig(config *BackendConfig, defaultConfig *BackendConfig) {
 	klog.V(4).Info("Applying default-backend-config annotation")
 	if defaultConfig.Proto != nil && config.Proto == nil {
 		config.SetProto(*defaultConfig.Proto)
