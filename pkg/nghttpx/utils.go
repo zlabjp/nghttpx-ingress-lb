@@ -199,7 +199,7 @@ func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
 }
 
 // ResolvePathConfig returns a PathConfig which should be used for the pattern denoted by host and path.
-func ResolvePathConfig(host, path string, defaultPathConfig *PathConfig, pathConfig map[string]*PathConfig) *PathConfig {
+func ResolvePathConfig(host, path string, defaultPathConfig *PathConfig, pathConfig PathConfigMapping) *PathConfig {
 	key := host + path
 	if c, ok := pathConfig[key]; ok {
 		return c

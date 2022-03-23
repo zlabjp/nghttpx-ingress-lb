@@ -1008,16 +1008,15 @@ func (lbc *LoadBalancerController) createIngressConfig(ings []*networkingv1.Ingr
 			requireTLS = len(ingPems) > 0
 		}
 
-		defaultBackendConfig, backendConfig := ingressAnnotation(ing.Annotations).getBackendConfig()
-		defaultPathConfig, pathConfig := ingressAnnotation(ing.Annotations).getPathConfig()
+		bcm := ingressAnnotation(ing.Annotations).NewBackendConfigMapper()
+		pcm := ingressAnnotation(ing.Annotations).NewPathConfigMapper()
 
 		if !lbc.noDefaultBackendOverride {
 			if isb := getDefaultBackendService(ing); isb != nil {
 				// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress
 				// resource specifies this.  But specification does not any rules how to deal with it.  Just use the one we
 				// meet last.
-				if ups, err := lbc.createUpstream(ing, "", "/", isb, false,
-					defaultPathConfig, pathConfig, defaultBackendConfig, backendConfig); err != nil {
+				if ups, err := lbc.createUpstream(ing, "", "/", isb, false /* requireTLS */, pcm, bcm); err != nil {
 					klog.Errorf("Could not create default backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 				} else {
 					defaultUpstream = ups
@@ -1056,8 +1055,7 @@ func (lbc *LoadBalancerController) createIngressConfig(ings []*networkingv1.Ingr
 					continue
 				}
 
-				if ups, err := lbc.createUpstream(ing, rule.Host, reqPath, isb, requireTLS,
-					defaultPathConfig, pathConfig, defaultBackendConfig, backendConfig); err != nil {
+				if ups, err := lbc.createUpstream(ing, rule.Host, reqPath, isb, requireTLS, pcm, bcm); err != nil {
 					klog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 					continue
 				} else {
@@ -1157,7 +1155,7 @@ App.new
 
 // createUpstream creates new nghttpx.Upstream for ing, host, path and isb.
 func (lbc *LoadBalancerController) createUpstream(ing *networkingv1.Ingress, host, path string, isb *networkingv1.IngressServiceBackend,
-	requireTLS bool, defaultPathConfig *nghttpx.PathConfig, pathConfig map[string]*nghttpx.PathConfig, defaultBackendConfig *nghttpx.BackendConfig, backendConfig map[string]map[string]*nghttpx.BackendConfig) (*nghttpx.Upstream, error) {
+	requireTLS bool, pcm *nghttpx.PathConfigMapper, bcm *nghttpx.BackendConfigMapper) (*nghttpx.Upstream, error) {
 	var normalizedPath string
 	switch {
 	case path == "":
@@ -1174,7 +1172,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networkingv1.Ingress, hos
 	} else {
 		portStr = strconv.FormatInt(int64(isb.Port.Number), 10)
 	}
-	pc := nghttpx.ResolvePathConfig(host, normalizedPath, defaultPathConfig, pathConfig)
+	pc := pcm.ConfigFor(host, normalizedPath)
 	// The format of upsName is similar to backend option syntax of nghttpx.
 	upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, isb.Name, portStr, host, normalizedPath)
 	ups := &nghttpx.Upstream{
@@ -1213,8 +1211,6 @@ func (lbc *LoadBalancerController) createUpstream(ing *networkingv1.Ingress, hos
 
 	klog.V(3).Infof("obtaining port information for Service %v", svcKey)
 
-	svcBackendConfig := backendConfig[isb.Name]
-
 	for i := range svc.Spec.Ports {
 		servicePort := &svc.Spec.Ports[i]
 		// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use servicePort.Port.
@@ -1233,13 +1229,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networkingv1.Ingress, hos
 			continue
 		}
 
-		backendConfig, ok := svcBackendConfig[key]
-		if !ok {
-			backendConfig = &nghttpx.BackendConfig{}
-			if defaultBackendConfig != nil {
-				nghttpx.ApplyDefaultBackendConfig(backendConfig, defaultBackendConfig)
-			}
-		}
+		backendConfig := bcm.ConfigFor(isb.Name, key)
 
 		eps := lbc.getEndpoints(svc, servicePort, backendConfig)
 		if len(eps) == 0 {

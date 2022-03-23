@@ -175,6 +175,37 @@ func NewDefaultBackend() Backend {
 	}
 }
 
+// BackendConfigMapper is a convenient object for querying BackendConfig for given service and port.
+type BackendConfigMapper struct {
+	DefaultBackendConfig *BackendConfig
+	BackendConfigMapping BackendConfigMapping
+}
+
+// NewBackendConfigMapper returns new BackendConfigMapper.
+func NewBackendConfigMapper(defaultBackendConfig *BackendConfig, backendConfigMapping BackendConfigMapping) *BackendConfigMapper {
+	return &BackendConfigMapper{
+		DefaultBackendConfig: defaultBackendConfig,
+		BackendConfigMapping: backendConfigMapping,
+	}
+}
+
+// ConfigFor returns BackendConfig for given svc and port.  svc is Service name, and port is either a named Service port or a numeric port
+// number.
+func (bcm *BackendConfigMapper) ConfigFor(svc, port string) *BackendConfig {
+	c := bcm.BackendConfigMapping[svc][port]
+	if c == nil {
+		c = new(BackendConfig)
+
+		if bcm.DefaultBackendConfig != nil {
+			ApplyDefaultBackendConfig(c, bcm.DefaultBackendConfig)
+		}
+	}
+
+	return c
+}
+
+type BackendConfigMapping map[string]map[string]*BackendConfig
+
 // BackendConfig is a backend configuration obtained from ingress annotation, specified per service port
 type BackendConfig struct {
 	// backend application protocol.  At the moment, this should be either ProtocolH2 or ProtocolH1.
@@ -248,6 +279,27 @@ func (pbc *BackendConfig) SetWeight(weight uint32) {
 	pbc.Weight = new(uint32)
 	*pbc.Weight = weight
 }
+
+// PathConfigMapper is a convenient object for querying PathConfig for given host and path.
+type PathConfigMapper struct {
+	DefaultPathConfig *PathConfig
+	PathConfigMapping PathConfigMapping
+}
+
+// NewPathConfigMapper returns new PathConfigMapper.
+func NewPathConfigMapper(defaultPathConfig *PathConfig, pathConfigMapping PathConfigMapping) *PathConfigMapper {
+	return &PathConfigMapper{
+		DefaultPathConfig: defaultPathConfig,
+		PathConfigMapping: pathConfigMapping,
+	}
+}
+
+// ConfigFor returns PathConfig for given host and path.
+func (pcm *PathConfigMapper) ConfigFor(host, path string) *PathConfig {
+	return ResolvePathConfig(host, path, pcm.DefaultPathConfig, pcm.PathConfigMapping)
+}
+
+type PathConfigMapping map[string]*PathConfig
 
 // PathConfig is per-pattern configuration obtained from Ingress annotation, specified per host and path pattern.
 type PathConfig struct {
