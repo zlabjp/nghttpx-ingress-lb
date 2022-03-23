@@ -87,7 +87,7 @@ func needsReload(filename string, newCfg []byte) (bool, error) {
 			klog.Errorf("error computing diff: %s", err)
 			return true, nil
 		}
-		klog.Infof("nghttpx configuration diff a/%s b/%s\n%v", filename, filename, dData)
+		klog.Infof("nghttpx configuration diff %s\n%v", filename, dData)
 	}
 
 	return true, nil

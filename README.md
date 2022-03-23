@@ -644,14 +644,13 @@ In particular:
 - `--v=2` shows details using `diff` about the changes in the configuration in nghttpx
 
 ```
-I1226 09:31:32.305044       1 utils.go:91] nghttpx configuration diff a//etc/nghttpx/nghttpx-backend.conf b//etc/nghttpx/nghttpx-backend.conf
-I1226 09:31:32.305078       1 utils.go:92] --- /tmp/132090794	 2016-12-26 09:31:32.000000000 +0000
-+++ /tmp/476970241	    2016-12-26 09:31:32.000000000 +0000
-@@ -0,0 +1,3 @@
-+# kube-system/default-http-backend,8080;/
-+backend=10.2.50.3,8080;/;proto=http/1.1
-+
-I1226 09:31:32.305093       1 command.go:78] change in configuration detected. Reloading...
+I0323 04:39:16.552830       8 utils.go:90] nghttpx configuration diff /etc/nghttpx/nghttpx.conf
+--- currnet
++++ new
+@@ -1,7 +1,41 @@
+-# A very simple nghttpx configuration file that forces nghttpx to start.
++accesslog-file=/dev/stdout
++include=/etc/nghttpx/nghttpx-backend.conf
 ```
 
 - `--v=3` shows details about the service, Ingress rule, endpoint changes and it dumps the nghttpx configuration in JSON format
