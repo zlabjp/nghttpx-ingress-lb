@@ -658,7 +658,7 @@ I1226 09:31:32.305093       1 command.go:78] change in configuration detected. R
 
 ## Limitations
 
-- When no TLS is configured, ingress controller still listen on port 443 for cleartext HTTP.
+- When no TLS is configured, nghttpx still listens on port 443 for cleartext HTTP.
 - TLS configuration is not bound to the specific service.  In general,
   all proxied services are accessible via TLS.
 - `.spec.rules[*].http.paths[*].pathType` is ignored and it is treated
@@ -682,6 +682,7 @@ $ make push
 
 # LICENSE
 
+```
 The MIT License (MIT)
 
 Copyright (c) 2016  Z Lab Corporation
@@ -705,10 +706,12 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
 LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
 
 This repository contains the code which has the following license
 notice:
 
+```
 Copyright 2015 The Kubernetes Authors. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -722,3 +725,4 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+```
