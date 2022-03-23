@@ -10,19 +10,19 @@ import (
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
 
-// TestGetBackendConfig verifies getBackendConfig.
-func TestGetBackendConfig(t *testing.T) {
+// TestIngressAnnotationNewBackendConfigMapper verifies ingressAnnotation.NewBackendConfigMapper.
+func TestIngressAnnotationNewBackendConfigMapper(t *testing.T) {
 	tests := []struct {
 		desc                    string
 		annotationDefaultConfig string
 		annotationConfig        string
 		wantDefaultConfig       *nghttpx.BackendConfig
-		wantConfig              map[string]map[string]*nghttpx.BackendConfig
+		wantConfig              nghttpx.BackendConfigMapping
 	}{
 		{
 			desc:             "Without default config",
 			annotationConfig: `{"svc": {"80": {"proto": "h2"}}}`,
-			wantConfig: map[string]map[string]*nghttpx.BackendConfig{
+			wantConfig: nghttpx.BackendConfigMapping{
 				"svc": {
 					"80": func() *nghttpx.BackendConfig {
 						a := &nghttpx.BackendConfig{}
@@ -50,7 +50,7 @@ func TestGetBackendConfig(t *testing.T) {
 				a.SetSNI("example.com")
 				return a
 			}(),
-			wantConfig: map[string]map[string]*nghttpx.BackendConfig{
+			wantConfig: nghttpx.BackendConfigMapping{
 				"svc": {
 					"80": func() *nghttpx.BackendConfig {
 						a := &nghttpx.BackendConfig{}
@@ -68,7 +68,7 @@ svc:
   80:
     proto: h2
 `,
-			wantConfig: map[string]map[string]*nghttpx.BackendConfig{
+			wantConfig: nghttpx.BackendConfigMapping{
 				"svc": {
 					"80": func() *nghttpx.BackendConfig {
 						a := &nghttpx.BackendConfig{}
@@ -86,20 +86,20 @@ svc:
 				defaultBackendConfigKey: tt.annotationDefaultConfig,
 				backendConfigKey:        tt.annotationConfig,
 			})
-			defaultConfig, config := ann.getBackendConfig()
+			bcm := ann.NewBackendConfigMapper()
 
-			if !reflect.DeepEqual(defaultConfig, tt.wantDefaultConfig) {
-				t.Errorf("defaultConfig = %+v, want %+v", defaultConfig, tt.wantDefaultConfig)
+			if !reflect.DeepEqual(bcm.DefaultBackendConfig, tt.wantDefaultConfig) {
+				t.Errorf("bcm.DefaultBackendConfig = %+v, want %+v", bcm.DefaultBackendConfig, tt.wantDefaultConfig)
 			}
-			if !reflect.DeepEqual(config, tt.wantConfig) {
-				t.Errorf("config = %+v, want %+v", config, tt.wantConfig)
+			if !reflect.DeepEqual(bcm.BackendConfigMapping, tt.wantConfig) {
+				t.Errorf("bcm.BackendConfigMapping = %+v, want %+v", bcm.BackendConfigMapping, tt.wantConfig)
 			}
 		})
 	}
 }
 
-// TestGetPathConfig verifies getPathConfig.
-func TestGetPathConfig(t *testing.T) {
+// TestIngressAnnotationNewPathConfigMapper verifies ingressAnnotation.NewPathConfigMapper.
+func TestIngresssAnnotationNewPathConfigMapper(t *testing.T) {
 	d120 := metav1.Duration{Duration: 120 * time.Second}
 	rb := "rb"
 	tests := []struct {
@@ -107,12 +107,12 @@ func TestGetPathConfig(t *testing.T) {
 		annotationDefaultConfig string
 		annotationConfig        string
 		wantDefaultConfig       *nghttpx.PathConfig
-		wantConfig              map[string]*nghttpx.PathConfig
+		wantConfig              nghttpx.PathConfigMapping
 	}{
 		{
 			desc:             "Without default config",
 			annotationConfig: `{"example.com/alpha": {"readTimeout": "120s"}}`,
-			wantConfig: map[string]*nghttpx.PathConfig{
+			wantConfig: nghttpx.PathConfigMapping{
 				"example.com/alpha": {
 					ReadTimeout: &d120,
 				},
@@ -125,7 +125,7 @@ func TestGetPathConfig(t *testing.T) {
 			wantDefaultConfig: &nghttpx.PathConfig{
 				Mruby: &rb,
 			},
-			wantConfig: map[string]*nghttpx.PathConfig{
+			wantConfig: nghttpx.PathConfigMapping{
 				"example.com/alpha": {
 					ReadTimeout: &d120,
 					Mruby:       &rb,
@@ -138,7 +138,7 @@ func TestGetPathConfig(t *testing.T) {
 example.com/alpha:
   readTimeout: 120s
 `,
-			wantConfig: map[string]*nghttpx.PathConfig{
+			wantConfig: nghttpx.PathConfigMapping{
 				"example.com/alpha": {
 					ReadTimeout: &d120,
 				},
@@ -147,7 +147,7 @@ example.com/alpha:
 		{
 			desc:             "JSON format",
 			annotationConfig: `{"example.com": {"readTimeout": "120s"}}`,
-			wantConfig: map[string]*nghttpx.PathConfig{
+			wantConfig: nghttpx.PathConfigMapping{
 				"example.com/": {
 					ReadTimeout: &d120,
 				},
@@ -161,13 +161,13 @@ example.com/alpha:
 				defaultPathConfigKey: tt.annotationDefaultConfig,
 				pathConfigKey:        tt.annotationConfig,
 			})
-			defaultConfig, config := ann.getPathConfig()
+			pcm := ann.NewPathConfigMapper()
 
-			if !reflect.DeepEqual(defaultConfig, tt.wantDefaultConfig) {
-				t.Errorf("defaultConfig = %+v, want %+v", defaultConfig, tt.wantDefaultConfig)
+			if !reflect.DeepEqual(pcm.DefaultPathConfig, tt.wantDefaultConfig) {
+				t.Errorf("pcm.DefaultPathConfig = %+v, want %+v", pcm.DefaultPathConfig, tt.wantDefaultConfig)
 			}
-			if !reflect.DeepEqual(config, tt.wantConfig) {
-				t.Errorf("config = %+v, want %+v", config, tt.wantConfig)
+			if !reflect.DeepEqual(pcm.PathConfigMapping, tt.wantConfig) {
+				t.Errorf("pcm.PathConfigMapping = %+v, want %+v", pcm.PathConfigMapping, tt.wantConfig)
 			}
 		})
 	}
