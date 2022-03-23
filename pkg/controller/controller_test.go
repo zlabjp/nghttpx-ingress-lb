@@ -355,7 +355,7 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 					discoveryv1.LabelServiceName: defaultBackendName,
 				},
 			},
-			AddressType: "IPv4",
+			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
 					Port: int32Ptr(8081),
@@ -385,7 +385,7 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 					discoveryv1.LabelServiceName: defaultBackendName,
 				},
 			},
-			AddressType: "IPv4",
+			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
 					Port: int32Ptr(8081),
@@ -509,7 +509,7 @@ func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev
 				discoveryv1.LabelServiceName: name,
 			},
 		},
-		AddressType: "IPv4",
+		AddressType: discoveryv1.AddressTypeIPv4,
 		Ports: []discoveryv1.EndpointPort{
 			{
 				Protocol: &proto,

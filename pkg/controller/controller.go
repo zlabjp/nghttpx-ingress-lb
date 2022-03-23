@@ -1442,7 +1442,7 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(svc *corev1.Ser
 
 	for _, es := range ess {
 		switch es.AddressType {
-		case "IPv4", "IPv6":
+		case discoveryv1.AddressTypeIPv4, discoveryv1.AddressTypeIPv6:
 		default:
 			klog.Warningf("EndpointSlice %v/%v has unsupported address type %v", es.Namespace, es.Name, es.AddressType)
 			continue
