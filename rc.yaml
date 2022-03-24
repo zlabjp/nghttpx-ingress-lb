@@ -80,6 +80,9 @@ rules:
 - apiGroups: ["events.k8s.io"]
   resources: ["events"]
   verbs: ["create", "patch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 # Permission to write Secret is required for HTTP/3.
 # You can remove it if HTTP/3 is not used.
 - apiGroups: [""]
