@@ -45,6 +45,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
@@ -53,9 +54,12 @@ import (
 	listersnetworkingv1 "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
+	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
@@ -130,6 +134,7 @@ type LoadBalancerController struct {
 	http3                     bool
 	quicKeyingMaterialsSecret *types.NamespacedName
 	reconcileTimeout          time.Duration
+	leaderElectionConfig      componentbaseconfig.LeaderElectionConfiguration
 	reloadRateLimiter         flowcontrol.RateLimiter
 	eventRecorder             events.EventRecorder
 	syncQueue                 workqueue.Interface
@@ -192,6 +197,8 @@ type Config struct {
 	ReconcileTimeout time.Duration
 	// QUICKeyingMaterialsSecret is the Secret resource which contains QUIC keying materials used by nghttpx.
 	QUICKeyingMaterialsSecret *types.NamespacedName
+	// LeaderElectionConfig is the configuration of leader election.
+	LeaderElectionConfig componentbaseconfig.LeaderElectionConfiguration
 	// Pod is the Pod where this controller runs.
 	Pod *corev1.Pod
 	// EventRecorder is the event recorder.
@@ -227,6 +234,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		http3:                     config.HTTP3,
 		quicKeyingMaterialsSecret: config.QUICKeyingMaterialsSecret,
 		reconcileTimeout:          config.ReconcileTimeout,
+		leaderElectionConfig:      config.LeaderElectionConfig,
 		eventRecorder:             config.EventRecorder,
 		syncQueue:                 workqueue.New(),
 		quicSecretQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
@@ -1583,6 +1591,12 @@ func (lbc *LoadBalancerController) ShutdownCommenced() bool {
 	return lbc.shutdown
 }
 
+type legacyEventRecorderEventf func(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{})
+
+func (r legacyEventRecorderEventf) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
+	r(object, nil, eventtype, reason, reason, messageFmt, args...)
+}
+
 // Run starts the loadbalancer controller.
 func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	klog.Infof("Starting nghttpx loadbalancer controller")
@@ -1631,23 +1645,58 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		return
 	}
 
-	if lbc.http3 {
-		lbc.quicSecretQueue.Add(quicSecretKey)
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			lbc.quicSecretWorker(ctrlCtx)
-		}()
+	rlc := resourcelock.ResourceLockConfig{
+		Identity:      lbc.pod.Name,
+		EventRecorder: legacyEventRecorderEventf(lbc.eventRecorder.Eventf),
 	}
 
-	go lbc.worker()
+	rl, err := resourcelock.New(resourcelock.LeasesResourceLock, lbc.pod.Namespace, lbc.leaderElectionConfig.ResourceName,
+		lbc.clientset.CoreV1(), lbc.clientset.CoordinationV1(), rlc)
+	if err != nil {
+		klog.Errorf("Unable to create resource lock: %v", err)
+		return
+	}
 
-	wg.Add(1)
+	lec := leaderelection.LeaderElectionConfig{
+		Lock:          rl,
+		LeaseDuration: lbc.leaderElectionConfig.LeaseDuration.Duration,
+		RenewDeadline: lbc.leaderElectionConfig.RenewDeadline.Duration,
+		RetryPeriod:   lbc.leaderElectionConfig.RetryPeriod.Duration,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: func(ctx context.Context) {
+				if lbc.http3 {
+					lbc.quicSecretQueue.Add(quicSecretKey)
+
+					go func() {
+						lbc.quicSecretWorker(ctx)
+					}()
+				}
+
+				go func() {
+					lbc.syncIngress(ctx)
+				}()
+			},
+			OnStoppedLeading: func() {},
+			OnNewLeader:      func(identity string) {},
+		},
+	}
+
+	le, err := leaderelection.NewLeaderElector(lec)
+	if err != nil {
+		klog.Errorf("Unable to create LeaderElector: %v", err)
+		return
+	}
+
 	go func() {
-		defer wg.Done()
-		lbc.syncIngress(ctrlCtx)
+		le.Run(ctrlCtx)
+
+		select {
+		case <-ctrlCtx.Done():
+			return
+		}
 	}()
+
+	go lbc.worker()
 
 	go func() {
 		<-ctx.Done()

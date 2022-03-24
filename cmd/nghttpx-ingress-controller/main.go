@@ -48,6 +48,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/component-base/cli"
+	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
@@ -90,6 +91,12 @@ var (
 	http3                     = false
 	quicKeyingMaterialsSecret = "nghttpx-quic-km"
 	reconcileTimeout          = 10 * time.Minute
+	leaderElectionConfig      = componentbaseconfig.LeaderElectionConfiguration{
+		LeaseDuration: metav1.Duration{Duration: 15 * time.Second},
+		RenewDeadline: metav1.Duration{Duration: 10 * time.Second},
+		RetryPeriod:   metav1.Duration{Duration: 2 * time.Second},
+		ResourceName:  "nghttpx-ingress-lb",
+	}
 )
 
 func main() {
@@ -174,6 +181,18 @@ func main() {
 
 	rootCmd.Flags().DurationVar(&reconcileTimeout, "reconcile-timeout", reconcileTimeout,
 		`A timeout for a single reconciliation.  It is a safe guard to prevent a reconciliation from getting stuck indefinitely.`)
+
+	rootCmd.Flags().DurationVar(&leaderElectionConfig.LeaseDuration.Duration, "leader-elect-lease-duration", leaderElectionConfig.LeaseDuration.Duration,
+		`Duration that non-leader will wait after observing the current leader renewed its leadership until attempting to acquire leadership.`)
+
+	rootCmd.Flags().DurationVar(&leaderElectionConfig.RenewDeadline.Duration, "leader-elect-renew-deadline", leaderElectionConfig.RenewDeadline.Duration,
+		`Interval that a leader renews its leadership.`)
+
+	rootCmd.Flags().DurationVar(&leaderElectionConfig.RetryPeriod.Duration, "leader-elect-retry-period", leaderElectionConfig.RetryPeriod.Duration,
+		`Duration that client should wait until acquiring or renewing leadership.`)
+
+	rootCmd.Flags().StringVar(&leaderElectionConfig.ResourceName, "leader-elect-resource-name", leaderElectionConfig.ResourceName,
+		`Name of leases.coordination.k8s.io resource that is used as a lock.`)
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
@@ -306,6 +325,7 @@ func run(cmd *cobra.Command, args []string) {
 		HTTP3:                     http3,
 		QUICKeyingMaterialsSecret: &types.NamespacedName{Name: quicKeyingMaterialsSecret, Namespace: thisPod.Namespace},
 		ReconcileTimeout:          reconcileTimeout,
+		LeaderElectionConfig:      leaderElectionConfig,
 		Pod:                       thisPod,
 		EventRecorder:             eventRecorder,
 	}
