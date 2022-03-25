@@ -30,7 +30,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"sort"
 	"strconv"
@@ -57,7 +56,6 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
@@ -138,6 +136,7 @@ type LoadBalancerController struct {
 	reloadRateLimiter         flowcontrol.RateLimiter
 	eventRecorder             events.EventRecorder
 	syncQueue                 workqueue.Interface
+	ingQueue                  workqueue.RateLimitingInterface
 	quicSecretQueue           workqueue.RateLimitingInterface
 
 	// shutdownMu protects shutdown from the concurrent read/write.
@@ -237,6 +236,10 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		leaderElectionConfig:      config.LeaderElectionConfig,
 		eventRecorder:             config.EventRecorder,
 		syncQueue:                 workqueue.New(),
+		ingQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		)),
 		quicSecretQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
 			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
@@ -369,6 +372,7 @@ func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
 	}
 	klog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
 	lbc.enqueue()
+	lbc.enqueueIngress(ing)
 }
 
 func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
@@ -379,6 +383,7 @@ func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cu
 	}
 	klog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
 	lbc.enqueue()
+	lbc.enqueueIngress(curIng)
 }
 
 func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
@@ -406,12 +411,14 @@ func (lbc *LoadBalancerController) addIngressClassNotification(obj interface{}) 
 	ingClass := obj.(*networkingv1.IngressClass)
 	klog.V(4).Infof("IngressClass %v added", ingClass.Name)
 	lbc.enqueue()
+	lbc.enqueueIngressWithIngressClass(ingClass)
 }
 
 func (lbc *LoadBalancerController) updateIngressClassNotification(old interface{}, cur interface{}) {
 	ingClass := cur.(*networkingv1.IngressClass)
 	klog.V(4).Infof("IngressClass %v updated", ingClass.Name)
 	lbc.enqueue()
+	lbc.enqueueIngressWithIngressClass(ingClass)
 }
 
 func (lbc *LoadBalancerController) deleteIngressClassNotification(obj interface{}) {
@@ -529,21 +536,41 @@ func (lbc *LoadBalancerController) endpointSliceReferenced(es *discoveryv1.Endpo
 
 func (lbc *LoadBalancerController) addServiceNotification(obj interface{}) {
 	svc := obj.(*corev1.Service)
-	if !lbc.serviceReferenced(namespacedName(svc)) {
+	referenced := lbc.serviceReferenced(namespacedName(svc))
+	pubSvc := lbc.publishService != nil && lbc.publishService.Namespace == svc.Namespace && lbc.publishService.Name == svc.Name
+
+	if !referenced && !pubSvc {
 		return
 	}
+
 	klog.V(4).Infof("Service %v/%v added", svc.Namespace, svc.Name)
-	lbc.enqueue()
+
+	if referenced {
+		lbc.enqueue()
+	}
+	if pubSvc {
+		lbc.enqueueIngressAll()
+	}
 }
 
 func (lbc *LoadBalancerController) updateServiceNotification(old, cur interface{}) {
 	oldSvc := old.(*corev1.Service)
 	curSvc := cur.(*corev1.Service)
-	if !lbc.serviceReferenced(namespacedName(oldSvc)) && !lbc.serviceReferenced(namespacedName(curSvc)) {
+	referenced := lbc.serviceReferenced(namespacedName(oldSvc)) || lbc.serviceReferenced(namespacedName(curSvc))
+	pubSvc := lbc.publishService != nil && lbc.publishService.Namespace == curSvc.Namespace && lbc.publishService.Name == curSvc.Name
+
+	if !referenced && !pubSvc {
 		return
 	}
+
 	klog.V(4).Infof("Service %v/%v updated", curSvc.Namespace, curSvc.Name)
-	lbc.enqueue()
+
+	if referenced {
+		lbc.enqueue()
+	}
+	if pubSvc {
+		lbc.enqueueIngressAll()
+	}
 }
 
 func (lbc *LoadBalancerController) deleteServiceNotification(obj interface{}) {
@@ -703,21 +730,41 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 
 func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
 	pod := obj.(*corev1.Pod)
-	if !lbc.podReferenced(pod) {
+	referenced := lbc.podReferenced(pod)
+	ctrlPod := matchLabels(pod, lbc.pod.Labels)
+
+	if !referenced && !ctrlPod {
 		return
 	}
+
 	klog.V(4).Infof("Pod %v/%v added", pod.Namespace, pod.Name)
-	lbc.enqueue()
+
+	if referenced {
+		lbc.enqueue()
+	}
+	if ctrlPod {
+		lbc.enqueueIngressAll()
+	}
 }
 
 func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
 	oldPod := old.(*corev1.Pod)
 	curPod := cur.(*corev1.Pod)
-	if !lbc.podReferenced(oldPod) && !lbc.podReferenced(curPod) {
+	referenced := lbc.podReferenced(oldPod) || lbc.podReferenced(curPod)
+	ctrlPod := matchLabels(curPod, lbc.pod.Labels)
+
+	if !referenced && !ctrlPod {
 		return
 	}
+
 	klog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
-	lbc.enqueue()
+
+	if referenced {
+		lbc.enqueue()
+	}
+	if ctrlPod {
+		lbc.enqueueIngressAll()
+	}
 }
 
 func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
@@ -1673,7 +1720,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 				}
 
 				go func() {
-					lbc.syncIngress(ctx)
+					lbc.ingressWorker(ctx)
 				}()
 			},
 			OnStoppedLeading: func() {},
@@ -1721,6 +1768,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	klog.Infof("Shutting down nghttpx loadbalancer controller")
 
 	lbc.syncQueue.ShutDown()
+	lbc.ingQueue.ShutDown()
 	if lbc.http3 {
 		lbc.quicSecretQueue.ShutDown()
 	}
@@ -1775,42 +1823,146 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *networkingv1.Ingres
 	return true
 }
 
-// syncIngress updates Ingress resource status.
-func (lbc *LoadBalancerController) syncIngress(ctx context.Context) {
-	for {
-		if err := lbc.getLoadBalancerIngressAndUpdateIngress(ctx); err != nil {
-			klog.Errorf("Could not update Ingress status: %v", err)
+func (lbc *LoadBalancerController) ingressWorker(ctx context.Context) {
+	work := func() bool {
+		key, quit := lbc.ingQueue.Get()
+		if quit {
+			return true
 		}
 
-		select {
-		case <-ctx.Done():
-			if err := lbc.removeAddressFromLoadBalancerIngress(); err != nil {
-				klog.Errorf("Could not remove address from LoadBalancerIngress: %v", err)
-			}
+		defer lbc.ingQueue.Done(key)
+
+		ctx, cancel := context.WithTimeout(ctx, lbc.reconcileTimeout)
+		defer cancel()
+
+		if err := lbc.syncIngress(ctx, key.(string)); err != nil {
+			klog.Error(err)
+			lbc.ingQueue.AddRateLimited(key)
+		} else {
+			lbc.ingQueue.Forget(key)
+		}
+
+		return false
+	}
+
+	for {
+		if quit := work(); quit {
 			return
-		case <-time.After(time.Duration(float64(30*time.Second) * (rand.Float64() + 1))):
 		}
 	}
 }
 
-// getLoadBalancerIngressAndUpdateIngress gets addresses to set in Ingress resource, and updates Ingress Status with them.
-func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, lbc.reconcileTimeout)
-	defer cancel()
+func (lbc *LoadBalancerController) enqueueIngress(ing *networkingv1.Ingress) {
+	key := types.NamespacedName{Name: ing.Name, Namespace: ing.Namespace}.String()
+	if lbc.ingQueue.NumRequeues(key) == 0 {
+		lbc.ingQueue.AddRateLimited(key)
+	}
+}
 
+func (lbc *LoadBalancerController) enqueueIngressWithIngressClass(ingClass *networkingv1.IngressClass) {
+	if ingClass.Spec.Controller != lbc.ingressClassController {
+		return
+	}
+
+	ings, err := lbc.ingLister.Ingresses(ingClass.Namespace).List(labels.Everything())
+	if err != nil {
+		klog.Errorf("Could not list Ingresses: %v", err)
+		return
+	}
+
+	defaultIngClass := ingClass.Annotations[annotationIsDefaultIngressClass] == "true"
+
+	for _, ing := range ings {
+		switch {
+		case ing.Spec.IngressClassName == nil:
+			if !defaultIngClass {
+				continue
+			}
+		case *ing.Spec.IngressClassName != ingClass.Name:
+			continue
+		}
+
+		lbc.enqueueIngress(ing)
+	}
+}
+
+func (lbc *LoadBalancerController) enqueueIngressAll() {
+	ings, err := lbc.ingLister.List(labels.Everything())
+	if err != nil {
+		klog.Errorf("Could not list Ingresses: %v", err)
+		return
+	}
+
+	for _, ing := range ings {
+		if !lbc.validateIngressClass(ing) {
+			continue
+		}
+
+		lbc.enqueueIngress(ing)
+	}
+}
+
+// syncIngress updates Ingress resource status.
+func (lbc *LoadBalancerController) syncIngress(ctx context.Context, key string) error {
+	klog.V(2).Infof("Syncing Ingress %v", key)
+
+	ns, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		klog.Errorf("Could not split namespace and name from key %v: %v", key, err)
+		// Since key is broken, we do not retry.
+		return nil
+	}
+
+	ing, err := lbc.ingLister.Ingresses(ns).Get(name)
+	if err != nil {
+		klog.Errorf("Could not get Ingress %v: %v", key, err)
+		return err
+	}
+
+	if !lbc.validateIngressClass(ing) {
+		klog.V(4).Infof("Ingress %v is not controlled by this controller", key)
+		// Deletion of LB address from status is done by an Ingress controller that now controls ing.
+		return nil
+	}
+
+	lbIngs, err := lbc.getLoadBalancerIngress()
+	if err != nil {
+		return err
+	}
+
+	if loadBalancerIngressesIPEqual(ing.Status.LoadBalancer.Ingress, lbIngs) {
+		klog.V(4).Infof("Ingress %v has correct .Status.LoadBalancer.Ingress", key)
+		return nil
+	}
+
+	klog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %#v", ing.Namespace, ing.Name, lbIngs)
+
+	newIng := ing.DeepCopy()
+	newIng.Status.LoadBalancer.Ingress = lbIngs
+
+	if _, err := lbc.clientset.NetworkingV1().Ingresses(ing.Namespace).UpdateStatus(ctx, newIng, metav1.UpdateOptions{}); err != nil {
+		klog.Errorf("Could not update Ingress %v status: %v", key, err)
+		return err
+	}
+
+	return nil
+}
+
+func (lbc *LoadBalancerController) getLoadBalancerIngress() ([]corev1.LoadBalancerIngress, error) {
 	var lbIngs []corev1.LoadBalancerIngress
 
 	if lbc.publishService == nil {
 		selector := labels.Set(lbc.pod.Labels).AsSelector()
 		var err error
-		lbIngs, err = lbc.getLoadBalancerIngress(selector)
+		lbIngs, err = lbc.getLoadBalancerIngressSelector(selector)
 		if err != nil {
-			return fmt.Errorf("could not get Node IP of Ingress controller: %w", err)
+			return nil, fmt.Errorf("could not get Pod or Node IP of Ingress controller: %w", err)
 		}
 	} else {
 		svc, err := lbc.svcLister.Services(lbc.publishService.Namespace).Get(lbc.publishService.Name)
 		if err != nil {
-			return err
+			klog.Errorf("Could not get Service %v: %v", lbc.publishService, err)
+			return nil, err
 		}
 
 		lbIngs = lbc.getLoadBalancerIngressFromService(svc)
@@ -1818,48 +1970,11 @@ func (lbc *LoadBalancerController) getLoadBalancerIngressAndUpdateIngress(ctx co
 
 	sortLoadBalancerIngress(lbIngs)
 
-	return lbc.updateIngressStatus(ctx, uniqLoadBalancerIngress(lbIngs))
+	return uniqLoadBalancerIngress(lbIngs), nil
 }
 
-// updateIngressStatus updates LoadBalancerIngress field of all Ingresses.
-func (lbc *LoadBalancerController) updateIngressStatus(ctx context.Context, lbIngs []corev1.LoadBalancerIngress) error {
-	ings, err := lbc.ingLister.List(labels.Everything())
-	if err != nil {
-		return fmt.Errorf("could not list Ingress: %w", err)
-	}
-
-	for _, ing := range ings {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
-
-		if !lbc.validateIngressClass(ing) {
-			continue
-		}
-
-		// Just pass ing.Status.LoadBalancerIngress.Ingress without sorting them.  This is OK since we write sorted
-		// LoadBalancerIngress array, and will eventually get sorted one.
-		if loadBalancerIngressesIPEqual(ing.Status.LoadBalancer.Ingress, lbIngs) {
-			continue
-		}
-
-		klog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %#v", ing.Namespace, ing.Name, lbIngs)
-
-		newIng := ing.DeepCopy()
-		newIng.Status.LoadBalancer.Ingress = lbIngs
-
-		if _, err := lbc.clientset.NetworkingV1().Ingresses(ing.Namespace).UpdateStatus(ctx, newIng, metav1.UpdateOptions{}); err != nil {
-			klog.Errorf("Could not update Ingress %v/%v status: %v", ing.Namespace, ing.Name, err)
-		}
-	}
-
-	return nil
-}
-
-// getLoadBalancerIngress creates array of v1.LoadBalancerIngress based on cached Pods and Nodes.
-func (lbc *LoadBalancerController) getLoadBalancerIngress(selector labels.Selector) ([]corev1.LoadBalancerIngress, error) {
+// getLoadBalancerIngressSelector creates array of v1.LoadBalancerIngress based on cached Pods and Nodes.
+func (lbc *LoadBalancerController) getLoadBalancerIngressSelector(selector labels.Selector) ([]corev1.LoadBalancerIngress, error) {
 	pods, err := lbc.podLister.List(selector)
 	if err != nil {
 		return nil, fmt.Errorf("could not list Pods with label %v", selector)
@@ -1944,68 +2059,6 @@ func (lbc *LoadBalancerController) getPodNodeAddress(pod *corev1.Pod) (string, e
 	}
 
 	return externalIP, nil
-}
-
-// removeAddressFromLoadBalancerIngress removes this address from all Ingress.Status.LoadBalancer.Ingress.
-func (lbc *LoadBalancerController) removeAddressFromLoadBalancerIngress() error {
-	klog.Infof("Remove this address from all Ingress.Status.LoadBalancer.Ingress.")
-
-	ctx, cancel := context.WithTimeout(context.Background(), lbc.reconcileTimeout)
-	defer cancel()
-
-	var (
-		addr string
-		err  error
-	)
-
-	if lbc.pod.Spec.HostNetwork {
-		addr, err = lbc.getPodNodeAddress(lbc.pod)
-		if err != nil {
-			return fmt.Errorf("could not remove address from LoadBalancerIngress: %w", err)
-		}
-	} else {
-		addr = lbc.pod.Status.PodIP
-	}
-
-	ings, err := lbc.ingLister.List(labels.Everything())
-	if err != nil {
-		return fmt.Errorf("could not remove address from LoadBalancerIngress: %w", err)
-	}
-
-	for _, ing := range ings {
-		if !lbc.validateIngressClass(ing) {
-			continue
-		}
-
-		// Time may be short because we should do all the work during Pod graceful shut down period.
-		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-			ing, err := lbc.ingLister.Ingresses(ing.Namespace).Get(ing.Name)
-			if err != nil {
-				return err
-			}
-
-			if len(ing.Status.LoadBalancer.Ingress) == 0 {
-				return nil
-			}
-
-			lbIngs := removeAddressFromLoadBalancerIngress(ing.Status.LoadBalancer.Ingress, addr)
-			if len(ing.Status.LoadBalancer.Ingress) == len(lbIngs) {
-				return nil
-			}
-
-			newIng := ing.DeepCopy()
-			newIng.Status.LoadBalancer.Ingress = lbIngs
-
-			if _, err := lbc.clientset.NetworkingV1().Ingresses(newIng.Namespace).UpdateStatus(ctx, newIng, metav1.UpdateOptions{}); err != nil {
-				return err
-			}
-			return nil
-		}); err != nil {
-			klog.Errorf("Could not remove address from LoadBalancerIngress from Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
-		}
-	}
-
-	return nil
 }
 
 func (lbc *LoadBalancerController) quicSecretWorker(ctx context.Context) {
