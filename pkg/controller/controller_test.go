@@ -536,12 +536,109 @@ func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev
 	return svc, eps, es
 }
 
-func newIngressTLS(namespace, name, svcName string, svcPort networkingv1.ServiceBackendPort, tlsSecretName string) *networkingv1.Ingress {
-	ing := newIngress(namespace, name, svcName, svcPort)
-	ing.Spec.TLS = []networkingv1.IngressTLS{
-		{SecretName: tlsSecretName},
+type ingressBuilder struct {
+	*networkingv1.Ingress
+}
+
+func newIngressBuilder(namespace, name string) *ingressBuilder {
+	return &ingressBuilder{
+		Ingress: &networkingv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+		},
 	}
-	return ing
+}
+
+func (b *ingressBuilder) Complete() *networkingv1.Ingress {
+	return b.Ingress
+}
+
+func (b *ingressBuilder) WithAnnotations(annotations map[string]string) *ingressBuilder {
+	b.Annotations = annotations
+
+	return b
+}
+
+func (b *ingressBuilder) WithDefaultRule(svc string, port networkingv1.ServiceBackendPort) *ingressBuilder {
+	rule := networkingv1.IngressRule{
+		IngressRuleValue: networkingv1.IngressRuleValue{
+			HTTP: &networkingv1.HTTPIngressRuleValue{
+				Paths: []networkingv1.HTTPIngressPath{
+					{
+						Path: "/",
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: svc,
+								Port: port,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	b.Spec.Rules = append(b.Spec.Rules, rule)
+
+	return b
+}
+
+func (b *ingressBuilder) WithRule(path, svc string, port networkingv1.ServiceBackendPort) *ingressBuilder {
+	rule := networkingv1.IngressRule{
+		Host: fmt.Sprintf("%v.%v.test", b.Name, b.Namespace),
+		IngressRuleValue: networkingv1.IngressRuleValue{
+			HTTP: &networkingv1.HTTPIngressRuleValue{
+				Paths: []networkingv1.HTTPIngressPath{
+					{
+						Path: path,
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: svc,
+								Port: port,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	b.Spec.Rules = append(b.Spec.Rules, rule)
+
+	return b
+}
+
+func (b *ingressBuilder) WithDefaultBackend(svc string, port networkingv1.ServiceBackendPort) *ingressBuilder {
+	b.Spec.DefaultBackend = &networkingv1.IngressBackend{
+		Service: &networkingv1.IngressServiceBackend{
+			Name: svc,
+			Port: port,
+		},
+	}
+
+	return b
+}
+
+func (b *ingressBuilder) WithTLS(tlsSecret string) *ingressBuilder {
+	b.Spec.TLS = append(b.Spec.TLS, networkingv1.IngressTLS{
+		SecretName: tlsSecret,
+	})
+
+	return b
+}
+
+func (b *ingressBuilder) WithIngressClass(ingressClass string) *ingressBuilder {
+	b.Spec.IngressClassName = stringPtr(ingressClass)
+
+	return b
+}
+
+func (b *ingressBuilder) WithLoadBalancerIngress(lbIngs []corev1.LoadBalancerIngress) *ingressBuilder {
+	b.Status.LoadBalancer.Ingress = lbIngs
+
+	return b
 }
 
 func serviceBackendPortNumber(port int32) networkingv1.ServiceBackendPort {
@@ -553,37 +650,6 @@ func serviceBackendPortNumber(port int32) networkingv1.ServiceBackendPort {
 func serviceBackendPortName(name string) networkingv1.ServiceBackendPort {
 	return networkingv1.ServiceBackendPort{
 		Name: name,
-	}
-}
-
-func newIngress(namespace, name, svcName string, svcPort networkingv1.ServiceBackendPort) *networkingv1.Ingress {
-	return &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: networkingv1.IngressSpec{
-			Rules: []networkingv1.IngressRule{
-				{
-					Host: fmt.Sprintf("%v.%v.test", name, namespace),
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{
-								{
-									Path: "/",
-									Backend: networkingv1.IngressBackend{
-										Service: &networkingv1.IngressServiceBackend{
-											Name: svcName,
-											Port: svcPort,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
 	}
 }
 
@@ -753,7 +819,10 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	svc, eps, _ := newDefaultBackend()
 
 	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	ing1 := newIngressTLS(metav1.NamespaceDefault, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port), tlsSecret.Name)
+	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
+		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+		WithTLS(tlsSecret.Name).
+		Complete()
 
 	f.secretStore = append(f.secretStore, tlsSecret)
 	f.ingStore = append(f.ingStore, ing1)
@@ -826,7 +895,10 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	svc, eps, _ := newDefaultBackend()
 
 	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	ing1 := newIngressTLS(metav1.NamespaceDefault, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port), tlsSecret.Name)
+	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
+		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+		WithTLS(tlsSecret.Name).
+		Complete()
 
 	f.secretStore = append(f.secretStore, tlsSecret)
 	f.ingStore = append(f.ingStore, ing1)
@@ -895,7 +967,9 @@ func TestSyncStringNamedPort(t *testing.T) {
 				TargetPort: intstr.FromString("my-port"),
 				Protocol:   corev1.ProtocolTCP,
 			}
-			ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
+			ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
+				WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+				Complete()
 
 			bp1 := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -984,7 +1058,9 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 		TargetPort: intstr.FromString(""),
 		Protocol:   corev1.ProtocolTCP,
 	}
-	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
+	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
+		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+		Complete()
 
 	f.svcStore = append(f.svcStore, svc, bs1)
 	f.epStore = append(f.epStore, eps, be1)
@@ -1012,31 +1088,18 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 func TestValidateIngressClass(t *testing.T) {
 	tests := []struct {
 		desc     string
-		ing      networkingv1.Ingress
+		ing      *networkingv1.Ingress
 		ingClass *networkingv1.IngressClass
 		want     bool
 	}{
 		{
 			desc: "no IngressClass",
-			ing: networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-				},
-			},
+			ing:  newIngressBuilder("default", "foo").Complete(),
 			want: true,
 		},
 		{
 			desc: "IngressClass targets this controller",
-			ing: networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-				},
-				Spec: networkingv1.IngressSpec{
-					IngressClassName: stringPtr("bar"),
-				},
-			},
+			ing:  newIngressBuilder("default", "foo").WithIngressClass("bar").Complete(),
 			ingClass: &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
@@ -1049,15 +1112,7 @@ func TestValidateIngressClass(t *testing.T) {
 		},
 		{
 			desc: "IngressClass does not target this controller",
-			ing: networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-				},
-				Spec: networkingv1.IngressSpec{
-					IngressClassName: stringPtr("bar"),
-				},
-			},
+			ing:  newIngressBuilder("default", "foo").WithIngressClass("bar").Complete(),
 			ingClass: &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
@@ -1069,24 +1124,11 @@ func TestValidateIngressClass(t *testing.T) {
 		},
 		{
 			desc: "The specified IngressClass is not found",
-			ing: networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-				},
-				Spec: networkingv1.IngressSpec{
-					IngressClassName: stringPtr("bar"),
-				},
-			},
+			ing:  newIngressBuilder("default", "foo").WithIngressClass("bar").Complete(),
 		},
 		{
 			desc: "IngressClass which targets this controller is marked default",
-			ing: networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-				},
-			},
+			ing:  newIngressBuilder("default", "foo").Complete(),
 			ingClass: &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
@@ -1102,12 +1144,7 @@ func TestValidateIngressClass(t *testing.T) {
 		},
 		{
 			desc: "IngressClass which does not target this controller is marked default",
-			ing: networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-				},
-			},
+			ing:  newIngressBuilder("default", "foo").Complete(),
 			ingClass: &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
@@ -1126,7 +1163,7 @@ func TestValidateIngressClass(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
 
-			f.ingStore = append(f.ingStore, &tt.ing)
+			f.ingStore = append(f.ingStore, tt.ing)
 			if tt.ingClass != nil {
 				f.ingClassStore = append(f.ingClassStore, tt.ingClass)
 			}
@@ -1134,7 +1171,7 @@ func TestValidateIngressClass(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			if got, want := f.lbc.validateIngressClass(&tt.ing), tt.want; got != want {
+			if got, want := f.lbc.validateIngressClass(tt.ing), tt.want; got != want {
 				t.Errorf("f.lbc.validateIngressClass(...) = %v, want %v", got, want)
 			}
 		})
@@ -1149,13 +1186,10 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 
 	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
 	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "bravo", []string{"192.168.10.2"})
-	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
-	ing1.Spec.DefaultBackend = &networkingv1.IngressBackend{
-		Service: &networkingv1.IngressServiceBackend{
-			Name: "bravo",
-			Port: serviceBackendPortNumber(bs2.Spec.Ports[0].Port),
-		},
-	}
+	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
+		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+		WithDefaultBackend("bravo", serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
+		Complete()
 
 	f.svcStore = append(f.svcStore, svc, bs1, bs2)
 	f.epStore = append(f.epStore, eps, be1, be2)
@@ -1198,42 +1232,17 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 	}{
 		{
 			desc: ".Spec.DefaultBackend must be ignored",
-			ing: func() *networkingv1.Ingress {
-				ing := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
-				ing.Spec.DefaultBackend = &networkingv1.IngressBackend{
-					Service: &networkingv1.IngressServiceBackend{
-						Name: bs2.Name,
-						Port: serviceBackendPortNumber(bs2.Spec.Ports[0].Port),
-					},
-				}
-				return ing
-			}(),
+			ing: newIngressBuilder(bs1.Namespace, "alpha-ing").
+				WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+				WithDefaultBackend(bs2.Name, serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
+				Complete(),
 		},
 		{
 			desc: "Any rules which override default backend must be ignored",
-			ing: func() *networkingv1.Ingress {
-				ing := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
-				ing.Spec.Rules = append(ing.Spec.Rules,
-					networkingv1.IngressRule{
-						IngressRuleValue: networkingv1.IngressRuleValue{
-							HTTP: &networkingv1.HTTPIngressRuleValue{
-								Paths: []networkingv1.HTTPIngressPath{
-									{
-										Path: "/",
-										Backend: networkingv1.IngressBackend{
-											Service: &networkingv1.IngressServiceBackend{
-												Name: bs2.Name,
-												Port: serviceBackendPortNumber(bs2.Spec.Ports[0].Port),
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				)
-				return ing
-			}(),
+			ing: newIngressBuilder(bs1.Namespace, "alpha-ing").
+				WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+				WithDefaultRule(bs2.Name, serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
+				Complete(),
 		},
 	}
 
@@ -1390,27 +1399,27 @@ func TestSyncIngress(t *testing.T) {
 		wantLoadBalancerIngresses []corev1.LoadBalancerIngress
 	}{
 		{
-			desc:                      "Update Ingress status",
-			ingress:                   newIngress(metav1.NamespaceDefault, "delta-ing", "delta", serviceBackendPortNumber(80)),
+			desc: "Update Ingress status",
+			ingress: newIngressBuilder(metav1.NamespaceDefault, "delta-ing").
+				WithRule("/", "delta", serviceBackendPortNumber(80)).
+				Complete(),
 			wantLoadBalancerIngresses: []corev1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}},
 		},
 		{
 			desc: "Not Ingress controlled by the controller",
-			ingress: func() *networkingv1.Ingress {
-				ing := newIngress(metav1.NamespaceDefault, "foxtrot-ing", "foxtrot", serviceBackendPortNumber(80))
-				ing.Spec.IngressClassName = stringPtr("not-nghttpx")
-				ing.Status.LoadBalancer.Ingress = []corev1.LoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}}
-				return ing
-			}(),
+			ingress: newIngressBuilder(metav1.NamespaceDefault, "foxtrot-ing").
+				WithRule("/", "foxtrot", serviceBackendPortNumber(80)).
+				WithIngressClass("not-nghttpx").
+				WithLoadBalancerIngress([]corev1.LoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}}).
+				Complete(),
 			wantLoadBalancerIngresses: []corev1.LoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}},
 		},
 		{
 			desc: "Ingress already has correct load balancer addresses",
-			ingress: func() *networkingv1.Ingress {
-				ing := newIngress(metav1.NamespaceDefault, "golf-ing", "golf", serviceBackendPortNumber(80))
-				ing.Status.LoadBalancer.Ingress = []corev1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}
-				return ing
-			}(),
+			ingress: newIngressBuilder(metav1.NamespaceDefault, "golf-ing").
+				WithRule("/", "golf", serviceBackendPortNumber(80)).
+				WithLoadBalancerIngress([]corev1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}).
+				Complete(),
 			wantLoadBalancerIngresses: []corev1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}},
 		},
 	}
@@ -1520,7 +1529,9 @@ func TestSyncNamedServicePort(t *testing.T) {
 		Port:     80,
 		Protocol: corev1.ProtocolTCP,
 	}
-	ing1 := newIngress(bs1.Namespace, "alpha-ing", bs1.Name, serviceBackendPortName(bs1.Spec.Ports[0].Name))
+	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
+		WithRule("/", bs1.Name, serviceBackendPortName(bs1.Spec.Ports[0].Name)).
+		Complete()
 
 	f.svcStore = append(f.svcStore, svc, bs1)
 	f.epStore = append(f.epStore, eps, be1)
@@ -1599,13 +1610,14 @@ func TestSyncDoNotForward(t *testing.T) {
 
 	svc, eps, _ := newDefaultBackend()
 
-	ing1 := newIngress(metav1.NamespaceDefault, "alpha-ing", "alpha-svc", serviceBackendPortNumber(80))
-	ing1.Annotations = map[string]string{
-		pathConfigKey: `alpha-ing.default.test/:
+	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
+		WithRule("/", "alpha-svc", serviceBackendPortNumber(80)).
+		WithAnnotations(map[string]string{
+			pathConfigKey: `alpha-ing.default.test/:
   doNotForward: true
   mruby: foo
-`,
-	}
+`}).
+		Complete()
 
 	f.svcStore = append(f.svcStore, svc)
 	f.epStore = append(f.epStore, eps)
@@ -1671,8 +1683,9 @@ func TestSyncNormalizePath(t *testing.T) {
 			svc, eps, _ := newDefaultBackend()
 
 			bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-			ing1 := newIngress(metav1.NamespaceDefault, "alpha-ing", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port))
-			ing1.Spec.Rules[0].HTTP.Paths[0].Path = tt.path
+			ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
+				WithRule(tt.path, bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+				Complete()
 
 			f.svcStore = append(f.svcStore, svc, bs1)
 			f.epStore = append(f.epStore, eps, be1)
