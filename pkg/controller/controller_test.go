@@ -55,6 +55,7 @@ type fixture struct {
 	clientset *fake.Clientset
 
 	lbc *LoadBalancerController
+	lc  *LeaderController
 
 	ingStore      []*networkingv1.Ingress
 	ingClassStore []*networkingv1.IngressClass
@@ -71,6 +72,8 @@ type fixture struct {
 	actions []core.Action
 
 	enableEndpointSlice bool
+	http3               bool
+	publishService      *types.NamespacedName
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -145,10 +148,21 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		EnableEndpointSlice:    f.enableEndpointSlice,
 		ReloadRate:             1.0,
 		ReloadBurst:            1,
+		HTTP3:                  f.http3,
+		PublishService:         f.publishService,
 		Pod:                    pod,
 		EventRecorder:          &events.FakeRecorder{},
 	}
+
+	if f.http3 {
+		config.QUICKeyingMaterialsSecret = &types.NamespacedName{
+			Name:      defaultQUICSecret.Name,
+			Namespace: defaultQUICSecret.Namespace,
+		}
+	}
+
 	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), config)
+	f.lc = NewLeaderController(f.lbc)
 }
 
 func (f *fixture) run() {
@@ -176,9 +190,15 @@ func (f *fixture) setupStore() {
 		if err := f.lbc.ingInformer.GetIndexer().Add(ing); err != nil {
 			panic(err)
 		}
+		if err := f.lc.ingInformer.GetIndexer().Add(ing); err != nil {
+			panic(err)
+		}
 	}
 	for _, ingClass := range f.ingClassStore {
 		if err := f.lbc.ingClassInformer.GetIndexer().Add(ingClass); err != nil {
+			panic(err)
+		}
+		if err := f.lc.ingClassInformer.GetIndexer().Add(ingClass); err != nil {
 			panic(err)
 		}
 	}
@@ -199,10 +219,20 @@ func (f *fixture) setupStore() {
 		if err := f.lbc.svcInformer.GetIndexer().Add(svc); err != nil {
 			panic(err)
 		}
+		if f.lc.svcInformer != nil {
+			if err := f.lc.svcInformer.GetIndexer().Add(svc); err != nil {
+				panic(err)
+			}
+		}
 	}
 	for _, secret := range f.secretStore {
 		if err := f.lbc.secretInformer.GetIndexer().Add(secret); err != nil {
 			panic(err)
+		}
+		if f.lc.secretInformer != nil {
+			if err := f.lc.secretInformer.GetIndexer().Add(secret); err != nil {
+				panic(err)
+			}
 		}
 	}
 	for _, cm := range f.cmStore {
@@ -214,9 +244,12 @@ func (f *fixture) setupStore() {
 		if err := f.lbc.podInformer.GetIndexer().Add(pod); err != nil {
 			panic(err)
 		}
+		if err := f.lc.podInformer.GetIndexer().Add(pod); err != nil {
+			panic(err)
+		}
 	}
 	for _, node := range f.nodeStore {
-		if err := f.lbc.nodeInformer.GetIndexer().Add(node); err != nil {
+		if err := f.lc.nodeInformer.GetIndexer().Add(node); err != nil {
 			panic(err)
 		}
 	}
@@ -1361,12 +1394,12 @@ func TestGetLoadBalancerIngressSelector(t *testing.T) {
 			f.preparePod(po1)
 			f.setupStore()
 
-			lbIngs, err := f.lbc.getLoadBalancerIngressSelector(labels.Set(defaultIngPodLables).AsSelector())
+			lbIngs, err := f.lc.getLoadBalancerIngressSelector(labels.Set(defaultIngPodLables).AsSelector())
 
 			f.verifyActions()
 
 			if err != nil {
-				t.Fatalf("f.lbc.getLoadBalancerIngressSelector() returned unexpected error %v", err)
+				t.Fatalf("f.lc.getLoadBalancerIngressSelector() returned unexpected error %v", err)
 			}
 
 			if got, want := len(lbIngs), 2; got != want {
@@ -1440,9 +1473,9 @@ func TestSyncIngress(t *testing.T) {
 			f.setupStore()
 
 			key := types.NamespacedName{Name: tt.ingress.Name, Namespace: tt.ingress.Namespace}.String()
-			err := f.lbc.syncIngress(context.Background(), key)
+			err := f.lc.syncIngress(context.Background(), key)
 			if err != nil {
-				t.Fatalf("f.lbc.syncIngress(...): %v", err)
+				t.Fatalf("f.lc.syncIngress(...): %v", err)
 			}
 
 			f.verifyActions()
@@ -1463,6 +1496,10 @@ func TestSyncIngress(t *testing.T) {
 // TestGetLoadBalancerIngressFromService verifies getLoadBalancerIngressFromService.
 func TestGetLoadBalancerIngressFromService(t *testing.T) {
 	f := newFixture(t)
+	f.publishService = &types.NamespacedName{
+		Namespace: "alpha",
+		Name:      "bravo",
+	}
 
 	svc := &corev1.Service{
 		Spec: corev1.ServiceSpec{
@@ -1505,15 +1542,11 @@ func TestGetLoadBalancerIngressFromService(t *testing.T) {
 	}
 
 	f.prepare()
-	f.lbc.publishService = &types.NamespacedName{
-		Namespace: "alpha",
-		Name:      "bravo",
-	}
 
-	got := f.lbc.getLoadBalancerIngressFromService(svc)
+	got := f.lc.getLoadBalancerIngressFromService(svc)
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("f.lbc.getLoadBalancerIngressFromService(...) = %#v, want %#v", got, want)
+		t.Errorf("f.lc.getLoadBalancerIngressFromService(...) = %#v, want %#v", got, want)
 	}
 }
 
@@ -1776,6 +1809,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
+			f.http3 = true
 
 			if tt.secret != nil {
 				f.secretStore = append(f.secretStore, tt.secret)
@@ -1786,12 +1820,11 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			f.lbc.http3 = true
 			f.lbc.quicKeyingMaterialsSecret = &defaultQUICSecret
 
-			err := f.lbc.syncQUICKeyingMaterials(context.Background(), now)
+			err := f.lc.syncQUICKeyingMaterials(context.Background(), now)
 			if err != nil {
-				t.Fatalf("f.lbc.syncQUICKeyingMaterials(...): %v", err)
+				t.Fatalf("f.lc.syncQUICKeyingMaterials(...): %v", err)
 			}
 
 			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultQUICSecret.Namespace).Get(context.Background(), defaultQUICSecret.Name, metav1.GetOptions{})

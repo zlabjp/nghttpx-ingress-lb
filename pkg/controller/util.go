@@ -28,10 +28,13 @@ import (
 	"fmt"
 	"sort"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	listersnetworkingv1 "k8s.io/client-go/listers/networking/v1"
+	"k8s.io/klog/v2"
 )
 
 // loadBalancerIngressesIPEqual compares a and b, and if their IP fields are equal, returns true.  a and b might not be sorted in the
@@ -137,7 +140,59 @@ func podFindPort(pod *corev1.Pod, svcPort *corev1.ServicePort) (int32, error) {
 	return 0, fmt.Errorf("no suitable port for manifest: %s", pod.UID)
 }
 
-// matchLabels returns true if labelSet matches obj.GetLabels().
-func matchLabels(obj metav1.Object, labelSet map[string]string) bool {
-	return labels.Set(labelSet).AsSelector().Matches(labels.Set(obj.GetLabels()))
+// podLabelSelector returns labels.Selector from labelSet.
+func podLabelSelector(labelSet map[string]string) labels.Selector {
+	l := make(map[string]string)
+	// Remove labels which represent pod template hash, revision, or generation.
+	for k, v := range labelSet {
+		switch k {
+		case appsv1.ControllerRevisionHashLabelKey:
+		case "pod-template-generation": // Used by DaemonSet
+		case appsv1.DefaultDeploymentUniqueLabelKey:
+			continue
+		}
+		l[k] = v
+	}
+	return labels.Set(l).AsSelector()
+}
+
+// validateIngressClass checks whether this controller should process ing or not.
+func validateIngressClass(ing *networkingv1.Ingress, ingressClassController string, ingClassLister listersnetworkingv1.IngressClassLister) bool {
+	if ing.Spec.IngressClassName != nil {
+		ingClass, err := ingClassLister.Get(*ing.Spec.IngressClassName)
+		if err != nil {
+			klog.Errorf("Could not get IngressClass %v: %v", *ing.Spec.IngressClassName, err)
+			return false
+		}
+		if ingClass.Spec.Controller != ingressClassController {
+			klog.V(4).Infof("Skip Ingress %v/%v which needs IngressClass %v controller %v", ing.Namespace, ing.Name,
+				ingClass.Name, ingClass.Spec.Controller)
+			return false
+		}
+		return true
+	}
+
+	// Check defaults
+
+	ingClasses, err := ingClassLister.List(labels.Everything())
+	if err != nil {
+		klog.Errorf("Could not list IngressClass: %v", err)
+		return false
+	}
+
+	for _, ingClass := range ingClasses {
+		if ingClass.Annotations[annotationIsDefaultIngressClass] != "true" {
+			continue
+		}
+
+		if ingClass.Spec.Controller != ingressClassController {
+			klog.V(4).Infof("Skip Ingress %v/%v because it defaults to IngressClass %v controller %v", ing.Namespace, ing.Name,
+				ingClass.Name, ingClass.Spec.Controller)
+			return false
+		}
+		return true
+	}
+
+	// If there is no default IngressClass, process the Ingress.
+	return true
 }
