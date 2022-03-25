@@ -29,6 +29,8 @@ import (
 	"sort"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -133,4 +135,9 @@ func podFindPort(pod *corev1.Pod, svcPort *corev1.ServicePort) (int32, error) {
 	}
 
 	return 0, fmt.Errorf("no suitable port for manifest: %s", pod.UID)
+}
+
+// matchLabels returns true if labelSet matches obj.GetLabels().
+func matchLabels(obj metav1.Object, labelSet map[string]string) bool {
+	return labels.Set(labelSet).AsSelector().Matches(labels.Set(obj.GetLabels()))
 }
