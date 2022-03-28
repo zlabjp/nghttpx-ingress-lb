@@ -157,7 +157,8 @@ func podLabelSelector(labelSet map[string]string) labels.Selector {
 }
 
 // validateIngressClass checks whether this controller should process ing or not.
-func validateIngressClass(ing *networkingv1.Ingress, ingressClassController string, ingClassLister listersnetworkingv1.IngressClassLister) bool {
+func validateIngressClass(ing *networkingv1.Ingress, ingressClassController string, ingClassLister listersnetworkingv1.IngressClassLister,
+	requireIngressClass bool) bool {
 	if ing.Spec.IngressClassName != nil {
 		ingClass, err := ingClassLister.Get(*ing.Spec.IngressClassName)
 		if err != nil {
@@ -170,6 +171,11 @@ func validateIngressClass(ing *networkingv1.Ingress, ingressClassController stri
 			return false
 		}
 		return true
+	}
+
+	if requireIngressClass {
+		// Requiring IngressClass is the intended behavior of Ingress resource.  But historically, we do this differently.
+		return false
 	}
 
 	// Check defaults
