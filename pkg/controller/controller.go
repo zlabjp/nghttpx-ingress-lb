@@ -74,8 +74,6 @@ const (
 
 	noResyncPeriod = 0
 
-	annotationIsDefaultIngressClass = "ingressclass.kubernetes.io/is-default-class"
-
 	// nghttpxQUICKeyingMaterialsSecretKey is a field name of QUIC keying materials in Secret.
 	nghttpxQUICKeyingMaterialsSecretKey = "nghttpx-quic-keying-materials"
 	// quicSecretTimestampKey is an annotation key which is associated to the value that contains the timestamp when QUIC secret is last
@@ -2083,7 +2081,7 @@ func (lc *LeaderController) enqueueIngressWithIngressClass(ingClass *networkingv
 		return
 	}
 
-	defaultIngClass := ingClass.Annotations[annotationIsDefaultIngressClass] == "true"
+	defaultIngClass := ingClass.Annotations[networkingv1.AnnotationIsDefaultIngressClass] == "true"
 
 	for _, ing := range ings {
 		switch {

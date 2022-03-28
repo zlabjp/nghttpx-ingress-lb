@@ -1166,7 +1166,7 @@ func TestValidateIngressClass(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
 					Annotations: map[string]string{
-						annotationIsDefaultIngressClass: "true",
+						networkingv1.AnnotationIsDefaultIngressClass: "true",
 					},
 				},
 				Spec: networkingv1.IngressClassSpec{
@@ -1182,7 +1182,7 @@ func TestValidateIngressClass(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bar",
 					Annotations: map[string]string{
-						annotationIsDefaultIngressClass: "true",
+						networkingv1.AnnotationIsDefaultIngressClass: "true",
 					},
 				},
 				Spec: networkingv1.IngressClassSpec{

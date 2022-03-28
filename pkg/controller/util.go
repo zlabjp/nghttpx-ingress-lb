@@ -181,7 +181,7 @@ func validateIngressClass(ing *networkingv1.Ingress, ingressClassController stri
 	}
 
 	for _, ingClass := range ingClasses {
-		if ingClass.Annotations[annotationIsDefaultIngressClass] != "true" {
+		if ingClass.Annotations[networkingv1.AnnotationIsDefaultIngressClass] != "true" {
 			continue
 		}
 
