@@ -106,7 +106,6 @@ type LoadBalancerController struct {
 	secretLister              listerscorev1.SecretLister
 	cmLister                  listerscorev1.ConfigMapLister
 	podLister                 listerscorev1.PodLister
-	nodeLister                listerscorev1.NodeLister
 	nghttpx                   nghttpx.Interface
 	pod                       *corev1.Pod
 	defaultSvc                *types.NamespacedName
@@ -136,8 +135,6 @@ type LoadBalancerController struct {
 	reloadRateLimiter         flowcontrol.RateLimiter
 	eventRecorder             events.EventRecorder
 	syncQueue                 workqueue.Interface
-	ingQueue                  workqueue.RateLimitingInterface
-	quicSecretQueue           workqueue.RateLimitingInterface
 
 	// shutdownMu protects shutdown from the concurrent read/write.
 	shutdownMu sync.RWMutex
@@ -236,15 +233,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		leaderElectionConfig:      config.LeaderElectionConfig,
 		eventRecorder:             config.EventRecorder,
 		syncQueue:                 workqueue.New(),
-		ingQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		)),
-		quicSecretQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		)),
-		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
+		reloadRateLimiter:         flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
 	}
 
 	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace))
@@ -324,12 +313,6 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 	}
 
 	{
-		f := allNSInformers.Core().V1().Nodes()
-		lbc.nodeLister = f.Lister()
-		lbc.nodeInformer = f.Informer()
-	}
-
-	{
 		f := allNSInformers.Networking().V1().IngressClasses()
 		lbc.ingClassLister = f.Lister()
 		lbc.ingClassInformer = f.Informer()
@@ -372,7 +355,6 @@ func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
 	}
 	klog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
 	lbc.enqueue()
-	lbc.enqueueIngress(ing)
 }
 
 func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cur interface{}) {
@@ -383,7 +365,6 @@ func (lbc *LoadBalancerController) updateIngressNotification(old interface{}, cu
 	}
 	klog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
 	lbc.enqueue()
-	lbc.enqueueIngress(curIng)
 }
 
 func (lbc *LoadBalancerController) deleteIngressNotification(obj interface{}) {
@@ -411,14 +392,12 @@ func (lbc *LoadBalancerController) addIngressClassNotification(obj interface{}) 
 	ingClass := obj.(*networkingv1.IngressClass)
 	klog.V(4).Infof("IngressClass %v added", ingClass.Name)
 	lbc.enqueue()
-	lbc.enqueueIngressWithIngressClass(ingClass)
 }
 
 func (lbc *LoadBalancerController) updateIngressClassNotification(old interface{}, cur interface{}) {
 	ingClass := cur.(*networkingv1.IngressClass)
 	klog.V(4).Infof("IngressClass %v updated", ingClass.Name)
 	lbc.enqueue()
-	lbc.enqueueIngressWithIngressClass(ingClass)
 }
 
 func (lbc *LoadBalancerController) deleteIngressClassNotification(obj interface{}) {
@@ -536,41 +515,27 @@ func (lbc *LoadBalancerController) endpointSliceReferenced(es *discoveryv1.Endpo
 
 func (lbc *LoadBalancerController) addServiceNotification(obj interface{}) {
 	svc := obj.(*corev1.Service)
-	referenced := lbc.serviceReferenced(namespacedName(svc))
-	pubSvc := lbc.publishService != nil && lbc.publishService.Namespace == svc.Namespace && lbc.publishService.Name == svc.Name
 
-	if !referenced && !pubSvc {
+	if !lbc.serviceReferenced(namespacedName(svc)) {
 		return
 	}
 
 	klog.V(4).Infof("Service %v/%v added", svc.Namespace, svc.Name)
 
-	if referenced {
-		lbc.enqueue()
-	}
-	if pubSvc {
-		lbc.enqueueIngressAll()
-	}
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updateServiceNotification(old, cur interface{}) {
 	oldSvc := old.(*corev1.Service)
 	curSvc := cur.(*corev1.Service)
-	referenced := lbc.serviceReferenced(namespacedName(oldSvc)) || lbc.serviceReferenced(namespacedName(curSvc))
-	pubSvc := lbc.publishService != nil && lbc.publishService.Namespace == curSvc.Namespace && lbc.publishService.Name == curSvc.Name
 
-	if !referenced && !pubSvc {
+	if !lbc.serviceReferenced(namespacedName(oldSvc)) && !lbc.serviceReferenced(namespacedName(curSvc)) {
 		return
 	}
 
 	klog.V(4).Infof("Service %v/%v updated", curSvc.Namespace, curSvc.Name)
 
-	if referenced {
-		lbc.enqueue()
-	}
-	if pubSvc {
-		lbc.enqueueIngressAll()
-	}
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deleteServiceNotification(obj interface{}) {
@@ -650,7 +615,6 @@ func (lbc *LoadBalancerController) addSecretNotification(obj interface{}) {
 	}
 
 	klog.V(4).Infof("Secret %v/%v added", s.Namespace, s.Name)
-	lbc.dealWithQUICSecret(s)
 	lbc.enqueue()
 }
 
@@ -662,7 +626,6 @@ func (lbc *LoadBalancerController) updateSecretNotification(old, cur interface{}
 	}
 
 	klog.V(4).Infof("Secret %v/%v updated", curS.Namespace, curS.Name)
-	lbc.dealWithQUICSecret(curS)
 	lbc.enqueue()
 }
 
@@ -684,7 +647,6 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 		return
 	}
 	klog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
-	lbc.dealWithQUICSecret(s)
 	lbc.enqueue()
 }
 
@@ -730,41 +692,27 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 
 func (lbc *LoadBalancerController) addPodNotification(obj interface{}) {
 	pod := obj.(*corev1.Pod)
-	referenced := lbc.podReferenced(pod)
-	ctrlPod := matchLabels(pod, lbc.pod.Labels)
 
-	if !referenced && !ctrlPod {
+	if !lbc.podReferenced(pod) {
 		return
 	}
 
 	klog.V(4).Infof("Pod %v/%v added", pod.Namespace, pod.Name)
 
-	if referenced {
-		lbc.enqueue()
-	}
-	if ctrlPod {
-		lbc.enqueueIngressAll()
-	}
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updatePodNotification(old, cur interface{}) {
 	oldPod := old.(*corev1.Pod)
 	curPod := cur.(*corev1.Pod)
-	referenced := lbc.podReferenced(oldPod) || lbc.podReferenced(curPod)
-	ctrlPod := matchLabels(curPod, lbc.pod.Labels)
 
-	if !referenced && !ctrlPod {
+	if !lbc.podReferenced(oldPod) && !lbc.podReferenced(curPod) {
 		return
 	}
 
 	klog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
 
-	if referenced {
-		lbc.enqueue()
-	}
-	if ctrlPod {
-		lbc.enqueueIngressAll()
-	}
+	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) deletePodNotification(obj interface{}) {
@@ -1388,10 +1336,6 @@ func (lbc *LoadBalancerController) secretReferenced(s *corev1.Secret) bool {
 		return true
 	}
 
-	if lbc.http3 && s.Namespace == lbc.quicKeyingMaterialsSecret.Namespace && s.Name == lbc.quicKeyingMaterialsSecret.Name {
-		return true
-	}
-
 	ings, err := lbc.ingLister.Ingresses(s.Namespace).List(labels.Everything())
 	if err != nil {
 		klog.Errorf("Could not list Ingress namespace=%v: %v", s.Namespace, err)
@@ -1409,16 +1353,6 @@ func (lbc *LoadBalancerController) secretReferenced(s *corev1.Secret) bool {
 		}
 	}
 	return false
-}
-
-func (lbc *LoadBalancerController) dealWithQUICSecret(s *corev1.Secret) {
-	if !lbc.http3 || s.Namespace != lbc.quicKeyingMaterialsSecret.Namespace || s.Name != lbc.quicKeyingMaterialsSecret.Name {
-		return
-	}
-
-	if lbc.quicSecretQueue.NumRequeues(quicSecretKey) == 0 {
-		lbc.quicSecretQueue.AddRateLimited(quicSecretKey)
-	}
 }
 
 // getEndpoints returns a list of Backend for a given service.  backendConfig is additional per-port configuration for backend, which must
@@ -1711,39 +1645,49 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		RetryPeriod:   lbc.leaderElectionConfig.RetryPeriod.Duration,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				if lbc.http3 {
-					lbc.quicSecretQueue.Add(quicSecretKey)
+				lc := NewLeaderController(lbc)
 
-					go func() {
-						lbc.quicSecretWorker(ctx)
-					}()
+				if err := lc.Run(ctx); err != nil {
+					klog.Errorf("LeaderController.Run returned: %v", err)
 				}
-
-				go func() {
-					lbc.ingressWorker(ctx)
-				}()
 			},
-			OnStoppedLeading: func() {},
-			OnNewLeader:      func(identity string) {},
+			OnStoppedLeading: func() {
+				klog.V(4).Info("Stopped leading")
+			},
+			OnNewLeader: func(identity string) {},
 		},
 	}
 
-	le, err := leaderelection.NewLeaderElector(lec)
-	if err != nil {
-		klog.Errorf("Unable to create LeaderElector: %v", err)
-		return
-	}
+	wg.Add(1)
 
 	go func() {
-		le.Run(ctrlCtx)
+		defer wg.Done()
 
-		select {
-		case <-ctrlCtx.Done():
-			return
+		for {
+			le, err := leaderelection.NewLeaderElector(lec)
+			if err != nil {
+				klog.Errorf("Unable to create LeaderElector: %v", err)
+				cancel()
+				return
+			}
+
+			le.Run(ctrlCtx)
+
+			select {
+			case <-ctrlCtx.Done():
+				return
+			default:
+			}
 		}
 	}()
 
-	go lbc.worker()
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		lbc.worker()
+	}()
 
 	go func() {
 		<-ctx.Done()
@@ -1767,12 +1711,6 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 
 	klog.Infof("Shutting down nghttpx loadbalancer controller")
 
-	lbc.syncQueue.ShutDown()
-	lbc.ingQueue.ShutDown()
-	if lbc.http3 {
-		lbc.quicSecretQueue.ShutDown()
-	}
-
 	wg.Wait()
 }
 
@@ -1784,87 +1722,362 @@ func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) 
 
 // validateIngressClass checks whether this controller should process ing or not.
 func (lbc *LoadBalancerController) validateIngressClass(ing *networkingv1.Ingress) bool {
-	if ing.Spec.IngressClassName != nil {
-		ingClass, err := lbc.ingClassLister.Get(*ing.Spec.IngressClassName)
-		if err != nil {
-			klog.Errorf("Could not get IngressClass %v: %v", *ing.Spec.IngressClassName, err)
-			return false
-		}
-		if ingClass.Spec.Controller != lbc.ingressClassController {
-			klog.V(4).Infof("Skip Ingress %v/%v which needs IngressClass %v controller %v", ing.Namespace, ing.Name,
-				ingClass.Name, ingClass.Spec.Controller)
-			return false
-		}
-		return true
-	}
-
-	// Check defaults
-
-	ingClasses, err := lbc.ingClassLister.List(labels.Everything())
-	if err != nil {
-		klog.Errorf("Could not list IngressClass: %v", err)
-		return false
-	}
-
-	for _, ingClass := range ingClasses {
-		if ingClass.Annotations[annotationIsDefaultIngressClass] != "true" {
-			continue
-		}
-
-		if ingClass.Spec.Controller != lbc.ingressClassController {
-			klog.V(4).Infof("Skip Ingress %v/%v because it defaults to IngressClass %v controller %v", ing.Namespace, ing.Name,
-				ingClass.Name, ingClass.Spec.Controller)
-			return false
-		}
-		return true
-	}
-
-	// If there is no default IngressClass, process the Ingress.
-	return true
+	return validateIngressClass(ing, lbc.ingressClassController, lbc.ingClassLister)
 }
 
-func (lbc *LoadBalancerController) ingressWorker(ctx context.Context) {
-	work := func() bool {
-		key, quit := lbc.ingQueue.Get()
-		if quit {
-			return true
-		}
+// LeaderController is operated by leader.  It is started when a controller gains leadership, and stopped when it is lost.
+type LeaderController struct {
+	lbc *LoadBalancerController
 
-		defer lbc.ingQueue.Done(key)
+	ingInformer      cache.SharedIndexInformer
+	ingClassInformer cache.SharedIndexInformer
+	svcInformer      cache.SharedIndexInformer
+	podInformer      cache.SharedIndexInformer
+	secretInformer   cache.SharedIndexInformer
+	nodeInformer     cache.SharedIndexInformer
 
-		ctx, cancel := context.WithTimeout(ctx, lbc.reconcileTimeout)
-		defer cancel()
+	ingLister      listersnetworkingv1.IngressLister
+	ingClassLister listersnetworkingv1.IngressClassLister
+	svcLister      listerscorev1.ServiceLister
+	podLister      listerscorev1.PodLister
+	secretLister   listerscorev1.SecretLister
+	nodeLister     listerscorev1.NodeLister
 
-		if err := lbc.syncIngress(ctx, key.(string)); err != nil {
-			klog.Error(err)
-			lbc.ingQueue.AddRateLimited(key)
-		} else {
-			lbc.ingQueue.Forget(key)
-		}
+	ingQueue        workqueue.RateLimitingInterface
+	quicSecretQueue workqueue.RateLimitingInterface
+}
 
-		return false
+func NewLeaderController(lbc *LoadBalancerController) *LeaderController {
+	lc := &LeaderController{
+		lbc: lbc,
+		ingQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		)),
+		quicSecretQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		)),
 	}
 
-	for {
-		if quit := work(); quit {
+	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(lbc.watchNamespace))
+
+	{
+		f := watchNSInformers.Networking().V1().Ingresses()
+		lc.ingLister = f.Lister()
+		lc.ingInformer = f.Informer()
+		lc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lc.addIngressNotification,
+			UpdateFunc: lc.updateIngressNotification,
+		})
+	}
+
+	podNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+		informers.WithNamespace(lbc.pod.Namespace),
+		informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+			opts.LabelSelector = podLabelSelector(lbc.pod.Labels).String()
+		}),
+	)
+
+	{
+		f := podNSInformers.Core().V1().Pods()
+		lc.podLister = f.Lister()
+		lc.podInformer = f.Informer()
+		lc.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lc.addPodNotification,
+			UpdateFunc: lc.updatePodNotification,
+			DeleteFunc: lc.deletePodNotification,
+		})
+	}
+
+	if lbc.http3 {
+		factory := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+			informers.WithNamespace(lbc.quicKeyingMaterialsSecret.Namespace),
+			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+				opts.FieldSelector = "metadata.name=" + lbc.quicKeyingMaterialsSecret.Name
+			}),
+		)
+		f := factory.Core().V1().Secrets()
+		lc.secretLister = f.Lister()
+		lc.secretInformer = f.Informer()
+		lc.secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lc.addSecretNotification,
+			UpdateFunc: lc.updateSecretNotification,
+			DeleteFunc: lc.deleteSecretNotification,
+		})
+	}
+
+	if lbc.publishService != nil {
+		factory := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+			informers.WithNamespace(lbc.publishService.Namespace),
+			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+				opts.FieldSelector = "metadata.name=" + lbc.publishService.Name
+			}),
+		)
+		f := factory.Core().V1().Services()
+		lc.svcLister = f.Lister()
+		lc.svcInformer = f.Informer()
+		lc.svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lc.addServiceNotification,
+			UpdateFunc: lc.updateServiceNotification,
+			DeleteFunc: lc.deleteServiceNotification,
+		})
+	}
+
+	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod)
+
+	{
+		f := allNSInformers.Networking().V1().IngressClasses()
+		lc.ingClassLister = f.Lister()
+		lc.ingClassInformer = f.Informer()
+		lc.ingClassInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lc.addIngressClassNotification,
+			UpdateFunc: lc.updateIngressClassNotification,
+			DeleteFunc: lc.deleteIngressClassNotification,
+		})
+	}
+
+	{
+		f := allNSInformers.Core().V1().Nodes()
+		lc.nodeLister = f.Lister()
+		lc.nodeInformer = f.Informer()
+	}
+
+	return lc
+}
+
+func (lc *LeaderController) Run(ctx context.Context) error {
+	klog.Infof("Starting leader controller")
+
+	var wg sync.WaitGroup
+
+	go lc.ingInformer.Run(ctx.Done())
+	go lc.ingClassInformer.Run(ctx.Done())
+	go lc.podInformer.Run(ctx.Done())
+	go lc.nodeInformer.Run(ctx.Done())
+
+	hasSynced := []cache.InformerSynced{
+		lc.ingInformer.HasSynced,
+		lc.ingClassInformer.HasSynced,
+		lc.podInformer.HasSynced,
+		lc.nodeInformer.HasSynced,
+	}
+
+	if lc.secretInformer != nil {
+		go lc.secretInformer.Run(ctx.Done())
+		hasSynced = append(hasSynced, lc.secretInformer.HasSynced)
+	}
+
+	if lc.svcInformer != nil {
+		go lc.svcInformer.Run(ctx.Done())
+		hasSynced = append(hasSynced, lc.svcInformer.HasSynced)
+	}
+
+	if !cache.WaitForCacheSync(ctx.Done(), hasSynced...) {
+		return errors.New("Could not sync cache")
+	}
+
+	if lc.lbc.http3 {
+		lc.quicSecretQueue.Add(quicSecretKey)
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			lc.quicSecretWorker(ctx)
+		}()
+	}
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		lc.ingressWorker(ctx)
+	}()
+
+	<-ctx.Done()
+
+	klog.Infof("Shutting down leader controller")
+
+	lc.ingQueue.ShutDown()
+	if lc.lbc.http3 {
+		lc.quicSecretQueue.ShutDown()
+	}
+
+	wg.Wait()
+
+	return ctx.Err()
+}
+
+func (lc *LeaderController) addIngressNotification(obj interface{}) {
+	ing := obj.(*networkingv1.Ingress)
+	if !lc.validateIngressClass(ing) {
+		return
+	}
+	klog.V(4).Infof("Ingress %v/%v added", ing.Namespace, ing.Name)
+	lc.enqueueIngress(ing)
+}
+
+func (lc *LeaderController) updateIngressNotification(old interface{}, cur interface{}) {
+	oldIng := old.(*networkingv1.Ingress)
+	curIng := cur.(*networkingv1.Ingress)
+	if !lc.validateIngressClass(oldIng) && !lc.validateIngressClass(curIng) {
+		return
+	}
+	klog.V(4).Infof("Ingress %v/%v updated", curIng.Namespace, curIng.Name)
+	lc.enqueueIngress(curIng)
+}
+
+func (lc *LeaderController) addPodNotification(obj interface{}) {
+	pod := obj.(*corev1.Pod)
+
+	klog.V(4).Infof("Pod %v/%v added", pod.Namespace, pod.Name)
+
+	lc.enqueueIngressAll()
+}
+
+func (lc *LeaderController) updatePodNotification(old, cur interface{}) {
+	curPod := cur.(*corev1.Pod)
+
+	klog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
+
+	lc.enqueueIngressAll()
+}
+
+func (lc *LeaderController) deletePodNotification(obj interface{}) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Could not get object from tombstone %+v", obj)
+			return
+		}
+		pod, ok = tombstone.Obj.(*corev1.Pod)
+		if !ok {
+			klog.Errorf("Tombstone contained object that is not Pod %+v", obj)
 			return
 		}
 	}
+
+	klog.V(4).Infof("Pod %v/%v deleted", pod.Namespace, pod.Name)
+
+	lc.enqueueIngressAll()
 }
 
-func (lbc *LoadBalancerController) enqueueIngress(ing *networkingv1.Ingress) {
+func (lc *LeaderController) addServiceNotification(obj interface{}) {
+	svc := obj.(*corev1.Service)
+
+	klog.V(4).Infof("Service %v/%v added", svc.Namespace, svc.Name)
+
+	lc.enqueueIngressAll()
+}
+
+func (lc *LeaderController) updateServiceNotification(old, cur interface{}) {
+	curSvc := cur.(*corev1.Service)
+
+	klog.V(4).Infof("Service %v/%v updated", curSvc.Namespace, curSvc.Name)
+
+	lc.enqueueIngressAll()
+}
+
+func (lc *LeaderController) deleteServiceNotification(obj interface{}) {
+	svc, ok := obj.(*corev1.Service)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Could not get object from tombstone %+v", obj)
+			return
+		}
+		svc, ok = tombstone.Obj.(*corev1.Service)
+		if !ok {
+			klog.Errorf("Tombstone contained object that is not Service %+v", obj)
+			return
+		}
+	}
+
+	klog.V(4).Infof("Service %v/%v deleted", svc.Namespace, svc.Name)
+
+	lc.enqueueIngressAll()
+}
+
+func (lc *LeaderController) addSecretNotification(obj interface{}) {
+	s := obj.(*corev1.Secret)
+
+	klog.V(4).Infof("Secret %v/%v added", s.Namespace, s.Name)
+	lc.enqueueQUICSecret()
+}
+
+func (lc *LeaderController) updateSecretNotification(old, cur interface{}) {
+	curS := cur.(*corev1.Secret)
+
+	klog.V(4).Infof("Secret %v/%v updated", curS.Namespace, curS.Name)
+	lc.enqueueQUICSecret()
+}
+
+func (lc *LeaderController) deleteSecretNotification(obj interface{}) {
+	s, ok := obj.(*corev1.Secret)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Could not get object from tombstone %+v", obj)
+			return
+		}
+		s, ok = tombstone.Obj.(*corev1.Secret)
+		if !ok {
+			klog.Errorf("Tombstone contained object that is not a Secret %+v", obj)
+			return
+		}
+	}
+
+	klog.V(4).Infof("Secret %v/%v deleted", s.Namespace, s.Name)
+	lc.enqueueQUICSecret()
+}
+
+func (lc *LeaderController) addIngressClassNotification(obj interface{}) {
+	ingClass := obj.(*networkingv1.IngressClass)
+	klog.V(4).Infof("IngressClass %v added", ingClass.Name)
+	lc.enqueueIngressWithIngressClass(ingClass)
+}
+
+func (lc *LeaderController) updateIngressClassNotification(old interface{}, cur interface{}) {
+	ingClass := cur.(*networkingv1.IngressClass)
+	klog.V(4).Infof("IngressClass %v updated", ingClass.Name)
+	lc.enqueueIngressWithIngressClass(ingClass)
+}
+
+func (lc *LeaderController) deleteIngressClassNotification(obj interface{}) {
+	ingClass, ok := obj.(*networkingv1.IngressClass)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Could not get object from tombstone %+v", obj)
+			return
+		}
+		ingClass, ok = tombstone.Obj.(*networkingv1.IngressClass)
+		if !ok {
+			klog.Errorf("Tombstone contained object that is not IngressClass %+v", obj)
+			return
+		}
+	}
+	klog.V(4).Infof("IngressClass %v deleted", ingClass.Name)
+	lc.enqueueIngressWithIngressClass(ingClass)
+}
+
+func (lc *LeaderController) enqueueIngress(ing *networkingv1.Ingress) {
 	key := types.NamespacedName{Name: ing.Name, Namespace: ing.Namespace}.String()
-	if lbc.ingQueue.NumRequeues(key) == 0 {
-		lbc.ingQueue.AddRateLimited(key)
+	if lc.ingQueue.NumRequeues(key) == 0 {
+		lc.ingQueue.AddRateLimited(key)
 	}
 }
 
-func (lbc *LoadBalancerController) enqueueIngressWithIngressClass(ingClass *networkingv1.IngressClass) {
-	if ingClass.Spec.Controller != lbc.ingressClassController {
+func (lc *LeaderController) enqueueIngressWithIngressClass(ingClass *networkingv1.IngressClass) {
+	if ingClass.Spec.Controller != lc.lbc.ingressClassController {
 		return
 	}
 
-	ings, err := lbc.ingLister.Ingresses(ingClass.Namespace).List(labels.Everything())
+	ings, err := lc.ingLister.Ingresses(ingClass.Namespace).List(labels.Everything())
 	if err != nil {
 		klog.Errorf("Could not list Ingresses: %v", err)
 		return
@@ -1882,202 +2095,53 @@ func (lbc *LoadBalancerController) enqueueIngressWithIngressClass(ingClass *netw
 			continue
 		}
 
-		lbc.enqueueIngress(ing)
+		lc.enqueueIngress(ing)
 	}
 }
 
-func (lbc *LoadBalancerController) enqueueIngressAll() {
-	ings, err := lbc.ingLister.List(labels.Everything())
+func (lc *LeaderController) enqueueIngressAll() {
+	ings, err := lc.ingLister.List(labels.Everything())
 	if err != nil {
 		klog.Errorf("Could not list Ingresses: %v", err)
 		return
 	}
 
 	for _, ing := range ings {
-		if !lbc.validateIngressClass(ing) {
+		if !lc.validateIngressClass(ing) {
 			continue
 		}
 
-		lbc.enqueueIngress(ing)
+		lc.enqueueIngress(ing)
 	}
 }
 
-// syncIngress updates Ingress resource status.
-func (lbc *LoadBalancerController) syncIngress(ctx context.Context, key string) error {
-	klog.V(2).Infof("Syncing Ingress %v", key)
-
-	ns, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		klog.Errorf("Could not split namespace and name from key %v: %v", key, err)
-		// Since key is broken, we do not retry.
-		return nil
-	}
-
-	ing, err := lbc.ingLister.Ingresses(ns).Get(name)
-	if err != nil {
-		klog.Errorf("Could not get Ingress %v: %v", key, err)
-		return err
-	}
-
-	if !lbc.validateIngressClass(ing) {
-		klog.V(4).Infof("Ingress %v is not controlled by this controller", key)
-		// Deletion of LB address from status is done by an Ingress controller that now controls ing.
-		return nil
-	}
-
-	lbIngs, err := lbc.getLoadBalancerIngress()
-	if err != nil {
-		return err
-	}
-
-	if loadBalancerIngressesIPEqual(ing.Status.LoadBalancer.Ingress, lbIngs) {
-		klog.V(4).Infof("Ingress %v has correct .Status.LoadBalancer.Ingress", key)
-		return nil
-	}
-
-	klog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %#v", ing.Namespace, ing.Name, lbIngs)
-
-	newIng := ing.DeepCopy()
-	newIng.Status.LoadBalancer.Ingress = lbIngs
-
-	if _, err := lbc.clientset.NetworkingV1().Ingresses(ing.Namespace).UpdateStatus(ctx, newIng, metav1.UpdateOptions{}); err != nil {
-		klog.Errorf("Could not update Ingress %v status: %v", key, err)
-		return err
-	}
-
-	return nil
+func (lc *LeaderController) validateIngressClass(ing *networkingv1.Ingress) bool {
+	return validateIngressClass(ing, lc.lbc.ingressClassController, lc.ingClassLister)
 }
 
-func (lbc *LoadBalancerController) getLoadBalancerIngress() ([]corev1.LoadBalancerIngress, error) {
-	var lbIngs []corev1.LoadBalancerIngress
-
-	if lbc.publishService == nil {
-		selector := labels.Set(lbc.pod.Labels).AsSelector()
-		var err error
-		lbIngs, err = lbc.getLoadBalancerIngressSelector(selector)
-		if err != nil {
-			return nil, fmt.Errorf("could not get Pod or Node IP of Ingress controller: %w", err)
-		}
-	} else {
-		svc, err := lbc.svcLister.Services(lbc.publishService.Namespace).Get(lbc.publishService.Name)
-		if err != nil {
-			klog.Errorf("Could not get Service %v: %v", lbc.publishService, err)
-			return nil, err
-		}
-
-		lbIngs = lbc.getLoadBalancerIngressFromService(svc)
+func (lc *LeaderController) enqueueQUICSecret() {
+	if lc.quicSecretQueue.NumRequeues(quicSecretKey) == 0 {
+		lc.quicSecretQueue.AddRateLimited(quicSecretKey)
 	}
-
-	sortLoadBalancerIngress(lbIngs)
-
-	return uniqLoadBalancerIngress(lbIngs), nil
 }
 
-// getLoadBalancerIngressSelector creates array of v1.LoadBalancerIngress based on cached Pods and Nodes.
-func (lbc *LoadBalancerController) getLoadBalancerIngressSelector(selector labels.Selector) ([]corev1.LoadBalancerIngress, error) {
-	pods, err := lbc.podLister.List(selector)
-	if err != nil {
-		return nil, fmt.Errorf("could not list Pods with label %v", selector)
-	}
-
-	if len(pods) == 0 {
-		return nil, nil
-	}
-
-	lbIngs := make([]corev1.LoadBalancerIngress, 0, len(pods))
-
-	for _, pod := range pods {
-		if !pod.Spec.HostNetwork {
-			if pod.Status.PodIP == "" {
-				continue
-			}
-
-			lbIngs = append(lbIngs, corev1.LoadBalancerIngress{IP: pod.Status.PodIP})
-
-			continue
-		}
-
-		externalIP, err := lbc.getPodNodeAddress(pod)
-		if err != nil {
-			klog.Error(err)
-			continue
-		}
-
-		lbIng := corev1.LoadBalancerIngress{}
-		// This is really a messy specification.
-		if net.ParseIP(externalIP) != nil {
-			lbIng.IP = externalIP
-		} else {
-			lbIng.Hostname = externalIP
-		}
-		lbIngs = append(lbIngs, lbIng)
-	}
-
-	return lbIngs, nil
-}
-
-// getLoadBalancerIngressFromService returns the set of addresses from svc.
-func (lbc *LoadBalancerController) getLoadBalancerIngressFromService(svc *corev1.Service) []corev1.LoadBalancerIngress {
-	lbIngs := make([]corev1.LoadBalancerIngress, len(svc.Status.LoadBalancer.Ingress)+len(svc.Spec.ExternalIPs))
-	copy(lbIngs, svc.Status.LoadBalancer.Ingress)
-
-	i := len(svc.Status.LoadBalancer.Ingress)
-	for _, ip := range svc.Spec.ExternalIPs {
-		lbIngs[i].IP = ip
-		i++
-	}
-
-	return lbIngs
-}
-
-// getPodNodeAddress returns address of Node where pod is running.  It prefers external IP.  It may return internal IP if configuration
-// allows it.
-func (lbc *LoadBalancerController) getPodNodeAddress(pod *corev1.Pod) (string, error) {
-	node, err := lbc.nodeLister.Get(pod.Spec.NodeName)
-	if err != nil {
-		return "", fmt.Errorf("could not get Node %v for Pod %v/%v from lister: %w", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
-	}
-	var externalIP string
-	for i := range node.Status.Addresses {
-		address := &node.Status.Addresses[i]
-		if address.Type == corev1.NodeExternalIP {
-			if address.Address == "" {
-				continue
-			}
-			externalIP = address.Address
-			break
-		}
-
-		if externalIP == "" && (lbc.allowInternalIP && address.Type == corev1.NodeInternalIP) {
-			externalIP = address.Address
-			// Continue to the next iteration because we may encounter v1.NodeExternalIP later.
-		}
-	}
-
-	if externalIP == "" {
-		return "", fmt.Errorf("Node %v has no external IP", node.Name)
-	}
-
-	return externalIP, nil
-}
-
-func (lbc *LoadBalancerController) quicSecretWorker(ctx context.Context) {
+func (lc *LeaderController) quicSecretWorker(ctx context.Context) {
 	work := func() bool {
-		key, quit := lbc.quicSecretQueue.Get()
+		key, quit := lc.quicSecretQueue.Get()
 		if quit {
 			return true
 		}
 
-		defer lbc.quicSecretQueue.Done(key)
+		defer lc.quicSecretQueue.Done(key)
 
-		ctx, cancel := context.WithTimeout(ctx, lbc.reconcileTimeout)
+		ctx, cancel := context.WithTimeout(ctx, lc.lbc.reconcileTimeout)
 		defer cancel()
 
-		if err := lbc.syncQUICKeyingMaterials(ctx, time.Now()); err != nil {
+		if err := lc.syncQUICKeyingMaterials(ctx, time.Now()); err != nil {
 			klog.Error(err)
-			lbc.quicSecretQueue.AddRateLimited(key)
+			lc.quicSecretQueue.AddRateLimited(key)
 		} else {
-			lbc.quicSecretQueue.Forget(key)
+			lc.quicSecretQueue.Forget(key)
 		}
 
 		return false
@@ -2090,9 +2154,12 @@ func (lbc *LoadBalancerController) quicSecretWorker(ctx context.Context) {
 	}
 }
 
-func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, now time.Time) error {
-	key := *lbc.quicKeyingMaterialsSecret
-	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
+func (lc *LeaderController) syncQUICKeyingMaterials(ctx context.Context, now time.Time) error {
+	key := *lc.lbc.quicKeyingMaterialsSecret
+
+	klog.V(2).Infof("Syncing Secret %v", key)
+
+	secret, err := lc.secretLister.Secrets(key.Namespace).Get(key.Name)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			klog.Errorf("Could not get Secret %v: %v", key, err)
@@ -2112,7 +2179,7 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, 
 			},
 		}
 
-		if _, err := lbc.clientset.CoreV1().Secrets(secret.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+		if _, err := lc.lbc.clientset.CoreV1().Secrets(secret.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
 			klog.Errorf("Could not create Secret %v/%v: %v", secret.Namespace, secret.Name, err)
 			return err
 		}
@@ -2120,7 +2187,7 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, 
 		klog.Infof("QUIC keying materials Secret %v/%v was created", secret.Namespace, secret.Name)
 
 		// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
-		lbc.quicSecretQueue.AddAfter(quicSecretKey, quicSecretTimeout)
+		lc.quicSecretQueue.AddAfter(quicSecretKey, quicSecretTimeout)
 
 		return nil
 	}
@@ -2148,13 +2215,13 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, 
 				if d > 0 {
 					klog.Infof("QUIC keying materials are not expired and in a good shape.  Retry after %v", d)
 					// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
-					lbc.quicSecretQueue.AddAfter(quicSecretKey, d)
+					lc.quicSecretQueue.AddAfter(quicSecretKey, d)
 
 					if quicKeyingMaterialsAnnotationKey == quicSecretTimestampKey {
 						updatedSecret := secret.DeepCopy()
 						updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = secret.Annotations[quicSecretTimestampKey]
 
-						if _, err := lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(ctx, updatedSecret, metav1.UpdateOptions{}); err != nil {
+						if _, err := lc.lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(ctx, updatedSecret, metav1.UpdateOptions{}); err != nil {
 							klog.Errorf("Could not update Secret %v/%v: %v", updatedSecret.Namespace, updatedSecret.Name, err)
 							return err
 						}
@@ -2182,7 +2249,7 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, 
 
 	updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey] = nghttpx.UpdateQUICKeyingMaterials(km)
 
-	if _, err := lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(ctx, updatedSecret, metav1.UpdateOptions{}); err != nil {
+	if _, err := lc.lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(ctx, updatedSecret, metav1.UpdateOptions{}); err != nil {
 		klog.Errorf("Could not update Secret %v/%v: %v", updatedSecret.Namespace, updatedSecret.Name, err)
 		return err
 	}
@@ -2190,7 +2257,194 @@ func (lbc *LoadBalancerController) syncQUICKeyingMaterials(ctx context.Context, 
 	klog.Infof("QUIC keying materials Secret %v/%v was updated", updatedSecret.Namespace, updatedSecret.Name)
 
 	// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
-	lbc.quicSecretQueue.AddAfter(quicSecretKey, quicSecretTimeout)
+	lc.quicSecretQueue.AddAfter(quicSecretKey, quicSecretTimeout)
 
 	return nil
+}
+
+func (lc *LeaderController) ingressWorker(ctx context.Context) {
+	work := func() bool {
+		key, quit := lc.ingQueue.Get()
+		if quit {
+			return true
+		}
+
+		defer lc.ingQueue.Done(key)
+
+		ctx, cancel := context.WithTimeout(ctx, lc.lbc.reconcileTimeout)
+		defer cancel()
+
+		if err := lc.syncIngress(ctx, key.(string)); err != nil {
+			klog.Error(err)
+			lc.ingQueue.AddRateLimited(key)
+		} else {
+			lc.ingQueue.Forget(key)
+		}
+
+		return false
+	}
+
+	for {
+		if quit := work(); quit {
+			return
+		}
+	}
+}
+
+// syncIngress updates Ingress resource status.
+func (lc *LeaderController) syncIngress(ctx context.Context, key string) error {
+	klog.V(2).Infof("Syncing Ingress %v", key)
+
+	ns, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		klog.Errorf("Could not split namespace and name from key %v: %v", key, err)
+		// Since key is broken, we do not retry.
+		return nil
+	}
+
+	ing, err := lc.ingLister.Ingresses(ns).Get(name)
+	if err != nil {
+		klog.Errorf("Could not get Ingress %v: %v", key, err)
+		return err
+	}
+
+	if !lc.validateIngressClass(ing) {
+		klog.V(4).Infof("Ingress %v is not controlled by this controller", key)
+		// Deletion of LB address from status is done by an Ingress controller that now controls ing.
+		return nil
+	}
+
+	lbIngs, err := lc.getLoadBalancerIngress()
+	if err != nil {
+		return err
+	}
+
+	if loadBalancerIngressesIPEqual(ing.Status.LoadBalancer.Ingress, lbIngs) {
+		klog.V(4).Infof("Ingress %v has correct .Status.LoadBalancer.Ingress", key)
+		return nil
+	}
+
+	klog.V(4).Infof("Update Ingress %v/%v .Status.LoadBalancer.Ingress to %#v", ing.Namespace, ing.Name, lbIngs)
+
+	newIng := ing.DeepCopy()
+	newIng.Status.LoadBalancer.Ingress = lbIngs
+
+	if _, err := lc.lbc.clientset.NetworkingV1().Ingresses(ing.Namespace).UpdateStatus(ctx, newIng, metav1.UpdateOptions{}); err != nil {
+		klog.Errorf("Could not update Ingress %v status: %v", key, err)
+		return err
+	}
+
+	return nil
+}
+
+func (lc *LeaderController) getLoadBalancerIngress() ([]corev1.LoadBalancerIngress, error) {
+	var lbIngs []corev1.LoadBalancerIngress
+
+	if lc.lbc.publishService == nil {
+		var err error
+		lbIngs, err = lc.getLoadBalancerIngressSelector(podLabelSelector(lc.lbc.pod.Labels))
+		if err != nil {
+			return nil, fmt.Errorf("could not get Pod or Node IP of Ingress controller: %w", err)
+		}
+	} else {
+		svc, err := lc.svcLister.Services(lc.lbc.publishService.Namespace).Get(lc.lbc.publishService.Name)
+		if err != nil {
+			klog.Errorf("Could not get Service %v: %v", lc.lbc.publishService, err)
+			return nil, err
+		}
+
+		lbIngs = lc.getLoadBalancerIngressFromService(svc)
+	}
+
+	sortLoadBalancerIngress(lbIngs)
+
+	return uniqLoadBalancerIngress(lbIngs), nil
+}
+
+// getLoadBalancerIngressSelector creates array of v1.LoadBalancerIngress based on cached Pods and Nodes.
+func (lc *LeaderController) getLoadBalancerIngressSelector(selector labels.Selector) ([]corev1.LoadBalancerIngress, error) {
+	pods, err := lc.podLister.List(selector)
+	if err != nil {
+		return nil, fmt.Errorf("could not list Pods with label %v", selector)
+	}
+
+	if len(pods) == 0 {
+		return nil, nil
+	}
+
+	lbIngs := make([]corev1.LoadBalancerIngress, 0, len(pods))
+
+	for _, pod := range pods {
+		if !pod.Spec.HostNetwork {
+			if pod.Status.PodIP == "" {
+				continue
+			}
+
+			lbIngs = append(lbIngs, corev1.LoadBalancerIngress{IP: pod.Status.PodIP})
+
+			continue
+		}
+
+		externalIP, err := lc.getPodNodeAddress(pod)
+		if err != nil {
+			klog.Error(err)
+			continue
+		}
+
+		lbIng := corev1.LoadBalancerIngress{}
+		// This is really a messy specification.
+		if net.ParseIP(externalIP) != nil {
+			lbIng.IP = externalIP
+		} else {
+			lbIng.Hostname = externalIP
+		}
+		lbIngs = append(lbIngs, lbIng)
+	}
+
+	return lbIngs, nil
+}
+
+// getPodNodeAddress returns address of Node where pod is running.  It prefers external IP.  It may return internal IP if configuration
+// allows it.
+func (lc *LeaderController) getPodNodeAddress(pod *corev1.Pod) (string, error) {
+	node, err := lc.nodeLister.Get(pod.Spec.NodeName)
+	if err != nil {
+		return "", fmt.Errorf("could not get Node %v for Pod %v/%v from lister: %w", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
+	}
+	var externalIP string
+	for i := range node.Status.Addresses {
+		address := &node.Status.Addresses[i]
+		if address.Type == corev1.NodeExternalIP {
+			if address.Address == "" {
+				continue
+			}
+			externalIP = address.Address
+			break
+		}
+
+		if externalIP == "" && (lc.lbc.allowInternalIP && address.Type == corev1.NodeInternalIP) {
+			externalIP = address.Address
+			// Continue to the next iteration because we may encounter v1.NodeExternalIP later.
+		}
+	}
+
+	if externalIP == "" {
+		return "", fmt.Errorf("Node %v has no external IP", node.Name)
+	}
+
+	return externalIP, nil
+}
+
+// getLoadBalancerIngressFromService returns the set of addresses from svc.
+func (lc *LeaderController) getLoadBalancerIngressFromService(svc *corev1.Service) []corev1.LoadBalancerIngress {
+	lbIngs := make([]corev1.LoadBalancerIngress, len(svc.Status.LoadBalancer.Ingress)+len(svc.Spec.ExternalIPs))
+	copy(lbIngs, svc.Status.LoadBalancer.Ingress)
+
+	i := len(svc.Status.LoadBalancer.Ingress)
+	for _, ip := range svc.Spec.ExternalIPs {
+		lbIngs[i].IP = ip
+		i++
+	}
+
+	return lbIngs
 }
