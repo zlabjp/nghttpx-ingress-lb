@@ -38,7 +38,7 @@ $ kubectl create -f examples/default/service-account.yaml
 $ kubectl create -f examples/default/rc-default.yaml
 ```
 
-## Ingress class
+## IngressClass
 
 This controller supports IngressClass resource.  The default
 IngressClass controller name is "zlab.co.jp/nghttpx".  It supports
@@ -46,6 +46,22 @@ IngressClass controller name is "zlab.co.jp/nghttpx".  It supports
 
 This controller no longer supports the deprecated
 `kubernetes.io/ingress.class` annotation.
+
+The default behavior around IngressClass does not follow the standard
+rule for a historical reason.  nghttpx ingress controller processes
+Ingress resource which does not have .spec.ingressClassName specified.
+It also interprets the default IngressClass in its own way.  If
+Ingress resource does not have .spec.ingressClassName specified, but
+the default IngressClass does not point to nghttpx ingress controller,
+it does not process the resource.  The standard rule is that if
+Ingress resource does not have .spec.ingressClassName, it should be
+ignored, and only process the resource which is explicitly designated
+to the controller via IngressClass.  `--require-ingress-class` flag
+enforces this rule.  Obviously, it completely changes which resources
+are processed by this controller.  You need to set
+.spec.ingressClassName for all Ingress resources in your cluster.  And
+create the default IngressClass resource to ensure that
+Ingress.spec.ingressClassName is defaulted properly.
 
 ## networking.k8s.io/v1 Ingress
 

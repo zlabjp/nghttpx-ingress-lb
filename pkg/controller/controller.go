@@ -129,6 +129,7 @@ type LoadBalancerController struct {
 	quicKeyingMaterialsSecret *types.NamespacedName
 	reconcileTimeout          time.Duration
 	leaderElectionConfig      componentbaseconfig.LeaderElectionConfiguration
+	requireIngressClass       bool
 	reloadRateLimiter         flowcontrol.RateLimiter
 	eventRecorder             events.EventRecorder
 	syncQueue                 workqueue.Interface
@@ -192,6 +193,8 @@ type Config struct {
 	QUICKeyingMaterialsSecret *types.NamespacedName
 	// LeaderElectionConfig is the configuration of leader election.
 	LeaderElectionConfig componentbaseconfig.LeaderElectionConfiguration
+	// RequireIngressClass, if set to true, ignores Ingress resource which does not specify .spec.ingressClassName.
+	RequireIngressClass bool
 	// Pod is the Pod where this controller runs.
 	Pod *corev1.Pod
 	// EventRecorder is the event recorder.
@@ -228,6 +231,7 @@ func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.In
 		quicKeyingMaterialsSecret: config.QUICKeyingMaterialsSecret,
 		reconcileTimeout:          config.ReconcileTimeout,
 		leaderElectionConfig:      config.LeaderElectionConfig,
+		requireIngressClass:       config.RequireIngressClass,
 		eventRecorder:             config.EventRecorder,
 		syncQueue:                 workqueue.New(),
 		reloadRateLimiter:         flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
@@ -1717,7 +1721,7 @@ func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) 
 
 // validateIngressClass checks whether this controller should process ing or not.
 func (lbc *LoadBalancerController) validateIngressClass(ing *networkingv1.Ingress) bool {
-	return validateIngressClass(ing, lbc.ingressClassController, lbc.ingClassLister)
+	return validateIngressClass(ing, lbc.ingressClassController, lbc.ingClassLister, lbc.requireIngressClass)
 }
 
 // LeaderController is operated by leader.  It is started when a controller gains leadership, and stopped when it is lost.
@@ -2083,6 +2087,9 @@ func (lc *LeaderController) enqueueIngressWithIngressClass(ingClass *networkingv
 	for _, ing := range ings {
 		switch {
 		case ing.Spec.IngressClassName == nil:
+			if lc.lbc.requireIngressClass {
+				continue
+			}
 			if !defaultIngClass {
 				continue
 			}
@@ -2111,7 +2118,7 @@ func (lc *LeaderController) enqueueIngressAll() {
 }
 
 func (lc *LeaderController) validateIngressClass(ing *networkingv1.Ingress) bool {
-	return validateIngressClass(ing, lc.lbc.ingressClassController, lc.ingClassLister)
+	return validateIngressClass(ing, lc.lbc.ingressClassController, lc.ingClassLister, lc.lbc.requireIngressClass)
 }
 
 func (lc *LeaderController) enqueueQUICSecret() {

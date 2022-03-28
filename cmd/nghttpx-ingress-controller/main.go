@@ -97,6 +97,7 @@ var (
 		RetryPeriod:   metav1.Duration{Duration: 2 * time.Second},
 		ResourceName:  "nghttpx-ingress-lb",
 	}
+	requireIngressClass = false
 )
 
 func main() {
@@ -193,6 +194,9 @@ func main() {
 
 	rootCmd.Flags().StringVar(&leaderElectionConfig.ResourceName, "leader-elect-resource-name", leaderElectionConfig.ResourceName,
 		`Name of leases.coordination.k8s.io resource that is used as a lock.`)
+
+	rootCmd.Flags().BoolVar(&requireIngressClass, "require-ingress-class", requireIngressClass,
+		`Ignore Ingress resource which does not specify .spec.ingressClassName.  Historically, nghttpx ingress controller processes Ingress resource which does not have .spec.ingressClassName specified.  It also interprets the default IngressClass in its own way.  If Ingress resource does not have .spec.ingressClassName specified, but the default IngressClass is not nghttpx ingress controller, it does not processes the resource.  If this flag is turned on, nghttpx follows the intended behavior around missing Ingress.spec.ingressClassName, that is ignore those resources that do not have .spec.ingressClassName.`)
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
@@ -326,6 +330,7 @@ func run(cmd *cobra.Command, args []string) {
 		QUICKeyingMaterialsSecret: &types.NamespacedName{Name: quicKeyingMaterialsSecret, Namespace: thisPod.Namespace},
 		ReconcileTimeout:          reconcileTimeout,
 		LeaderElectionConfig:      leaderElectionConfig,
+		RequireIngressClass:       requireIngressClass,
 		Pod:                       thisPod,
 		EventRecorder:             eventRecorder,
 	}

@@ -74,6 +74,7 @@ type fixture struct {
 	enableEndpointSlice bool
 	http3               bool
 	publishService      *types.NamespacedName
+	requireIngressClass bool
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -150,6 +151,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		ReloadBurst:            1,
 		HTTP3:                  f.http3,
 		PublishService:         f.publishService,
+		RequireIngressClass:    f.requireIngressClass,
 		Pod:                    pod,
 		EventRecorder:          &events.FakeRecorder{},
 	}
@@ -1120,10 +1122,11 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 // TestValidateIngressClass verifies validateIngressClass.
 func TestValidateIngressClass(t *testing.T) {
 	tests := []struct {
-		desc     string
-		ing      *networkingv1.Ingress
-		ingClass *networkingv1.IngressClass
-		want     bool
+		desc            string
+		ing             *networkingv1.Ingress
+		ingClass        *networkingv1.IngressClass
+		requireIngClass bool
+		want            bool
 	}{
 		{
 			desc: "no IngressClass",
@@ -1190,11 +1193,17 @@ func TestValidateIngressClass(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc:            "Ingress without IngressClass must be ignored",
+			ing:             newIngressBuilder("default", "foo").Complete(),
+			requireIngClass: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
+			f.requireIngressClass = tt.requireIngClass
 
 			f.ingStore = append(f.ingStore, tt.ing)
 			if tt.ingClass != nil {
