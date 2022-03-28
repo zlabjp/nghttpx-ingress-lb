@@ -95,7 +95,6 @@ type LoadBalancerController struct {
 	secretInformer            cache.SharedIndexInformer
 	cmInformer                cache.SharedIndexInformer
 	podInformer               cache.SharedIndexInformer
-	nodeInformer              cache.SharedIndexInformer
 	ingLister                 listersnetworkingv1.IngressLister
 	ingClassLister            listersnetworkingv1.IngressClassLister
 	svcLister                 listerscorev1.ServiceLister
@@ -1598,7 +1597,6 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	go lbc.secretInformer.Run(ctrlCtx.Done())
 	go lbc.cmInformer.Run(ctrlCtx.Done())
 	go lbc.podInformer.Run(ctrlCtx.Done())
-	go lbc.nodeInformer.Run(ctrlCtx.Done())
 	go lbc.ingClassInformer.Run(ctrlCtx.Done())
 
 	hasSynced := []cache.InformerSynced{
@@ -1607,7 +1605,6 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		lbc.secretInformer.HasSynced,
 		lbc.cmInformer.HasSynced,
 		lbc.podInformer.HasSynced,
-		lbc.nodeInformer.HasSynced,
 		lbc.ingClassInformer.HasSynced,
 	}
 
