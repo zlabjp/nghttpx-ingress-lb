@@ -97,7 +97,8 @@ var (
 		RetryPeriod:   metav1.Duration{Duration: 2 * time.Second},
 		ResourceName:  "nghttpx-ingress-lb",
 	}
-	requireIngressClass = false
+	requireIngressClass  = false
+	nghttpxHealthTimeout = 30 * time.Second
 )
 
 func main() {
@@ -197,6 +198,9 @@ func main() {
 
 	rootCmd.Flags().BoolVar(&requireIngressClass, "require-ingress-class", requireIngressClass,
 		`Ignore Ingress resource which does not specify .spec.ingressClassName.  Historically, nghttpx ingress controller processes Ingress resource which does not have .spec.ingressClassName specified.  It also interprets the default IngressClass in its own way.  If Ingress resource does not have .spec.ingressClassName specified, but the default IngressClass is not nghttpx ingress controller, it does not processes the resource.  If this flag is turned on, nghttpx follows the intended behavior around missing Ingress.spec.ingressClassName, that is ignore those resources that do not have .spec.ingressClassName.`)
+
+	rootCmd.Flags().DurationVar(&nghttpxHealthTimeout, "nghttpx-health-timeout", nghttpxHealthTimeout,
+		`Timeout for a request to nghttpx health monitor endpoint.`)
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
@@ -381,7 +385,15 @@ func (hc healthzChecker) Name() string {
 
 // Check returns if the nghttpx healthz endpoint is returning ok (status code 200)
 func (hc healthzChecker) Check(_ *http.Request) error {
-	res, err := http.Get(hc.targetURI)
+	ctx, cancel := context.WithTimeout(context.Background(), nghttpxHealthTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, hc.targetURI, nil)
+	if err != nil {
+		return err
+	}
+
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
