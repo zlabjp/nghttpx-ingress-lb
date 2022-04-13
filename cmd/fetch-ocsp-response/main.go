@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -9,9 +10,14 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ocsp"
+)
+
+var (
+	timeout = time.Minute
 )
 
 func main() {
@@ -21,6 +27,8 @@ func main() {
 		Args:                  cobra.ExactArgs(1),
 		Run:                   run,
 	}
+
+	rootCmd.Flags().DurationVar(&timeout, "timeout", timeout, "HTTP request timeout")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(255)
@@ -84,12 +92,22 @@ func run(cmd *cobra.Command, args []string) {
 
 // getOCSPResponse retrieves OCSP response from OCSP responder.  It returns the DER encoded response.
 func getOCSPResponse(cert, issuer *x509.Certificate) ([]byte, error) {
-	req, err := ocsp.CreateRequest(cert, issuer, nil)
+	ocspReq, err := ocsp.CreateRequest(cert, issuer, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := http.Post(cert.OCSPServer[0], "application/ocsp-request", bytes.NewBuffer(req))
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cert.OCSPServer[0], bytes.NewBuffer(ocspReq))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/ocsp-request")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, newTemporaryError(err.Error())
 	}
