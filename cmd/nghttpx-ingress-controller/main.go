@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/server/healthz"
@@ -294,7 +295,7 @@ func run(cmd *cobra.Command, args []string) {
 		klog.Exit("POD_NAMESPACE environment variable cannot be empty.")
 	}
 
-	thisPod, err := clientset.CoreV1().Pods(podInfo.Namespace).Get(context.Background(), podInfo.Name, metav1.GetOptions{})
+	thisPod, err := getThisPod(clientset, podInfo)
 	if err != nil {
 		klog.Exit("Could not get Pod %v/%v: %v", podInfo.Namespace, podInfo.Name, err)
 	}
@@ -363,6 +364,14 @@ func run(cmd *cobra.Command, args []string) {
 	lbc.Run(ctx)
 
 	eventBroadcaster.Shutdown()
+}
+
+// getThisPod returns a Pod denoted by podInfo.
+func getThisPod(clientset clientset.Interface, podInfo types.NamespacedName) (*corev1.Pod, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	return clientset.CoreV1().Pods(podInfo.Namespace).Get(ctx, podInfo.Name, metav1.GetOptions{})
 }
 
 // healthzChecker implements healthz.HealthzChecker interface.
