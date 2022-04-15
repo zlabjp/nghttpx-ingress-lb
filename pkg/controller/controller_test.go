@@ -163,7 +163,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		}
 	}
 
-	f.lbc = NewLoadBalancerController(f.clientset, newFakeManager(), config)
+	f.lbc = NewLoadBalancerController(f.clientset, newFakeLoadBalancer(), config)
 	f.lc = NewLeaderController(f.lbc)
 }
 
@@ -279,30 +279,30 @@ func (f *fixture) expectUpdateIngAction(ing *networkingv1.Ingress) {
 	f.actions = append(f.actions, core.NewUpdateAction(schema.GroupVersionResource{Resource: "ingresses"}, ing.Namespace, ing))
 }
 
-// newFakeManager implements nghttpx.Interface.
-type fakeManager struct {
+// fakeLoadBalancer implements nghttpx.ServerReloader.
+type fakeLoadBalancer struct {
 	checkAndReloadHandler func(ingConfig *nghttpx.IngressConfig) (bool, error)
 
 	ingConfig *nghttpx.IngressConfig
 }
 
-// newFakeManager creates new fakeManager.
-func newFakeManager() *fakeManager {
-	fm := &fakeManager{}
-	fm.checkAndReloadHandler = fm.defaultCheckAndReload
-	return fm
+// newFakeLoadBalancer creates new fakeLoadBalancer.
+func newFakeLoadBalancer() *fakeLoadBalancer {
+	flb := &fakeLoadBalancer{}
+	flb.checkAndReloadHandler = flb.defaultCheckAndReload
+	return flb
 }
 
-func (fm *fakeManager) Start(ctx context.Context, path, confPath string) error {
+func (flb *fakeLoadBalancer) Start(ctx context.Context, path, confPath string) error {
 	return nil
 }
 
-func (fm *fakeManager) CheckAndReload(ctx context.Context, ingConfig *nghttpx.IngressConfig) (bool, error) {
-	return fm.checkAndReloadHandler(ingConfig)
+func (flb *fakeLoadBalancer) CheckAndReload(ctx context.Context, ingConfig *nghttpx.IngressConfig) (bool, error) {
+	return flb.checkAndReloadHandler(ingConfig)
 }
 
-func (fm *fakeManager) defaultCheckAndReload(ingConfig *nghttpx.IngressConfig) (bool, error) {
-	fm.ingConfig = ingConfig
+func (flb *fakeLoadBalancer) defaultCheckAndReload(ingConfig *nghttpx.IngressConfig) (bool, error) {
+	flb.ingConfig = ingConfig
 	return true, nil
 }
 
@@ -737,8 +737,8 @@ func TestSyncDefaultBackend(t *testing.T) {
 			f.prepare()
 			f.run()
 
-			fm := f.lbc.nghttpx.(*fakeManager)
-			ingConfig := fm.ingConfig
+			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+			ingConfig := flb.ingConfig
 
 			if got, want := ingConfig.TLS, false; got != want {
 				t.Errorf("ingConfig.TLS = %v, want %v", got, want)
@@ -761,15 +761,15 @@ func TestSyncDefaultBackend(t *testing.T) {
 				}
 			}
 
-			if got, want := fm.ingConfig.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
-				t.Errorf("fm.cfg.ExtraConfig = %v, want %v", got, want)
+			if got, want := flb.ingConfig.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
+				t.Errorf("flb.cfg.ExtraConfig = %v, want %v", got, want)
 			}
-			if got, want := fm.ingConfig.MrubyFile, (&nghttpx.ChecksumFile{
+			if got, want := flb.ingConfig.MrubyFile, (&nghttpx.ChecksumFile{
 				Path:     nghttpx.MrubyRbPath(defaultConfDir),
 				Content:  []byte(mrubyContent),
 				Checksum: nghttpx.Checksum([]byte(mrubyContent)),
 			}); !reflect.DeepEqual(got, want) {
-				t.Errorf("fm.ingConfig.MrubyFile = %q, want %q", got, want)
+				t.Errorf("flb.ingConfig.MrubyFile = %q, want %q", got, want)
 			}
 		})
 	}
@@ -816,8 +816,8 @@ func TestSyncDefaultSecret(t *testing.T) {
 	}
 	f.run()
 
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
 
 	if got, want := ingConfig.TLS, true; got != want {
 		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
@@ -873,8 +873,8 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	}
 	f.run()
 
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
 
 	if got, want := ingConfig.TLS, true; got != want {
 		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
@@ -945,8 +945,8 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	f.prepare()
 	f.run()
 
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
 
 	if ingConfig.DefaultTLSCred == nil {
 		t.Fatal("ingConfig.DefaultTLSCred should not be nil")
@@ -1060,8 +1060,8 @@ func TestSyncStringNamedPort(t *testing.T) {
 			f.prepare()
 			f.run()
 
-			fm := f.lbc.nghttpx.(*fakeManager)
-			ingConfig := fm.ingConfig
+			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+			ingConfig := flb.ingConfig
 
 			if got, want := len(ingConfig.Upstreams), 2; got != want {
 				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
@@ -1106,8 +1106,8 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 	f.prepare()
 	f.run()
 
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
 
 	if got, want := len(ingConfig.Upstreams), 2; got != want {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
@@ -1242,8 +1242,8 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	f.prepare()
 	f.run()
 
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
 
 	if got, want := len(ingConfig.Upstreams), 2; got != want {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
@@ -1303,8 +1303,8 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 			f.lbc.noDefaultBackendOverride = true
 			f.run()
 
-			fm := f.lbc.nghttpx.(*fakeManager)
-			ingConfig := fm.ingConfig
+			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+			ingConfig := flb.ingConfig
 
 			if got, want := len(ingConfig.Upstreams), 2; got != want {
 				t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
@@ -1584,8 +1584,8 @@ func TestSyncNamedServicePort(t *testing.T) {
 	f.prepare()
 	f.run()
 
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
 
 	if got, want := len(ingConfig.Upstreams), 2; got != want {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
@@ -1617,8 +1617,8 @@ func TestSyncInternalDefaultBackend(t *testing.T) {
 
 			f.run()
 
-			fm := f.lbc.nghttpx.(*fakeManager)
-			ingConfig := fm.ingConfig
+			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+			ingConfig := flb.ingConfig
 
 			if got, want := len(ingConfig.Upstreams), 1; got != want {
 				t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
@@ -1670,8 +1670,8 @@ func TestSyncDoNotForward(t *testing.T) {
 	f.prepare()
 	f.run()
 
-	fm := f.lbc.nghttpx.(*fakeManager)
-	ingConfig := fm.ingConfig
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
 
 	if got, want := len(ingConfig.Upstreams), 2; got != want {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
@@ -1738,8 +1738,8 @@ func TestSyncNormalizePath(t *testing.T) {
 			f.prepare()
 			f.run()
 
-			fm := f.lbc.nghttpx.(*fakeManager)
-			ingConfig := fm.ingConfig
+			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+			ingConfig := flb.ingConfig
 
 			if got, want := len(ingConfig.Upstreams), 2; got != want {
 				t.Fatalf("len(ingConfig.Upstream) = %v want %v", got, want)

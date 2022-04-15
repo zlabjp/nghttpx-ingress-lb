@@ -55,9 +55,9 @@ var (
 	defaultTmpl string
 )
 
-func (mgr *Manager) loadTemplate() {
-	mgr.template = template.Must(template.New("nghttpx.tmpl").Funcs(funcMap).Parse(nghttpxTmpl))
-	mgr.backendTemplate = template.Must(template.New("nghttpx-backend.tmpl").Funcs(funcMap).Parse(nghttpxBackendTmpl))
+func (lb *LoadBalancer) loadTemplate() {
+	lb.template = template.Must(template.New("nghttpx.tmpl").Funcs(funcMap).Parse(nghttpxTmpl))
+	lb.backendTemplate = template.Must(template.New("nghttpx-backend.tmpl").Funcs(funcMap).Parse(nghttpxBackendTmpl))
 }
 
 const (
@@ -70,15 +70,15 @@ const (
 )
 
 // generateCfg generates nghttpx's main and backend configurations.
-func (mgr *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error) {
+func (lb *LoadBalancer) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error) {
 	mainConfigBuffer := new(bytes.Buffer)
-	if err := mgr.template.Execute(mainConfigBuffer, ingConfig); err != nil {
+	if err := lb.template.Execute(mainConfigBuffer, ingConfig); err != nil {
 		klog.Infof("nghttpx error while executing main configuration template: %v", err)
 		return nil, nil, err
 	}
 
 	backendConfigBuffer := new(bytes.Buffer)
-	if err := mgr.backendTemplate.Execute(backendConfigBuffer, ingConfig); err != nil {
+	if err := lb.backendTemplate.Execute(backendConfigBuffer, ingConfig); err != nil {
 		klog.Infof("nghttpx error while executing backend configuration template: %v", err)
 		return nil, nil, err
 	}
@@ -86,7 +86,7 @@ func (mgr *Manager) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error
 	return mainConfigBuffer.Bytes(), backendConfigBuffer.Bytes(), nil
 }
 
-func (mgr *Manager) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backendConfig []byte) (int, error) {
+func (lb *LoadBalancer) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backendConfig []byte) (int, error) {
 	configPath := ConfigPath(ingConfig.ConfDir)
 	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
 
@@ -131,7 +131,7 @@ func (mgr *Manager) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backe
 }
 
 // writeDefaultNghttpxConfig writes default configuration file for nghttpx.
-func (mgr *Manager) writeDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nghttpxAPIPort int32) error {
+func (lb *LoadBalancer) writeDefaultNghttpxConfig(nghttpxConfDir string, nghttpxHealthPort, nghttpxAPIPort int32) error {
 	if err := MkdirAll(nghttpxConfDir); err != nil {
 		return err
 	}

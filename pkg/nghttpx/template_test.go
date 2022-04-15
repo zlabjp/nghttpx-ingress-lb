@@ -16,8 +16,8 @@ func hexMustDecodeString(s string) []byte {
 	return b
 }
 
-// TestManagerGenerateCfg verifies Manager.generateCfg.
-func TestManagerGenerateCfg(t *testing.T) {
+// TestLoadBalancerGenerateCfg verifies LoadBalancer.generateCfg.
+func TestLoadBalancerGenerateCfg(t *testing.T) {
 	tests := []struct {
 		desc              string
 		ingConfig         *IngressConfig
@@ -632,12 +632,12 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=cookie;affinity-cookie-nam
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			mgr := &Manager{}
-			mgr.loadTemplate()
+			lb := &LoadBalancer{}
+			lb.loadTemplate()
 
-			mainConfig, backendConfig, err := mgr.generateCfg(tt.ingConfig)
+			mainConfig, backendConfig, err := lb.generateCfg(tt.ingConfig)
 			if err != nil {
-				t.Fatalf("mgr.generateCfg: %v", err)
+				t.Fatalf("lb.generateCfg: %v", err)
 			}
 
 			if got, want := string(mainConfig), tt.wantMainConfig; got != want {

@@ -340,7 +340,7 @@ func run(cmd *cobra.Command, args []string) {
 		EventRecorder:             eventRecorder,
 	}
 
-	mgrConfig := nghttpx.ManagerConfig{
+	lbConfig := nghttpx.LoadBalancerConfig{
 		NghttpxHealthPort: nghttpxHealthPort,
 		NghttpxAPIPort:    nghttpxAPIPort,
 		NghttpxConfDir:    nghttpxConfDir,
@@ -348,12 +348,12 @@ func run(cmd *cobra.Command, args []string) {
 		EventRecorder:     eventRecorder,
 	}
 
-	mgr, err := nghttpx.NewManager(mgrConfig)
+	lb, err := nghttpx.NewLoadBalancer(lbConfig)
 	if err != nil {
 		klog.Exit(err)
 	}
 
-	lbc := controller.NewLoadBalancerController(clientset, mgr, controllerConfig)
+	lbc := controller.NewLoadBalancerController(clientset, lb, controllerConfig)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

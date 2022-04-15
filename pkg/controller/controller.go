@@ -103,7 +103,7 @@ type LoadBalancerController struct {
 	secretLister              listerscorev1.SecretLister
 	cmLister                  listerscorev1.ConfigMapLister
 	podLister                 listerscorev1.PodLister
-	nghttpx                   nghttpx.Interface
+	nghttpx                   nghttpx.ServerReloader
 	pod                       *corev1.Pod
 	defaultSvc                *types.NamespacedName
 	nghttpxConfigMap          *types.NamespacedName
@@ -202,11 +202,11 @@ type Config struct {
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
-func NewLoadBalancerController(clientset clientset.Interface, manager nghttpx.Interface, config Config) *LoadBalancerController {
+func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.ServerReloader, config Config) *LoadBalancerController {
 	lbc := LoadBalancerController{
 		clientset:                 clientset,
 		pod:                       config.Pod,
-		nghttpx:                   manager,
+		nghttpx:                   nghttpx,
 		nghttpxConfigMap:          config.NghttpxConfigMap,
 		nghttpxHealthPort:         config.NghttpxHealthPort,
 		nghttpxAPIPort:            config.NghttpxAPIPort,
