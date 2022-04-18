@@ -44,12 +44,12 @@ import (
 )
 
 // Start starts a nghttpx process using nghttpx executable at path, and wait.
-func (mgr *Manager) Start(ctx context.Context, path, confPath string) error {
+func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error {
 	klog.Infof("Starting nghttpx process: %v --conf %v", path, confPath)
-	mgr.cmd = exec.Command(path, "--conf", confPath)
-	mgr.cmd.Stdout = os.Stdout
-	mgr.cmd.Stderr = os.Stderr
-	if err := mgr.cmd.Start(); err != nil {
+	lb.cmd = exec.Command(path, "--conf", confPath)
+	lb.cmd.Stdout = os.Stdout
+	lb.cmd.Stderr = os.Stderr
+	if err := lb.cmd.Start(); err != nil {
 		klog.Errorf("nghttpx did not start successfully: %v", err)
 		return err
 	}
@@ -57,7 +57,7 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) error {
 	waitCtx, cancel := context.WithCancel(context.Background())
 
 	go func() {
-		if err := mgr.cmd.Wait(); err != nil {
+		if err := lb.cmd.Wait(); err != nil {
 			klog.Errorf("nghttpx did not finish successfully: %v", err)
 		}
 		cancel()
@@ -66,9 +66,9 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) error {
 	select {
 	case <-waitCtx.Done():
 	case <-ctx.Done():
-		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", mgr.cmd.Process.Pid)
-		if err := mgr.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
-			klog.Errorf("Could not send signal to nghttpx process (PID %v): %v", mgr.cmd.Process.Pid, err)
+		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", lb.cmd.Process.Pid)
+		if err := lb.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
+			klog.Errorf("Could not send signal to nghttpx process (PID %v): %v", lb.cmd.Process.Pid, err)
 			cancel()
 		}
 		<-waitCtx.Done()
@@ -83,13 +83,13 @@ func (mgr *Manager) Start(ctx context.Context, path, confPath string) error {
 //
 // The current running nghttpx master process executes new nghttpx with new configuration.  If its invocation succeeds, current nghttpx is
 // going to shutdown gracefully.  The invocation of new process may fail due to invalid configurations.
-func (mgr *Manager) CheckAndReload(ctx context.Context, ingressCfg *IngressConfig) (bool, error) {
-	mainConfig, backendConfig, err := mgr.generateCfg(ingressCfg)
+func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressConfig) (bool, error) {
+	mainConfig, backendConfig, err := lb.generateCfg(ingressCfg)
 	if err != nil {
 		return false, err
 	}
 
-	changed, err := mgr.checkAndWriteCfg(ingressCfg, mainConfig, backendConfig)
+	changed, err := lb.checkAndWriteCfg(ingressCfg, mainConfig, backendConfig)
 	if err != nil {
 		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %w", err)
 	}
@@ -108,7 +108,7 @@ func (mgr *Manager) CheckAndReload(ctx context.Context, ingressCfg *IngressConfi
 
 	switch changed {
 	case mainConfigChanged:
-		oldConfRev, err := mgr.getNghttpxConfigRevision(ctx)
+		oldConfRev, err := lb.getNghttpxConfigRevision(ctx)
 		if err != nil {
 			return false, err
 		}
@@ -126,15 +126,15 @@ func (mgr *Manager) CheckAndReload(ctx context.Context, ingressCfg *IngressConfi
 		}
 
 		klog.Info("change in configuration detected. Reloading...")
-		if err := mgr.cmd.Process.Signal(syscall.SIGHUP); err != nil {
-			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %w", mgr.cmd.Process.Pid, err)
+		if err := lb.cmd.Process.Signal(syscall.SIGHUP); err != nil {
+			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %w", lb.cmd.Process.Pid, err)
 		}
 
-		if err := mgr.waitUntilConfigRevisionChanges(ctx, oldConfRev); err != nil {
+		if err := lb.waitUntilConfigRevisionChanges(ctx, oldConfRev); err != nil {
 			return false, err
 		}
 
-		mgr.eventRecorder.Eventf(mgr.pod, nil, corev1.EventTypeNormal, "Reload", "Reload", "nghttpx reloaded its configuration")
+		lb.eventRecorder.Eventf(lb.pod, nil, corev1.EventTypeNormal, "Reload", "Reload", "nghttpx reloaded its configuration")
 
 		klog.Info("nghttpx has finished reloading new configuration")
 
@@ -146,11 +146,11 @@ func (mgr *Manager) CheckAndReload(ctx context.Context, ingressCfg *IngressConfi
 			return false, err
 		}
 
-		if err := mgr.issueBackendReplaceRequest(ctx, ingressCfg); err != nil {
+		if err := lb.issueBackendReplaceRequest(ctx, ingressCfg); err != nil {
 			return false, fmt.Errorf("failed to issue backend replace request: %w", err)
 		}
 
-		mgr.eventRecorder.Eventf(mgr.pod, nil, corev1.EventTypeNormal, "ReplaceBackend", "ReplaceBackend", "nghttpx replaced its backend servers")
+		lb.eventRecorder.Eventf(lb.pod, nil, corev1.EventTypeNormal, "ReplaceBackend", "ReplaceBackend", "nghttpx replaced its backend servers")
 
 		if err := deleteStaleMrubyAssets(ingressCfg); err != nil {
 			klog.Errorf("Could not delete stale assets: %v", err)
@@ -234,8 +234,8 @@ func deleteAssetFiles(dir string, keep map[string]bool) error {
 	return nil
 }
 
-func (mgr *Manager) issueBackendReplaceRequest(ctx context.Context, ingConfig *IngressConfig) error {
-	klog.Infof("Issuing API request %v", mgr.backendconfigURI)
+func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfig *IngressConfig) error {
+	klog.Infof("Issuing API request %v", lb.backendconfigURI)
 
 	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
 
@@ -249,14 +249,14 @@ func (mgr *Manager) issueBackendReplaceRequest(ctx context.Context, ingConfig *I
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, mgr.backendconfigURI, in)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, lb.backendconfigURI, in)
 	if err != nil {
 		return fmt.Errorf("could not create API request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "text/plain")
 
-	resp, err := mgr.httpClient.Do(req)
+	resp, err := lb.httpClient.Do(req)
 
 	if err != nil {
 		return fmt.Errorf("could not issue API request: %w", err)
@@ -290,18 +290,18 @@ type apiResult struct {
 }
 
 // getNghttpxConfigRevision returns the current nghttpx configRevision through configrevision API call.
-func (mgr *Manager) getNghttpxConfigRevision(ctx context.Context) (int64, error) {
-	klog.V(4).Infof("Issuing API request %v", mgr.configrevisionURI)
+func (lb *LoadBalancer) getNghttpxConfigRevision(ctx context.Context) (int64, error) {
+	klog.V(4).Infof("Issuing API request %v", lb.configrevisionURI)
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mgr.configrevisionURI, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, lb.configrevisionURI, nil)
 	if err != nil {
 		return 0, fmt.Errorf("could not create API request: %w", err)
 	}
 
-	resp, err := mgr.httpClient.Do(req)
+	resp, err := lb.httpClient.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("could not get nghttpx configRevision: %w", err)
 	}
@@ -335,11 +335,11 @@ func (mgr *Manager) getNghttpxConfigRevision(ctx context.Context) (int64, error)
 }
 
 // waitUntilConfigRevisionChanges waits for the current nghttpx configuration to change from old value, oldConfRev.
-func (mgr *Manager) waitUntilConfigRevisionChanges(ctx context.Context, oldConfRev int64) error {
+func (lb *LoadBalancer) waitUntilConfigRevisionChanges(ctx context.Context, oldConfRev int64) error {
 	klog.Infof("Waiting for nghttpx to finish reloading configuration")
 
 	if err := wait.Poll(time.Second, 30*time.Second, func() (bool, error) {
-		newConfRev, err := mgr.getNghttpxConfigRevision(ctx)
+		newConfRev, err := lb.getNghttpxConfigRevision(ctx)
 		if err != nil {
 			klog.Error(err)
 			return false, nil

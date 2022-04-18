@@ -34,7 +34,7 @@ import (
 	"k8s.io/client-go/tools/events"
 )
 
-type ManagerConfig struct {
+type LoadBalancerConfig struct {
 	NghttpxHealthPort int32
 	NghttpxAPIPort    int32
 	NghttpxConfDir    string
@@ -42,8 +42,8 @@ type ManagerConfig struct {
 	EventRecorder     events.EventRecorder
 }
 
-// Manager ...
-type Manager struct {
+// LoadBalancer starts nghttpx and reloads its configuration on demand.  It implements ServerReloader.
+type LoadBalancer struct {
 	// httpClient is used to issue backend API request to nghttpx
 	httpClient    *http.Client
 	pod           *corev1.Pod
@@ -65,13 +65,13 @@ type Manager struct {
 	cmd *exec.Cmd
 }
 
-// NewManager ...
-func NewManager(config ManagerConfig) (*Manager, error) {
+// NewLoadBalancer creates new LoadBalancer.
+func NewLoadBalancer(config LoadBalancerConfig) (*LoadBalancer, error) {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	// Disable keep alive connection, so that API request does not interfere graceful shutdown of nghttpx.
 	tr.DisableKeepAlives = true
 
-	mgr := &Manager{
+	lb := &LoadBalancer{
 		httpClient: &http.Client{
 			Transport: tr,
 		},
@@ -81,11 +81,11 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", config.NghttpxAPIPort),
 	}
 
-	mgr.loadTemplate()
+	lb.loadTemplate()
 
-	if err := mgr.writeDefaultNghttpxConfig(config.NghttpxConfDir, config.NghttpxHealthPort, config.NghttpxAPIPort); err != nil {
+	if err := lb.writeDefaultNghttpxConfig(config.NghttpxConfDir, config.NghttpxHealthPort, config.NghttpxAPIPort); err != nil {
 		return nil, err
 	}
 
-	return mgr, nil
+	return lb, nil
 }

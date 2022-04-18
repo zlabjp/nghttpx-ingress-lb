@@ -33,8 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
-// Interface is the API to update underlying load balancer.
-type Interface interface {
+// ServerReloader is the API to update underlying load balancer.
+type ServerReloader interface {
 	// Start starts a nghttpx process using executable at path with configuration file at confPath, and waits for the process to finish.
 	// If ctx is canceled, kill nghttpx process, and return.
 	Start(ctx context.Context, path, confPath string) error
