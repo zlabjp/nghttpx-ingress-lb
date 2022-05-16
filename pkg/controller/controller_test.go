@@ -306,12 +306,8 @@ func (flb *fakeLoadBalancer) defaultCheckAndReload(ingConfig *nghttpx.IngressCon
 	return true, nil
 }
 
-func stringPtr(s string) *string {
-	return &s
-}
-
-func int32Ptr(n int32) *int32 {
-	return &n
+func toPtr[T any](v T) *T {
+	return &v
 }
 
 // newEmptyConfigMap returns empty ConfigMap.
@@ -393,10 +389,10 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: int32Ptr(8081),
+					Port: toPtr(int32(8081)),
 				},
 				{
-					Port: int32Ptr(8080),
+					Port: toPtr(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -423,10 +419,10 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: int32Ptr(8081),
+					Port: toPtr(int32(8081)),
 				},
 				{
-					Port: int32Ptr(8080),
+					Port: toPtr(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -451,10 +447,10 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 			AddressType: "FQDN",
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: int32Ptr(8081),
+					Port: toPtr(int32(8081)),
 				},
 				{
-					Port: int32Ptr(8080),
+					Port: toPtr(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -548,11 +544,11 @@ func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev
 		Ports: []discoveryv1.EndpointPort{
 			{
 				Protocol: &proto,
-				Port:     int32Ptr(81),
+				Port:     toPtr(int32(81)),
 			},
 			{
 				Protocol: &proto,
-				Port:     int32Ptr(80),
+				Port:     toPtr(int32(80)),
 			},
 		},
 	}
@@ -665,7 +661,7 @@ func (b *ingressBuilder) WithTLS(tlsSecret string) *ingressBuilder {
 }
 
 func (b *ingressBuilder) WithIngressClass(ingressClass string) *ingressBuilder {
-	b.Spec.IngressClassName = stringPtr(ingressClass)
+	b.Spec.IngressClassName = toPtr(ingressClass)
 
 	return b
 }
