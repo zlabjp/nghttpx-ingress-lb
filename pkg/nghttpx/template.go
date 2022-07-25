@@ -60,9 +60,12 @@ func (lb *LoadBalancer) loadTemplate() {
 	lb.backendTemplate = template.Must(template.New("nghttpx-backend.tmpl").Funcs(funcMap).Parse(nghttpxBackendTmpl))
 }
 
+// configStatus is the status of configuration files.
+type configStatus int
+
 const (
 	// configuration has not changed
-	configNotChanged int = iota
+	configNotChanged configStatus = iota
 	// main configuration has changed
 	mainConfigChanged
 	// only backend configuration has changed
@@ -86,7 +89,7 @@ func (lb *LoadBalancer) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, e
 	return mainConfigBuffer.Bytes(), backendConfigBuffer.Bytes(), nil
 }
 
-func (lb *LoadBalancer) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backendConfig []byte) (int, error) {
+func (lb *LoadBalancer) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backendConfig []byte) (configStatus, error) {
 	configPath := ConfigPath(ingConfig.ConfDir)
 	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
 
