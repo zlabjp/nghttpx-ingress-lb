@@ -1,0 +1,69 @@
+From 39d9efe4bd1e2249f31e5cad5c4734fd0deb2037 Mon Sep 17 00:00:00 2001
+From: Tatsuhiro Tsujikawa <tatsuhiro.t@gmail.com>
+Date: Thu, 4 Aug 2022 16:42:24 +0900
+Subject: [PATCH] nghttpx: Randomize backend address backend robin order per
+ thread (2nd Ed.)
+
+This is the 2nd attempt to randomize backend address round robin
+order.
+
+The initial attempt of doing this was
+fdcdb21c38ef7acf23853d47d1dc5bda69d5398f, which has been reverted via
+470f06e5f6deab5284ffe93f15cc4ce8b16ee2ec because it broke the session
+affinity.
+
+This time, we shuffles seq fields and avoid reordering addrs vector.
+---
+ src/shrpx_worker.cc |  4 ++++
+ src/util.h          | 20 ++++++++++++++++++++
+ 2 files changed, 24 insertions(+)
+
+diff --git a/src/shrpx_worker.cc b/src/shrpx_worker.cc
+index b04d19c8..2226bf43 100644
+--- a/src/shrpx_worker.cc
++++ b/src/shrpx_worker.cc
+@@ -360,6 +360,10 @@ void Worker::replace_downstream_config(
+         addr.seq = seq++;
+       }
+ 
++      util::shuffle(std::begin(shared_addr->addrs),
++                    std::end(shared_addr->addrs), randgen_,
++                    [](auto i, auto j) { std::swap((*i).seq, (*j).seq); });
++
+       if (shared_addr->affinity.type == SessionAffinity::NONE) {
+         std::map<StringRef, WeightGroup *> wgs;
+         size_t num_wgs = 0;
+diff --git a/src/util.h b/src/util.h
+index bc271f43..f17154ec 100644
+--- a/src/util.h
++++ b/src/util.h
+@@ -879,6 +879,26 @@ void random_bytes(OutputIt first, OutputIt last, Generator &gen) {
+   std::generate(first, last, [&dis, &gen]() { return dis(gen); });
+ }
+ 
++// Shuffles the range [|first|, |last|] by calling swap function |fun|
++// for each pair.  |fun| takes 2 RandomIt iterators.  If |fun| is
++// noop, no modification is made.
++template <typename RandomIt, typename Generator, typename SwapFun>
++void shuffle(RandomIt first, RandomIt last, Generator &&gen, SwapFun fun) {
++  auto len = std::distance(first, last);
++  if (len < 2) {
++    return;
++  }
++
++  for (unsigned int i = 0; i < static_cast<unsigned int>(len - 1); ++i) {
++    auto dis = std::uniform_int_distribution<unsigned int>(i, len - 1);
++    auto j = dis(gen);
++    if (i == j) {
++      continue;
++    }
++    fun(first + i, first + j);
++  }
++}
++
+ template <typename OutputIterator, typename CharT, size_t N>
+ OutputIterator copy_lit(OutputIterator it, CharT (&s)[N]) {
+   return std::copy_n(s, N - 1, it);
+-- 
+2.25.1
+
