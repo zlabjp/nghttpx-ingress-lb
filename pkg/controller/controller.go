@@ -252,7 +252,7 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 
 	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod)
 
-	if !config.EnableEndpointSlice {
+	{
 		f := allNSInformers.Core().V1().Endpoints()
 		lbc.epLister = f.Lister()
 		lbc.epInformer = f.Informer()
@@ -261,8 +261,9 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			UpdateFunc: lbc.updateEndpointsNotification,
 			DeleteFunc: lbc.deleteEndpointsNotification,
 		})
+	}
 
-	} else {
+	if config.EnableEndpointSlice {
 		epSliceInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
 			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
 				opts.LabelSelector =
@@ -1367,13 +1368,63 @@ func (lbc *LoadBalancerController) getEndpoints(svc *corev1.Service, svcPort *co
 		svc.Namespace, svc.Name, svcPort.Port, svcPort.TargetPort.String())
 
 	switch {
-	case lbc.epLister != nil:
-		return lbc.getEndpointsFromEndpoints(svc, svcPort, backendConfig)
+	case len(svc.Spec.Selector) == 0:
+		return lbc.getEndpointsWithoutServiceSelectors(svc, svcPort, backendConfig)
 	case lbc.epSliceLister != nil:
 		return lbc.getEndpointsFromEndpointSlice(svc, svcPort, backendConfig)
 	default:
-		panic("unreachable")
+		return lbc.getEndpointsFromEndpoints(svc, svcPort, backendConfig)
 	}
+}
+
+func (lbc *LoadBalancerController) getEndpointsWithoutServiceSelectors(svc *corev1.Service, svcPort *corev1.ServicePort, backendConfig *nghttpx.BackendConfig) ([]nghttpx.Backend, error) {
+	var targetPort int32
+
+	switch {
+	case svcPort.TargetPort.IntVal != 0:
+		targetPort = svcPort.TargetPort.IntVal
+	case svcPort.TargetPort.StrVal == "":
+		targetPort = svcPort.Port
+	default:
+		return nil, fmt.Errorf("Service %v/%v must have integer target port if specified: %v", svc.Namespace, svc.Name, svcPort.TargetPort)
+	}
+
+	ep, err := lbc.epLister.Endpoints(svc.Namespace).Get(svc.Name)
+	if err != nil {
+		klog.Errorf("unexpected error obtaining service endpoints: %v", err)
+		return nil, err
+	}
+
+	var backends []nghttpx.Backend
+
+	for i := range ep.Subsets {
+		ss := &ep.Subsets[i]
+		for i := range ss.Ports {
+			port := &ss.Ports[i]
+
+			if port.Protocol != "" && port.Protocol != corev1.ProtocolTCP {
+				continue
+			}
+
+			for i := range ss.Addresses {
+				epAddr := &ss.Addresses[i]
+
+				if targetPort != port.Port {
+					continue
+				}
+
+				ip := net.ParseIP(epAddr.IP)
+				if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+					continue
+				}
+
+				backends = append(backends, lbc.createBackend(svc, epAddr.IP, targetPort, backendConfig))
+			}
+		}
+	}
+
+	klog.V(3).Infof("endpoints found: %+v", backends)
+	return backends, nil
 }
 
 func (lbc *LoadBalancerController) getEndpointsFromEndpoints(svc *corev1.Service, svcPort *corev1.ServicePort, backendConfig *nghttpx.BackendConfig) ([]nghttpx.Backend, error) {
@@ -1602,6 +1653,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	go lbc.cmInformer.Run(ctrlCtx.Done())
 	go lbc.podInformer.Run(ctrlCtx.Done())
 	go lbc.ingClassInformer.Run(ctrlCtx.Done())
+	go lbc.epInformer.Run(ctrlCtx.Done())
 
 	hasSynced := []cache.InformerSynced{
 		lbc.ingInformer.HasSynced,
@@ -1610,12 +1662,9 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		lbc.cmInformer.HasSynced,
 		lbc.podInformer.HasSynced,
 		lbc.ingClassInformer.HasSynced,
+		lbc.epInformer.HasSynced,
 	}
 
-	if lbc.epInformer != nil {
-		go lbc.epInformer.Run(ctrlCtx.Done())
-		hasSynced = append(hasSynced, lbc.epInformer.HasSynced)
-	}
 	if lbc.epSliceInformer != nil {
 		go lbc.epSliceInformer.Run(ctrlCtx.Done())
 		hasSynced = append(hasSynced, lbc.epSliceInformer.HasSynced)
