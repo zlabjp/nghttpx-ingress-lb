@@ -313,6 +313,11 @@ If `--internal-default-backend` is used, the controller configures
 nghttpx to act as a default backend.  In this case, the default
 backend service is not necessary.
 
+## Services without selectors
+
+nghttpx supports [Services without
+selectors](https://kubernetes.io/docs/concepts/services-networking/service/#services-without-selectors).
+
 ## Logs
 
 The access, and error log of nghttpx are written to stdout, and stderr

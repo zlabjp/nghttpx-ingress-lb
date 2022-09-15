@@ -210,11 +210,10 @@ func (f *fixture) setupStore() {
 				panic(err)
 			}
 		}
-	} else {
-		for _, ep := range f.epStore {
-			if err := f.lbc.epInformer.GetIndexer().Add(ep); err != nil {
-				panic(err)
-			}
+	}
+	for _, ep := range f.epStore {
+		if err := f.lbc.epInformer.GetIndexer().Add(ep); err != nil {
+			panic(err)
 		}
 	}
 	for _, svc := range f.svcStore {
@@ -329,6 +328,9 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 			Namespace: defaultBackendNamespace,
 		},
 		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app.kubernetes.io/name": defaultBackendName,
+			},
 			Ports: []corev1.ServicePort{
 				{
 					Port:       8181,
@@ -476,6 +478,55 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 	return svc, eps, ess
 }
 
+// newDefaultBackendWithoutSelectors returns Service and Endpoints for default backend without Service selectors.
+func newDefaultBackendWithoutSelectors() (*corev1.Service, *corev1.Endpoints) {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      defaultBackendName,
+			Namespace: defaultBackendNamespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Port:       8181,
+					TargetPort: intstr.FromInt(8080),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+	eps := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      defaultBackendName,
+			Namespace: defaultBackendNamespace,
+		},
+		Subsets: []corev1.EndpointSubset{
+			{
+				Addresses: []corev1.EndpointAddress{
+					{
+						IP: "192.168.100.1",
+					},
+					{
+						IP: "192.168.100.2",
+					},
+				},
+				Ports: []corev1.EndpointPort{
+					{
+						Protocol: corev1.ProtocolTCP,
+						Port:     8081,
+					},
+					{
+						Protocol: corev1.ProtocolTCP,
+						Port:     8080,
+					},
+				},
+			},
+		},
+	}
+
+	return svc, eps
+}
+
 func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -565,6 +616,55 @@ func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev
 	}
 
 	return svc, eps, es
+}
+
+func newBackendWithoutSelectors(namespace, name string, addrs []string) (*corev1.Service, *corev1.Endpoints) {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Port:       8281,
+					TargetPort: intstr.FromInt(80),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+	eps := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Subsets: []corev1.EndpointSubset{
+			{
+				Ports: []corev1.EndpointPort{
+					{
+						Protocol: corev1.ProtocolTCP,
+						Port:     81,
+					},
+					{
+						Protocol: corev1.ProtocolTCP,
+						Port:     80,
+					},
+				},
+			},
+		},
+	}
+
+	endpointAddrs := make([]corev1.EndpointAddress, len(addrs))
+	for i, addr := range addrs {
+		endpointAddrs[i] = corev1.EndpointAddress{
+			IP: addr,
+		}
+	}
+
+	eps.Subsets[0].Addresses = endpointAddrs
+
+	return svc, eps
 }
 
 type ingressBuilder struct {
@@ -702,6 +802,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 	tests := []struct {
 		desc                string
 		enableEndpointSlice bool
+		withoutSelectors    bool
 	}{
 		{
 			desc: "With Endpoints",
@@ -709,6 +810,10 @@ func TestSyncDefaultBackend(t *testing.T) {
 		{
 			desc:                "With EndpointSlice",
 			enableEndpointSlice: true,
+		},
+		{
+			desc:             "Without selectors",
+			withoutSelectors: true,
 		},
 	}
 
@@ -721,7 +826,16 @@ func TestSyncDefaultBackend(t *testing.T) {
 			cm.Data[nghttpx.NghttpxExtraConfigKey] = "Test"
 			const mrubyContent = "mruby"
 			cm.Data[nghttpx.NghttpxMrubyFileContentKey] = mrubyContent
-			svc, eps, ess := newDefaultBackend()
+			var (
+				svc *corev1.Service
+				eps *corev1.Endpoints
+				ess []*discoveryv1.EndpointSlice
+			)
+			if tt.withoutSelectors {
+				svc, eps = newDefaultBackendWithoutSelectors()
+			} else {
+				svc, eps, ess = newDefaultBackend()
+			}
 
 			f.cmStore = append(f.cmStore, cm)
 			f.svcStore = append(f.svcStore, svc)
@@ -754,6 +868,9 @@ func TestSyncDefaultBackend(t *testing.T) {
 				us := backends[0]
 				if got, want := us.Address, "192.168.100.1"; got != want {
 					t.Errorf("0: us.Address = %v, want %v", got, want)
+				}
+				if got, want := us.Port, "8080"; got != want {
+					t.Errorf("0: us.Port = %v, want %v", got, want)
 				}
 			}
 
@@ -1089,6 +1206,39 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 		TargetPort: intstr.FromString(""),
 		Protocol:   corev1.ProtocolTCP,
 	}
+	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
+		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+		Complete()
+
+	f.svcStore = append(f.svcStore, svc, bs1)
+	f.epStore = append(f.epStore, eps, be1)
+	f.ingStore = append(f.ingStore, ing1)
+
+	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+
+	f.prepare()
+	f.run()
+
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
+
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	}
+
+	backend := ingConfig.Upstreams[0].Backends[0]
+	if got, want := backend.Port, "80"; got != want {
+		t.Errorf("backend.Port = %v, want %v", got, want)
+	}
+}
+
+// TestSyncWithoutSelectors verifies that the controller deals with Service without selectors.
+func TestSyncWithoutSelectors(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps, _ := newDefaultBackend()
+
+	bs1, be1 := newBackendWithoutSelectors(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
 	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		Complete()
