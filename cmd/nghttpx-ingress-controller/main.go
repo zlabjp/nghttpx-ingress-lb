@@ -408,7 +408,7 @@ func (hc healthzChecker) Check(_ *http.Request) error {
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != 200 {
+	if res.StatusCode != http.StatusOK {
 		return errors.New("nghttpx is unhealthy")
 	}
 

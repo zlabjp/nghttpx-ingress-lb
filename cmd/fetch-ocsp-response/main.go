@@ -171,10 +171,10 @@ func (err *temporaryError) Error() string {
 
 // exitCode return exist code for err.
 func exitCode(err error) int {
-	switch err.(type) {
-	case *temporaryError:
+	var tempErr *temporaryError
+	if errors.As(err, &tempErr) {
 		return 75
-	default:
-		return 255
 	}
+
+	return 255
 }
