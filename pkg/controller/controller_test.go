@@ -36,6 +36,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -717,8 +718,12 @@ func (b *ingressBuilder) WithDefaultRule(svc string, port networkingv1.ServiceBa
 }
 
 func (b *ingressBuilder) WithRule(path, svc string, port networkingv1.ServiceBackendPort) *ingressBuilder {
+	return b.WithRuleHost(fmt.Sprintf("%v.%v.test", b.Name, b.Namespace), path, svc, port)
+}
+
+func (b *ingressBuilder) WithRuleHost(host, path, svc string, port networkingv1.ServiceBackendPort) *ingressBuilder {
 	rule := networkingv1.IngressRule{
-		Host: fmt.Sprintf("%v.%v.test", b.Name, b.Namespace),
+		Host: host,
 		IngressRuleValue: networkingv1.IngressRuleValue{
 			HTTP: &networkingv1.HTTPIngressRuleValue{
 				Paths: []networkingv1.HTTPIngressPath{
@@ -794,6 +799,12 @@ func newTLSSecret(namespace, name string, tlsCrt, tlsKey []byte) *corev1.Secret 
 			corev1.TLSCertKey:       tlsCrt,
 			corev1.TLSPrivateKeyKey: tlsKey,
 		},
+	}
+}
+
+func newChecksumFile(path string) *nghttpx.ChecksumFile {
+	return &nghttpx.ChecksumFile{
+		Path: path,
 	}
 }
 
@@ -1081,7 +1092,10 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 		t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	upstream := ingConfig.Upstreams[0]
+	upstream := ingConfig.Upstreams[1]
+	if got, want := upstream.Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+		t.Errorf("upstream.Ingress = %v, want %v", got, want)
+	}
 	if got, want := upstream.RedirectIfNotTLS, true; got != want {
 		t.Errorf("upstream.RedirectIfNotTLS = %v, want %v", got, want)
 	}
@@ -1180,11 +1194,15 @@ func TestSyncStringNamedPort(t *testing.T) {
 				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 			}
 
-			if got, want := len(ingConfig.Upstreams[0].Backends), 2; got != want {
+			if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+				t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
+			}
+
+			if got, want := len(ingConfig.Upstreams[1].Backends), 2; got != want {
 				t.Errorf("len(ingConfig.Upstreams[0].Backends) = %v, want %v", got, want)
 			} else {
 				for i, port := range []string{"80", "81"} {
-					backend := ingConfig.Upstreams[0].Backends[i]
+					backend := ingConfig.Upstreams[1].Backends[i]
 					if got, want := backend.Port, port; got != want {
 						t.Errorf("backends[i].Port = %v, want %v", got, want)
 					}
@@ -1226,7 +1244,11 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	backend := ingConfig.Upstreams[0].Backends[0]
+	if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+		t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
+	}
+
+	backend := ingConfig.Upstreams[1].Backends[0]
 	if got, want := backend.Port, "80"; got != want {
 		t.Errorf("backend.Port = %v, want %v", got, want)
 	}
@@ -1259,7 +1281,11 @@ func TestSyncWithoutSelectors(t *testing.T) {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	backend := ingConfig.Upstreams[0].Backends[0]
+	if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+		t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
+	}
+
+	backend := ingConfig.Upstreams[1].Backends[0]
 	if got, want := backend.Port, "80"; got != want {
 		t.Errorf("backend.Port = %v, want %v", got, want)
 	}
@@ -1456,8 +1482,12 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 				t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 			}
 
-			if got, want := ingConfig.Upstreams[1].Name, f.lbc.defaultSvc.String(); got != want {
-				t.Errorf("ingConfig.Upstreams[1].Name = %v, want %v", got, want)
+			if got, want := ingConfig.Upstreams[0].Ingress, (types.NamespacedName{}); got != want {
+				t.Errorf("ingConfig.Upstreams[0].Ingress = %v, want %v", got, want)
+			}
+
+			if got, want := ingConfig.Upstreams[0].Name, f.lbc.defaultSvc.String(); got != want {
+				t.Errorf("ingConfig.Upstreams[0].Name = %v, want %v", got, want)
 			}
 		})
 	}
@@ -1737,7 +1767,11 @@ func TestSyncNamedServicePort(t *testing.T) {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	backend := ingConfig.Upstreams[0].Backends[0]
+	if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+		t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
+	}
+
+	backend := ingConfig.Upstreams[1].Backends[0]
 	if got, want := backend.Port, "80"; got != want {
 		t.Errorf("backend.Port = %v, want %v", got, want)
 	}
@@ -1823,7 +1857,11 @@ func TestSyncDoNotForward(t *testing.T) {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	upstream := ingConfig.Upstreams[0]
+	upstream := ingConfig.Upstreams[1]
+
+	if got, want := upstream.Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+		t.Errorf("upstream.Ingress = %v, want %v", got, want)
+	}
 
 	if got, want := upstream.DoNotForward, true; got != want {
 		t.Errorf("upstream.DoNotForward = %v, want %v", got, want)
@@ -1891,7 +1929,12 @@ func TestSyncNormalizePath(t *testing.T) {
 				t.Fatalf("len(ingConfig.Upstream) = %v want %v", got, want)
 			}
 
-			upstream := ingConfig.Upstreams[0]
+			upstream := ingConfig.Upstreams[1]
+
+			if got, want := upstream.Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+				t.Errorf("upstream.Ingress = %v, want %v", got, want)
+			}
+
 			if got, want := upstream.Path, tt.want; got != want {
 				t.Errorf("upstream.Path = %v, want %v", got, want)
 			}
@@ -2011,5 +2054,542 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestRemoveUpstreamsWithInconsistentBackendParams verifies removeUpstreamsWithInconsistentBackendParams.
+func TestRemoveUpstreamsWithInconsistentBackendParams(t *testing.T) {
+	tests := []struct {
+		desc      string
+		upstreams []*nghttpx.Upstream
+		want      []*nghttpx.Upstream
+	}{
+		{
+			desc: "Empty upstreams",
+		},
+		{
+			desc: "Nothing to remove",
+			upstreams: []*nghttpx.Upstream{
+				{
+					Name:     "alpha0",
+					Host:     "alpha",
+					Path:     "/",
+					Mruby:    newChecksumFile("mruby1"),
+					Affinity: nghttpx.AffinityNone,
+				},
+				{
+					Name:                     "alpha1",
+					Host:                     "alpha",
+					Path:                     "/",
+					Affinity:                 nghttpx.AffinityCookie,
+					AffinityCookieName:       "foo",
+					AffinityCookiePath:       "/foo",
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureAuto,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessLoose,
+				},
+				{
+					Name:        "alpha2",
+					Host:        "alpha",
+					Path:        "/",
+					Affinity:    nghttpx.AffinityNone,
+					ReadTimeout: &metav1.Duration{Duration: 30 * time.Second},
+				},
+				{
+					Name:         "alpha3",
+					Host:         "alpha",
+					Path:         "/",
+					Affinity:     nghttpx.AffinityNone,
+					WriteTimeout: &metav1.Duration{Duration: 30 * time.Second},
+				},
+			},
+			want: []*nghttpx.Upstream{
+				{
+					Name:     "alpha0",
+					Host:     "alpha",
+					Path:     "/",
+					Mruby:    newChecksumFile("mruby1"),
+					Affinity: nghttpx.AffinityNone,
+				},
+				{
+					Name:                     "alpha1",
+					Host:                     "alpha",
+					Path:                     "/",
+					Affinity:                 nghttpx.AffinityCookie,
+					AffinityCookieName:       "foo",
+					AffinityCookiePath:       "/foo",
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureAuto,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessLoose,
+				},
+				{
+					Name:        "alpha2",
+					Host:        "alpha",
+					Path:        "/",
+					Affinity:    nghttpx.AffinityNone,
+					ReadTimeout: &metav1.Duration{Duration: 30 * time.Second},
+				},
+				{
+					Name:         "alpha3",
+					Host:         "alpha",
+					Path:         "/",
+					Affinity:     nghttpx.AffinityNone,
+					WriteTimeout: &metav1.Duration{Duration: 30 * time.Second},
+				},
+			},
+		},
+		{
+			desc: "Remove upstreams with inconsistent mruby",
+			upstreams: []*nghttpx.Upstream{
+				{
+					Name:  "alpha0",
+					Host:  "alpha",
+					Path:  "/",
+					Mruby: newChecksumFile("mruby1"),
+				},
+				{
+					Name:  "alpha1",
+					Host:  "alpha",
+					Path:  "/",
+					Mruby: newChecksumFile("mruby1"),
+				},
+				{
+					Name:  "bravo0",
+					Host:  "bravo",
+					Path:  "/",
+					Mruby: newChecksumFile("mruby2"),
+				},
+				{
+					Name:  "bravo1",
+					Host:  "bravo",
+					Path:  "/",
+					Mruby: newChecksumFile("mruby3"),
+				},
+				{
+					Name: "charlie0",
+					Host: "charlie",
+					Path: "/",
+				},
+				{
+					Name:  "charlie1",
+					Host:  "charlie",
+					Path:  "/",
+					Mruby: newChecksumFile("mruby4"),
+				},
+			},
+			want: []*nghttpx.Upstream{
+				{
+					Name:  "alpha0",
+					Host:  "alpha",
+					Path:  "/",
+					Mruby: newChecksumFile("mruby1"),
+				},
+				{
+					Name:  "alpha1",
+					Host:  "alpha",
+					Path:  "/",
+					Mruby: newChecksumFile("mruby1"),
+				},
+				{
+					Name: "charlie0",
+					Host: "charlie",
+					Path: "/",
+				},
+				{
+					Name:  "charlie1",
+					Host:  "charlie",
+					Path:  "/",
+					Mruby: newChecksumFile("mruby4"),
+				},
+			},
+		},
+		{
+			desc: "Remove upstreams with inconsistent affinity",
+			upstreams: []*nghttpx.Upstream{
+				{
+					Name:               "alpha0",
+					Host:               "alpha",
+					Path:               "/",
+					Affinity:           nghttpx.AffinityCookie,
+					AffinityCookieName: "foo",
+				},
+				{
+					Name:               "alpha1",
+					Host:               "alpha",
+					Path:               "/",
+					Affinity:           nghttpx.AffinityCookie,
+					AffinityCookieName: "foo",
+				},
+				{
+					Name:               "alpha2",
+					Host:               "alpha",
+					Path:               "/",
+					Affinity:           nghttpx.AffinityCookie,
+					AffinityCookieName: "bar",
+				},
+				{
+					Name:               "bravo0",
+					Host:               "bravo",
+					Path:               "/",
+					Affinity:           nghttpx.AffinityCookie,
+					AffinityCookieName: "foo",
+				},
+				{
+					Name:               "bravo1",
+					Host:               "bravo",
+					Path:               "/",
+					Affinity:           nghttpx.AffinityCookie,
+					AffinityCookieName: "foo",
+					AffinityCookiePath: "/",
+				},
+				{
+					Name:                 "charlie0",
+					Host:                 "charlie",
+					Path:                 "/",
+					Affinity:             nghttpx.AffinityCookie,
+					AffinityCookieName:   "foo",
+					AffinityCookieSecure: nghttpx.AffinityCookieSecureAuto,
+				},
+				{
+					Name:                 "charlie1",
+					Host:                 "charlie",
+					Path:                 "/",
+					Affinity:             nghttpx.AffinityCookie,
+					AffinityCookieName:   "foo",
+					AffinityCookieSecure: nghttpx.AffinityCookieSecureYes,
+				},
+				{
+					Name:                     "delta0",
+					Host:                     "delta",
+					Path:                     "/",
+					Affinity:                 nghttpx.AffinityCookie,
+					AffinityCookieName:       "foo",
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessLoose,
+				},
+				{
+					Name:                     "delta1",
+					Host:                     "delta",
+					Path:                     "/",
+					Affinity:                 nghttpx.AffinityCookie,
+					AffinityCookieName:       "foo",
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessStrict,
+				},
+				{
+					Name:     "echo0",
+					Host:     "echo",
+					Path:     "/",
+					Affinity: nghttpx.AffinityNone,
+				},
+				{
+					Name:                     "echo1",
+					Host:                     "echo",
+					Path:                     "/",
+					Affinity:                 nghttpx.AffinityCookie,
+					AffinityCookieName:       "foo",
+					AffinityCookiePath:       "/foo",
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureYes,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessStrict,
+				},
+				{
+					Name:     "echo2",
+					Host:     "echo",
+					Path:     "/",
+					Affinity: nghttpx.AffinityNone,
+				},
+				{
+					Name:                     "echo3",
+					Host:                     "echo",
+					Path:                     "/",
+					Affinity:                 nghttpx.AffinityCookie,
+					AffinityCookieName:       "foo",
+					AffinityCookiePath:       "/foo",
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureYes,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessStrict,
+				},
+			},
+			want: []*nghttpx.Upstream{
+				{
+					Name:     "echo0",
+					Host:     "echo",
+					Path:     "/",
+					Affinity: nghttpx.AffinityNone,
+				},
+				{
+					Name:                     "echo1",
+					Host:                     "echo",
+					Path:                     "/",
+					Affinity:                 nghttpx.AffinityCookie,
+					AffinityCookieName:       "foo",
+					AffinityCookiePath:       "/foo",
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureYes,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessStrict,
+				},
+				{
+					Name:     "echo2",
+					Host:     "echo",
+					Path:     "/",
+					Affinity: nghttpx.AffinityNone,
+				},
+				{
+					Name:                     "echo3",
+					Host:                     "echo",
+					Path:                     "/",
+					Affinity:                 nghttpx.AffinityCookie,
+					AffinityCookieName:       "foo",
+					AffinityCookiePath:       "/foo",
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureYes,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessStrict,
+				},
+			},
+		},
+		{
+			desc: "Remove upstreams with inconsistent readTimeout",
+			upstreams: []*nghttpx.Upstream{
+				{
+					Name:        "alpha0",
+					Host:        "alpha",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Second},
+				},
+				{
+					Name:        "alpha1",
+					Host:        "alpha",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Minute},
+				},
+				{
+					Name:        "bravo0",
+					Host:        "bravo",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: 30 * time.Second},
+				},
+				{
+					Name:        "bravo1",
+					Host:        "bravo",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: 10 * time.Second},
+				},
+				{
+					Name:        "charlie0",
+					Host:        "charlie",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Second},
+				},
+				{
+					Name:        "charlie1",
+					Host:        "charlie",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Second},
+				},
+				{
+					Name: "charlie2",
+					Host: "charlie",
+					Path: "/",
+				},
+				{
+					Name:        "delta0",
+					Host:        "delta",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Second},
+				},
+				{
+					Name:        "delta1",
+					Host:        "delta",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: 30 * time.Second},
+				},
+			},
+			want: []*nghttpx.Upstream{
+				{
+					Name:        "charlie0",
+					Host:        "charlie",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Second},
+				},
+				{
+					Name:        "charlie1",
+					Host:        "charlie",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Second},
+				},
+				{
+					Name: "charlie2",
+					Host: "charlie",
+					Path: "/",
+				},
+			},
+		},
+		{
+			desc: "Remove upstreams with inconsistent writeTimeout",
+			upstreams: []*nghttpx.Upstream{
+				{
+					Name: "alpha0",
+					Host: "alpha",
+					Path: "/",
+				},
+				{
+					Name:        "alpha1",
+					Host:        "alpha",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Minute},
+				},
+				{
+					Name: "alpha2",
+					Host: "alpha",
+					Path: "/",
+				},
+				{
+					Name:        "bravo0",
+					Host:        "bravo",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: 30 * time.Second},
+				},
+				{
+					Name:        "bravo1",
+					Host:        "bravo",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Hour},
+				},
+				{
+					Name:        "charlie0",
+					Host:        "charlie",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Second},
+				},
+			},
+			want: []*nghttpx.Upstream{
+				{
+					Name: "alpha0",
+					Host: "alpha",
+					Path: "/",
+				},
+				{
+					Name:        "alpha1",
+					Host:        "alpha",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Minute},
+				},
+				{
+					Name: "alpha2",
+					Host: "alpha",
+					Path: "/",
+				},
+				{
+					Name:        "charlie0",
+					Host:        "charlie",
+					Path:        "/",
+					ReadTimeout: &metav1.Duration{Duration: time.Second},
+				},
+			},
+		},
+		{
+			desc: "Host with different Path",
+			upstreams: []*nghttpx.Upstream{
+				{
+					Name:  "alpha0",
+					Host:  "alpha",
+					Path:  "/",
+					Mruby: newChecksumFile("foo"),
+				},
+				{
+					Name:  "alpha1",
+					Host:  "alpha",
+					Path:  "/",
+					Mruby: newChecksumFile("bar"),
+				},
+				{
+					Name:  "alpha2",
+					Host:  "alpha",
+					Path:  "/a",
+					Mruby: newChecksumFile("baz"),
+				},
+				{
+					Name:  "alpha2",
+					Host:  "alpha",
+					Path:  "/b",
+					Mruby: newChecksumFile("foo"),
+				},
+			},
+			want: []*nghttpx.Upstream{
+				{
+					Name:  "alpha2",
+					Host:  "alpha",
+					Path:  "/a",
+					Mruby: newChecksumFile("baz"),
+				},
+				{
+					Name:  "alpha2",
+					Host:  "alpha",
+					Path:  "/b",
+					Mruby: newChecksumFile("foo"),
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			if got, want := removeUpstreamsWithInconsistentBackendParams(tt.upstreams), tt.want; !equality.Semantic.DeepEqual(got, want) {
+				t.Errorf("removeUpstreamsWithInconsistentBackendParams(...) = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+// TestSyncIgnoreUpstreamsWithInconsistentBackendParams verifies that upstreams which have inconsistent backend parameters are ignored.
+func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps, _ := newDefaultBackend()
+
+	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha1", []string{"192.168.10.1"})
+	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha1").
+		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+		WithAnnotations(map[string]string{
+			pathConfigKey: `alpha1.default.test/:
+  mruby: foo
+`}).
+		Complete()
+
+	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "alpha2", []string{"192.168.10.2"})
+	ing2 := newIngressBuilder(metav1.NamespaceDefault, "alpha2").
+		WithRuleHost("alpha1.default.test", "/", bs2.Name, serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
+		WithAnnotations(map[string]string{
+			pathConfigKey: `alpha1.default.test/:
+  mruby: bar
+`}).
+		Complete()
+
+	bs3, be3, _ := newBackend(metav1.NamespaceDefault, "alpha3", []string{"192.168.10.3"})
+	ing3 := newIngressBuilder(metav1.NamespaceDefault, "alpha3").
+		WithRule("/examples", bs3.Name, serviceBackendPortNumber(bs3.Spec.Ports[0].Port)).
+		WithAnnotations(map[string]string{
+			pathConfigKey: `alpha3.default.test/examples:
+  mruby: foo
+`}).
+		Complete()
+
+	f.svcStore = append(f.svcStore, svc, bs1, bs2, bs3)
+	f.epStore = append(f.epStore, eps, be1, be2, be3)
+	f.ingStore = append(f.ingStore, ing1, ing2, ing3)
+
+	f.objects = append(f.objects, svc, bs1, bs2, bs3, eps, be1, be2, be3, ing1, ing2, ing3)
+
+	f.prepare()
+	f.run()
+
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
+
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	}
+
+	if got, want := ingConfig.Upstreams[0].Name, f.lbc.defaultSvc.String(); got != want {
+		t.Errorf("ingConfig.Upstreams[0].Name = %v, want %v", got, want)
+	}
+
+	upstream := ingConfig.Upstreams[1]
+
+	if got, want := upstream.Ingress, (types.NamespacedName{Name: ing3.Name, Namespace: ing3.Namespace}); got != want {
+		t.Errorf("upstream.Ingress = %v, want %v", got, want)
 	}
 }

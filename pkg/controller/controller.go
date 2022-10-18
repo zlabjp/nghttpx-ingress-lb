@@ -1108,7 +1108,12 @@ func (lbc *LoadBalancerController) createIngressConfig(ings []*networkingv1.Ingr
 		upstreams = append(upstreams, defaultUpstream)
 	}
 
-	sort.Slice(upstreams, func(i, j int) bool { return upstreams[i].Name < upstreams[j].Name })
+	sort.Slice(upstreams, func(i, j int) bool {
+		return upstreams[i].Host < upstreams[j].Host ||
+			(upstreams[i].Host == upstreams[j].Host && upstreams[i].Path < upstreams[j].Path)
+	})
+
+	upstreams = removeUpstreamsWithInconsistentBackendParams(upstreams)
 
 	for _, value := range upstreams {
 		backends := value.Backends
@@ -1138,6 +1143,195 @@ func (lbc *LoadBalancerController) createIngressConfig(ings []*networkingv1.Ingr
 	}
 
 	return ingConfig, nil
+}
+
+type backendOpts struct {
+	index                    int
+	mruby                    *nghttpx.ChecksumFile
+	affinity                 nghttpx.Affinity
+	affinityCookieName       string
+	affinityCookiePath       string
+	affinityCookieSecure     nghttpx.AffinityCookieSecure
+	affinityCookieStickiness nghttpx.AffinityCookieStickiness
+	readTimeout              *metav1.Duration
+	writeTimeout             *metav1.Duration
+}
+
+func newBackendOpts(idx int, upstream *nghttpx.Upstream) backendOpts {
+	opts := backendOpts{
+		index:        idx,
+		mruby:        upstream.Mruby,
+		affinity:     upstream.Affinity,
+		readTimeout:  upstream.ReadTimeout,
+		writeTimeout: upstream.WriteTimeout,
+	}
+
+	if upstream.Affinity == nghttpx.AffinityCookie {
+		opts.affinityCookieName = upstream.AffinityCookieName
+		opts.affinityCookiePath = upstream.AffinityCookiePath
+		opts.affinityCookieSecure = upstream.AffinityCookieSecure
+		opts.affinityCookieStickiness = upstream.AffinityCookieStickiness
+	}
+
+	return opts
+}
+
+func removeUpstreamsWithInconsistentBackendParams(upstreams []*nghttpx.Upstream) []*nghttpx.Upstream {
+	if len(upstreams) < 2 {
+		return upstreams
+	}
+
+	// Reuse the same buffer.  golang has no problem when calling append with overlapped ranges.  If no errors are found, we return
+	// upstreams without any modification.
+	out := upstreams[:0]
+
+	opts := newBackendOpts(0, upstreams[0])
+
+	for i := 1; i < len(upstreams); i++ {
+		b := upstreams[opts.index]
+		c := upstreams[i]
+
+		if b.Host != c.Host || b.Path != c.Path {
+			if len(out) < opts.index {
+				out = append(out, upstreams[opts.index:i]...)
+			} else {
+				out = upstreams[:i]
+			}
+
+			opts = newBackendOpts(i, c)
+
+			continue
+		}
+
+		err := validateUpstreamBackendParams(c, opts)
+		if err == nil {
+			if c.Mruby != nil && opts.mruby == nil {
+				opts.mruby = c.Mruby
+			}
+
+			if c.Affinity != nghttpx.AffinityNone && opts.affinity == nghttpx.AffinityNone {
+				opts.affinity = c.Affinity
+				if opts.affinity == nghttpx.AffinityCookie {
+					opts.affinityCookieName = c.AffinityCookieName
+					opts.affinityCookiePath = c.AffinityCookiePath
+					opts.affinityCookieSecure = c.AffinityCookieSecure
+					opts.affinityCookieStickiness = c.AffinityCookieStickiness
+				}
+			}
+
+			if c.ReadTimeout != nil && opts.readTimeout == nil {
+				opts.readTimeout = c.ReadTimeout
+			}
+
+			if c.WriteTimeout != nil && opts.writeTimeout == nil {
+				opts.writeTimeout = c.WriteTimeout
+			}
+
+			continue
+		}
+
+		klog.Errorf("Inconsistent upstream backend parameters found: %v", err)
+
+		// We encountered mismatch in backend parameters.  Skip those upstreams.
+		i++
+
+		for ; i < len(upstreams); i++ {
+			c := upstreams[i]
+			if b.Host != c.Host || b.Path != c.Path {
+				break
+			}
+		}
+
+		for j := opts.index; j < i; j++ {
+			klog.Errorf("Skip upstream name=%v from Ingress %v which contains inconsistent backend parameters", upstreams[j].Name, upstreams[j].Ingress)
+		}
+
+		if i == len(upstreams) {
+			return out
+		}
+
+		opts = newBackendOpts(i, upstreams[i])
+	}
+
+	if opts.index == 0 {
+		return upstreams
+	}
+
+	return append(out, upstreams[opts.index:]...)
+}
+
+func validateUpstreamBackendParams(upstream *nghttpx.Upstream, opts backendOpts) error {
+	if err := validateUpstreamBackendParamsMruby(upstream, opts); err != nil {
+		return err
+	}
+
+	if err := validateUpstreamBackendParamsAffinity(upstream, opts); err != nil {
+		return err
+	}
+
+	if err := validateUpstreamBackendParamsReadTimeout(upstream, opts); err != nil {
+		return err
+	}
+
+	if err := validateUpstreamBackendParamsWriteTimeout(upstream, opts); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateUpstreamBackendParamsMruby(upstream *nghttpx.Upstream, opts backendOpts) error {
+	if upstream.Mruby == nil || opts.mruby == nil {
+		return nil
+	}
+
+	if upstream.Mruby.Path == opts.mruby.Path {
+		return nil
+	}
+
+	return fmt.Errorf("Inconsistent mruby path %v: previously it is set to %v", upstream.Mruby.Path, opts.mruby.Path)
+}
+
+func validateUpstreamBackendParamsAffinity(upstream *nghttpx.Upstream, opts backendOpts) error {
+	if upstream.Affinity == nghttpx.AffinityNone || opts.affinity == nghttpx.AffinityNone {
+		return nil
+	}
+
+	if upstream.Affinity == opts.affinity &&
+		upstream.AffinityCookieName == opts.affinityCookieName &&
+		upstream.AffinityCookiePath == opts.affinityCookiePath &&
+		upstream.AffinityCookieSecure == opts.affinityCookieSecure &&
+		upstream.AffinityCookieStickiness == opts.affinityCookieStickiness {
+		return nil
+	}
+
+	return fmt.Errorf("Inconsistent affinity type=%v cookieName=%v cookiePath=%v cookieSecure=%v cookieStickiness=%v: previously they are set to type=%v cookieName=%v cookiePath=%v cookieSecure=%v cookieStickiness=%v",
+		upstream.Affinity, upstream.AffinityCookieName, upstream.AffinityCookiePath, upstream.AffinityCookieSecure, upstream.AffinityCookieStickiness,
+		opts.affinity, opts.affinityCookieName, opts.affinityCookiePath, opts.affinityCookieSecure, opts.affinityCookieStickiness)
+}
+
+func validateUpstreamBackendParamsReadTimeout(upstream *nghttpx.Upstream, opts backendOpts) error {
+	if upstream.ReadTimeout == nil || opts.readTimeout == nil {
+		return nil
+	}
+
+	if *upstream.ReadTimeout == *opts.readTimeout {
+		return nil
+	}
+
+	return fmt.Errorf("Inconsistent readTimeout %v: previously it is set to %v", *upstream.ReadTimeout, *opts.readTimeout)
+}
+
+func validateUpstreamBackendParamsWriteTimeout(upstream *nghttpx.Upstream, opts backendOpts) error {
+	if upstream.WriteTimeout == nil || opts.writeTimeout == nil {
+		return nil
+	}
+
+	if *upstream.WriteTimeout == *opts.writeTimeout {
+		return nil
+	}
+
+	return fmt.Errorf("Inconsistent writeTimeout %v: previously it is set to %v", *upstream.WriteTimeout, *opts.writeTimeout)
 }
 
 func (lbc *LoadBalancerController) createHealthzMruby() []byte {
@@ -1185,6 +1379,7 @@ func (lbc *LoadBalancerController) createUpstream(ing *networkingv1.Ingress, hos
 	upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, isb.Name, portStr, host, normalizedPath)
 	ups := &nghttpx.Upstream{
 		Name:                     upsName,
+		Ingress:                  types.NamespacedName{Name: ing.Name, Namespace: ing.Namespace},
 		Host:                     host,
 		Path:                     normalizedPath,
 		RedirectIfNotTLS:         pc.GetRedirectIfNotTLS() && (requireTLS || lbc.defaultTLSSecret != nil),
