@@ -162,6 +162,13 @@ func FixupPathConfig(config *PathConfig) {
 		klog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
 		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
 	}
+	switch config.GetAffinityCookieStickiness() {
+	case AffinityCookieStickinessLoose, AffinityCookieStickinessStrict, "":
+		// OK
+	default:
+		klog.Errorf("unsupported affinity cookie stickiness %v", config.GetAffinityCookieStickiness())
+		config.SetAffinityCookieStickiness(AffinityCookieStickinessLoose)
+	}
 }
 
 func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
