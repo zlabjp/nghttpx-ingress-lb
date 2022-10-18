@@ -2593,3 +2593,65 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 		t.Errorf("upstream.Ingress = %v, want %v", got, want)
 	}
 }
+
+// TestSyncEmptyAffinityCookieName verifies that an upstream which has empty affinity cookie name should be ignored.
+func TestSyncEmptyAffinityCookieName(t *testing.T) {
+	f := newFixture(t)
+
+	svc, eps, _ := newDefaultBackend()
+
+	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha1", []string{"192.168.10.1"})
+	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha1").
+		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+		WithAnnotations(map[string]string{
+			pathConfigKey: `alpha1.default.test/:
+  affinity: cookie
+`}).
+		Complete()
+
+	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "alpha2", []string{"192.168.10.2"})
+	ing2 := newIngressBuilder(metav1.NamespaceDefault, "alpha2").
+		WithRule("/", bs2.Name, serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
+		WithAnnotations(map[string]string{
+			pathConfigKey: `alpha2.default.test/:
+  affinity: cookie
+  affinityCookieName: ""
+`}).
+		Complete()
+
+	bs3, be3, _ := newBackend(metav1.NamespaceDefault, "alpha3", []string{"192.168.10.3"})
+	ing3 := newIngressBuilder(metav1.NamespaceDefault, "alpha3").
+		WithRule("/", bs3.Name, serviceBackendPortNumber(bs3.Spec.Ports[0].Port)).
+		WithAnnotations(map[string]string{
+			pathConfigKey: `alpha3.default.test/:
+  affinity: cookie
+  affinityCookieName: "foo"
+`}).
+		Complete()
+
+	f.svcStore = append(f.svcStore, svc, bs1, bs2, bs3)
+	f.epStore = append(f.epStore, eps, be1, be2, be3)
+	f.ingStore = append(f.ingStore, ing1, ing2, ing3)
+
+	f.objects = append(f.objects, svc, bs1, bs2, bs3, eps, be1, be2, be3, ing1, ing2, ing3)
+
+	f.prepare()
+	f.run()
+
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
+
+	if got, want := len(ingConfig.Upstreams), 2; got != want {
+		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	}
+
+	if got, want := ingConfig.Upstreams[0].Name, f.lbc.defaultSvc.String(); got != want {
+		t.Errorf("ingConfig.Upstreams[0].Name = %v, want %v", got, want)
+	}
+
+	upstream := ingConfig.Upstreams[1]
+
+	if got, want := upstream.Ingress, (types.NamespacedName{Name: ing3.Name, Namespace: ing3.Namespace}); got != want {
+		t.Errorf("upstream.Ingress = %v, want %v", got, want)
+	}
+}

@@ -1375,6 +1375,11 @@ func (lbc *LoadBalancerController) createUpstream(ing *networkingv1.Ingress, hos
 		portStr = strconv.FormatInt(int64(isb.Port.Number), 10)
 	}
 	pc := pcm.ConfigFor(host, normalizedPath)
+
+	if pc.GetAffinity() == nghttpx.AffinityCookie && pc.GetAffinityCookieName() == "" {
+		return nil, fmt.Errorf("Ingress %v/%v has empty affinity cookie name", ing.Namespace, ing.Name)
+	}
+
 	// The format of upsName is similar to backend option syntax of nghttpx.
 	upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, isb.Name, portStr, host, normalizedPath)
 	ups := &nghttpx.Upstream{
