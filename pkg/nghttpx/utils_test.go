@@ -34,6 +34,7 @@ func TestFixupBackendConfig(t *testing.T) {
 		{
 			desc:      "Empty input",
 			outWeight: 1,
+			outProto:  ProtocolH1,
 		},
 		{
 			desc:      "Correct input must be left unchanged.",
@@ -142,7 +143,10 @@ func TestFixupPathConfig(t *testing.T) {
 			outAffinityCookieStickiness: AffinityCookieStickinessLoose,
 		},
 		{
-			desc: "Empty input leaves as is.",
+			desc:                        "Empty input",
+			outAffinity:                 AffinityNone,
+			outAffinityCookieSecure:     AffinityCookieSecureAuto,
+			outAffinityCookieStickiness: AffinityCookieStickinessLoose,
 		},
 		{
 			desc:                        "Correct input must be left unchanged.",

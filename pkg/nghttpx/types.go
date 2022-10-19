@@ -232,7 +232,7 @@ type BackendConfig struct {
 
 func (pbc *BackendConfig) GetProto() Protocol {
 	if pbc.Proto == nil {
-		return ""
+		return ProtocolH1
 	}
 	return *pbc.Proto
 }
