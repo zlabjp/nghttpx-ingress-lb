@@ -107,7 +107,7 @@ func diff(b1, b2 []byte) (string, error) {
 // FixupBackendConfig validates config, and fixes the invalid values inside it.
 func FixupBackendConfig(config *BackendConfig) {
 	switch config.GetProto() {
-	case ProtocolH2, ProtocolH1, "":
+	case ProtocolH2, ProtocolH1:
 		// OK
 	default:
 		klog.Errorf("unrecognized backend protocol %q", config.GetProto())
@@ -149,18 +149,25 @@ func ApplyDefaultBackendConfig(config *BackendConfig, defaultConfig *BackendConf
 // FixupPathConfig validates config and fixes the invalid values inside it.
 func FixupPathConfig(config *PathConfig) {
 	switch config.GetAffinity() {
-	case AffinityNone, AffinityIP, AffinityCookie, "":
+	case AffinityNone, AffinityIP, AffinityCookie:
 		// OK
 	default:
 		klog.Errorf("unsupported affinity method %v", config.GetAffinity())
 		config.SetAffinity(AffinityNone)
 	}
 	switch config.GetAffinityCookieSecure() {
-	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo, "":
+	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo:
 		// OK
 	default:
 		klog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
 		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
+	}
+	switch config.GetAffinityCookieStickiness() {
+	case AffinityCookieStickinessLoose, AffinityCookieStickinessStrict:
+		// OK
+	default:
+		klog.Errorf("unsupported affinity cookie stickiness %v", config.GetAffinityCookieStickiness())
+		config.SetAffinityCookieStickiness(AffinityCookieStickinessLoose)
 	}
 }
 

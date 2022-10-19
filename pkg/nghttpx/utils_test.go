@@ -34,6 +34,7 @@ func TestFixupBackendConfig(t *testing.T) {
 		{
 			desc:      "Empty input",
 			outWeight: 1,
+			outProto:  ProtocolH1,
 		},
 		{
 			desc:      "Correct input must be left unchanged.",
@@ -124,28 +125,37 @@ func TestApplyDefaultBackendConfig(t *testing.T) {
 // TestFixupPathConfig validates that FixupPathConfig corrects invalid input to the correct default value.
 func TestFixupPathConfig(t *testing.T) {
 	tests := []struct {
-		desc                    string
-		inAffinity              Affinity
-		inAffinityCookieSecure  AffinityCookieSecure
-		outAffinity             Affinity
-		outAffinityCookieSecure AffinityCookieSecure
+		desc                        string
+		inAffinity                  Affinity
+		inAffinityCookieSecure      AffinityCookieSecure
+		inAffinityCookieStickiness  AffinityCookieStickiness
+		outAffinity                 Affinity
+		outAffinityCookieSecure     AffinityCookieSecure
+		outAffinityCookieStickiness AffinityCookieStickiness
 	}{
 		{
-			desc:                    "Fixup incorrect input",
-			inAffinity:              "bar",
-			inAffinityCookieSecure:  "buzz",
-			outAffinity:             AffinityNone,
-			outAffinityCookieSecure: AffinityCookieSecureAuto,
+			desc:                        "Fixup incorrect input",
+			inAffinity:                  "bar",
+			inAffinityCookieSecure:      "buzz",
+			inAffinityCookieStickiness:  "foo",
+			outAffinity:                 AffinityNone,
+			outAffinityCookieSecure:     AffinityCookieSecureAuto,
+			outAffinityCookieStickiness: AffinityCookieStickinessLoose,
 		},
 		{
-			desc: "Empty input leaves as is.",
+			desc:                        "Empty input",
+			outAffinity:                 AffinityNone,
+			outAffinityCookieSecure:     AffinityCookieSecureAuto,
+			outAffinityCookieStickiness: AffinityCookieStickinessLoose,
 		},
 		{
-			desc:                    "Correct input must be left unchanged.",
-			inAffinity:              AffinityIP,
-			inAffinityCookieSecure:  AffinityCookieSecureYes,
-			outAffinity:             AffinityIP,
-			outAffinityCookieSecure: AffinityCookieSecureYes,
+			desc:                        "Correct input must be left unchanged.",
+			inAffinity:                  AffinityIP,
+			inAffinityCookieSecure:      AffinityCookieSecureYes,
+			inAffinityCookieStickiness:  AffinityCookieStickinessStrict,
+			outAffinity:                 AffinityIP,
+			outAffinityCookieSecure:     AffinityCookieSecureYes,
+			outAffinityCookieStickiness: AffinityCookieStickinessStrict,
 		},
 	}
 
@@ -154,12 +164,16 @@ func TestFixupPathConfig(t *testing.T) {
 			c := &PathConfig{}
 			c.SetAffinity(tt.inAffinity)
 			c.SetAffinityCookieSecure(tt.inAffinityCookieSecure)
+			c.SetAffinityCookieStickiness(tt.inAffinityCookieStickiness)
 			FixupPathConfig(c)
 			if got, want := c.GetAffinity(), tt.outAffinity; got != want {
 				t.Errorf("c.GetAffinity() = %q, want %q", got, want)
 			}
 			if got, want := c.GetAffinityCookieSecure(), tt.outAffinityCookieSecure; got != want {
 				t.Errorf("c.GetAffinityCookieSecure() = %q, want %q", got, want)
+			}
+			if got, want := c.GetAffinityCookieStickiness(), tt.outAffinityCookieStickiness; got != want {
+				t.Errorf("c.GetAffinityCookieStickiness() = %q, want %q", got, want)
 			}
 		})
 	}

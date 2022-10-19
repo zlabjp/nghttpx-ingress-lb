@@ -30,6 +30,7 @@ import (
 	"runtime"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
@@ -90,6 +91,7 @@ func NewIngressConfig() *IngressConfig {
 // Upstream describes an nghttpx upstream
 type Upstream struct {
 	Name                     string
+	Ingress                  types.NamespacedName
 	Host                     string
 	Path                     string
 	Backends                 []Backend
@@ -103,6 +105,14 @@ type Upstream struct {
 	ReadTimeout              *metav1.Duration
 	WriteTimeout             *metav1.Duration
 	DoNotForward             bool
+}
+
+func (ups *Upstream) String() string {
+	if ups == nil {
+		return "(nil)"
+	}
+
+	return ups.Name
 }
 
 type Affinity string
@@ -222,7 +232,7 @@ type BackendConfig struct {
 
 func (pbc *BackendConfig) GetProto() Protocol {
 	if pbc.Proto == nil {
-		return ""
+		return ProtocolH1
 	}
 	return *pbc.Proto
 }
