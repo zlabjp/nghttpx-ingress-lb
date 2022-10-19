@@ -1,0 +1,29 @@
+From 5abafb42682fe6c04ad95d9488c732281ad3af95 Mon Sep 17 00:00:00 2001
+From: Tatsuhiro Tsujikawa <tatsuhiro.t@gmail.com>
+Date: Tue, 18 Oct 2022 17:14:50 +0900
+Subject: [PATCH] nghttpx: Fix affinity-cookie-stickiness parameter handling
+
+Fix affinity-cookie-stickiness backend parameter handling.
+Previously, if 3 backend options are used for the same pattern, and
+the first one does not have affinity-cookie-stickiness, and the rest
+of them have affinity-cookie-stickiness=strict, nghttpx wrongly
+determines that they have inconsistent configurations.
+---
+ src/shrpx_config.cc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/shrpx_config.cc b/src/shrpx_config.cc
+index 1a609052..1b5edf1f 100644
+--- a/src/shrpx_config.cc
++++ b/src/shrpx_config.cc
+@@ -1265,6 +1265,7 @@ int parse_mapping(Config *config, DownstreamAddrConfig &addr,
+                   downstreamconf.balloc, params.affinity.cookie.path);
+             }
+             g.affinity.cookie.secure = params.affinity.cookie.secure;
++            g.affinity.cookie.stickiness = params.affinity.cookie.stickiness;
+           }
+         } else if (g.affinity.type != params.affinity.type ||
+                    g.affinity.cookie.name != params.affinity.cookie.name ||
+-- 
+2.34.1
+
