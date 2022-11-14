@@ -19,7 +19,7 @@
 
 FROM debian:11 as build
 
-COPY patches/extra-mrbgem.patch patches/0001-nghttpx-Fix-affinity-cookie-stickiness-parameter-han.patch /
+COPY patches/extra-mrbgem.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
@@ -27,7 +27,7 @@ RUN apt-get update && \
         git clang make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison libelf-dev patch
 
-RUN git clone --depth 1 -b OpenSSL_1_1_1q+quic https://github.com/quictls/openssl && \
+RUN git clone --depth 1 -b OpenSSL_1_1_1s+quic https://github.com/quictls/openssl && \
     cd openssl && \
     ./config --openssldir=/etc/ssl && \
     make -j$(nproc) && \
@@ -44,7 +44,7 @@ RUN git clone --depth 1 -b v0.7.1 https://github.com/ngtcp2/nghttp3 && \
     cd .. && \
     rm -rf nghttp3
 
-RUN git clone --depth 1 -b v0.9.0 https://github.com/ngtcp2/ngtcp2 && \
+RUN git clone --depth 1 -b v0.11.0 https://github.com/ngtcp2/ngtcp2 && \
     cd ngtcp2 && \
     autoreconf -i && \
     ./configure --enable-lib-only \
@@ -56,16 +56,15 @@ RUN git clone --depth 1 -b v0.9.0 https://github.com/ngtcp2/ngtcp2 && \
     cd .. && \
     rm -rf ngtcp2
 
-RUN git clone --depth 1 -b v1.0.0 https://github.com/libbpf/libbpf && \
+RUN git clone --depth 1 -b v1.0.1 https://github.com/libbpf/libbpf && \
     cd libbpf && \
     PREFIX=/usr/local make -C src install && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --depth 1 -b v1.50.0 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --depth 1 -b v1.51.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
-    patch -p1 < /0001-nghttpx-Fix-affinity-cookie-stickiness-parameter-han.patch && \
     git submodule update --init && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --disable-python-bindings --with-mruby --with-neverbleed \
