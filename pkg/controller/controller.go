@@ -202,7 +202,7 @@ type Config struct {
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
-func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.ServerReloader, config Config) *LoadBalancerController {
+func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.ServerReloader, config Config) (*LoadBalancerController, error) {
 	lbc := LoadBalancerController{
 		clientset:                 clientset,
 		pod:                       config.Pod,
@@ -243,11 +243,14 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 		f := watchNSInformers.Networking().V1().Ingresses()
 		lbc.ingLister = f.Lister()
 		lbc.ingInformer = f.Informer()
-		lbc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lbc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addIngressNotification,
 			UpdateFunc: lbc.updateIngressNotification,
 			DeleteFunc: lbc.deleteIngressNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add Ingress event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod)
@@ -256,11 +259,14 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 		f := allNSInformers.Core().V1().Endpoints()
 		lbc.epLister = f.Lister()
 		lbc.epInformer = f.Informer()
-		lbc.epInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lbc.epInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addEndpointsNotification,
 			UpdateFunc: lbc.updateEndpointsNotification,
 			DeleteFunc: lbc.deleteEndpointsNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add Endpoints event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	if config.EnableEndpointSlice {
@@ -273,44 +279,56 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 		f := epSliceInformers.Discovery().V1().EndpointSlices()
 		lbc.epSliceLister = f.Lister()
 		lbc.epSliceInformer = f.Informer()
-		lbc.epSliceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lbc.epSliceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addEndpointSliceNotification,
 			UpdateFunc: lbc.updateEndpointSliceNotification,
 			DeleteFunc: lbc.deleteEndpointSliceNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add EndpointSlice event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	{
 		f := allNSInformers.Core().V1().Services()
 		lbc.svcLister = f.Lister()
 		lbc.svcInformer = f.Informer()
-		lbc.svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lbc.svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addServiceNotification,
 			UpdateFunc: lbc.updateServiceNotification,
 			DeleteFunc: lbc.deleteServiceNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add Service event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	{
 		f := allNSInformers.Core().V1().Secrets()
 		lbc.secretLister = f.Lister()
 		lbc.secretInformer = f.Informer()
-		lbc.secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lbc.secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addSecretNotification,
 			UpdateFunc: lbc.updateSecretNotification,
 			DeleteFunc: lbc.deleteSecretNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add Secret event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	{
 		f := allNSInformers.Core().V1().Pods()
 		lbc.podLister = f.Lister()
 		lbc.podInformer = f.Informer()
-		lbc.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lbc.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addPodNotification,
 			UpdateFunc: lbc.updatePodNotification,
 			DeleteFunc: lbc.deletePodNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add Pod event handler: %v", err)
+			return nil, err
+		}
 
 	}
 
@@ -318,11 +336,14 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 		f := allNSInformers.Networking().V1().IngressClasses()
 		lbc.ingClassLister = f.Lister()
 		lbc.ingClassInformer = f.Informer()
-		lbc.ingClassInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lbc.ingClassInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addIngressClassNotification,
 			UpdateFunc: lbc.updateIngressClassNotification,
 			DeleteFunc: lbc.deleteIngressClassNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add IngressClass event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	var cmNamespace string
@@ -339,15 +360,18 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 		f := cmNSInformers.Core().V1().ConfigMaps()
 		lbc.cmLister = f.Lister()
 		lbc.cmInformer = f.Informer()
-		lbc.cmInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lbc.cmInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addConfigMapNotification,
 			UpdateFunc: lbc.updateConfigMapNotification,
 			DeleteFunc: lbc.deleteConfigMapNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add ConfigMap event handler: %v", err)
+			return nil, err
+		}
 
 	}
 
-	return &lbc
+	return &lbc, nil
 }
 
 func (lbc *LoadBalancerController) addIngressNotification(obj interface{}) {
@@ -1895,7 +1919,12 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		RetryPeriod:   lbc.leaderElectionConfig.RetryPeriod.Duration,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				lc := NewLeaderController(lbc)
+				lc, err := NewLeaderController(lbc)
+				if err != nil {
+					klog.Errorf("NewLeaderController: %v", err)
+
+					return
+				}
 
 				if err := lc.Run(ctx); err != nil {
 					klog.Errorf("LeaderController.Run returned: %v", err)
@@ -1997,7 +2026,7 @@ type LeaderController struct {
 	quicSecretQueue workqueue.RateLimitingInterface
 }
 
-func NewLeaderController(lbc *LoadBalancerController) *LeaderController {
+func NewLeaderController(lbc *LoadBalancerController) (*LeaderController, error) {
 	lc := &LeaderController{
 		lbc: lbc,
 		ingQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
@@ -2016,10 +2045,13 @@ func NewLeaderController(lbc *LoadBalancerController) *LeaderController {
 		f := watchNSInformers.Networking().V1().Ingresses()
 		lc.ingLister = f.Lister()
 		lc.ingInformer = f.Informer()
-		lc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addIngressNotification,
 			UpdateFunc: lc.updateIngressNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add Ingress event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	podNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
@@ -2033,11 +2065,14 @@ func NewLeaderController(lbc *LoadBalancerController) *LeaderController {
 		f := podNSInformers.Core().V1().Pods()
 		lc.podLister = f.Lister()
 		lc.podInformer = f.Informer()
-		lc.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lc.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addPodNotification,
 			UpdateFunc: lc.updatePodNotification,
 			DeleteFunc: lc.deletePodNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add Pod event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	if lbc.http3 {
@@ -2050,11 +2085,14 @@ func NewLeaderController(lbc *LoadBalancerController) *LeaderController {
 		f := factory.Core().V1().Secrets()
 		lc.secretLister = f.Lister()
 		lc.secretInformer = f.Informer()
-		lc.secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lc.secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addSecretNotification,
 			UpdateFunc: lc.updateSecretNotification,
 			DeleteFunc: lc.deleteSecretNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add Secret event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	if lbc.publishService != nil {
@@ -2067,11 +2105,14 @@ func NewLeaderController(lbc *LoadBalancerController) *LeaderController {
 		f := factory.Core().V1().Services()
 		lc.svcLister = f.Lister()
 		lc.svcInformer = f.Informer()
-		lc.svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lc.svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addServiceNotification,
 			UpdateFunc: lc.updateServiceNotification,
 			DeleteFunc: lc.deleteServiceNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add Service event handler: %v", err)
+			return nil, err
+		}
 	}
 
 	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod)
@@ -2080,11 +2121,13 @@ func NewLeaderController(lbc *LoadBalancerController) *LeaderController {
 		f := allNSInformers.Networking().V1().IngressClasses()
 		lc.ingClassLister = f.Lister()
 		lc.ingClassInformer = f.Informer()
-		lc.ingClassInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		if _, err := lc.ingClassInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addIngressClassNotification,
 			UpdateFunc: lc.updateIngressClassNotification,
 			DeleteFunc: lc.deleteIngressClassNotification,
-		})
+		}); err != nil {
+			klog.Errorf("Unable to add IngressClass event handler: %v", err)
+		}
 	}
 
 	{
@@ -2093,7 +2136,7 @@ func NewLeaderController(lbc *LoadBalancerController) *LeaderController {
 		lc.nodeInformer = f.Informer()
 	}
 
-	return lc
+	return lc, nil
 }
 
 func (lc *LeaderController) Run(ctx context.Context) error {

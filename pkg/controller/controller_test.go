@@ -164,8 +164,18 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		}
 	}
 
-	f.lbc = NewLoadBalancerController(f.clientset, newFakeLoadBalancer(), config)
-	f.lc = NewLeaderController(f.lbc)
+	lbc, err := NewLoadBalancerController(f.clientset, newFakeLoadBalancer(), config)
+	if err != nil {
+		f.t.Fatalf("NewLoadBalancerController: %v", err)
+	}
+
+	lc, err := NewLeaderController(lbc)
+	if err != nil {
+		f.t.Fatalf("NewLeaderController: %v", err)
+	}
+
+	f.lbc = lbc
+	f.lc = lc
 }
 
 func (f *fixture) run() {
