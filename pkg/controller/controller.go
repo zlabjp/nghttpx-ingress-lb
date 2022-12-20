@@ -2590,8 +2590,8 @@ func (lc *LeaderController) syncIngress(ctx context.Context, key string) error {
 	return nil
 }
 
-func (lc *LeaderController) getLoadBalancerIngress() ([]corev1.LoadBalancerIngress, error) {
-	var lbIngs []corev1.LoadBalancerIngress
+func (lc *LeaderController) getLoadBalancerIngress() ([]networkingv1.IngressLoadBalancerIngress, error) {
+	var lbIngs []networkingv1.IngressLoadBalancerIngress
 
 	if lc.lbc.publishService == nil {
 		var err error
@@ -2606,7 +2606,7 @@ func (lc *LeaderController) getLoadBalancerIngress() ([]corev1.LoadBalancerIngre
 			return nil, err
 		}
 
-		lbIngs = lc.getLoadBalancerIngressFromService(svc)
+		lbIngs = ingressLoadBalancerIngressFromService(svc)
 	}
 
 	sortLoadBalancerIngress(lbIngs)
@@ -2614,8 +2614,8 @@ func (lc *LeaderController) getLoadBalancerIngress() ([]corev1.LoadBalancerIngre
 	return uniqLoadBalancerIngress(lbIngs), nil
 }
 
-// getLoadBalancerIngressSelector creates array of v1.LoadBalancerIngress based on cached Pods and Nodes.
-func (lc *LeaderController) getLoadBalancerIngressSelector(selector labels.Selector) ([]corev1.LoadBalancerIngress, error) {
+// getLoadBalancerIngressSelector creates array of networkingv1.IngressLoadBalancerIngress based on cached Pods and Nodes.
+func (lc *LeaderController) getLoadBalancerIngressSelector(selector labels.Selector) ([]networkingv1.IngressLoadBalancerIngress, error) {
 	pods, err := lc.podLister.List(selector)
 	if err != nil {
 		return nil, fmt.Errorf("could not list Pods with label %v", selector)
@@ -2625,7 +2625,7 @@ func (lc *LeaderController) getLoadBalancerIngressSelector(selector labels.Selec
 		return nil, nil
 	}
 
-	lbIngs := make([]corev1.LoadBalancerIngress, 0, len(pods))
+	lbIngs := make([]networkingv1.IngressLoadBalancerIngress, 0, len(pods))
 
 	for _, pod := range pods {
 		if !pod.Spec.HostNetwork {
@@ -2633,7 +2633,7 @@ func (lc *LeaderController) getLoadBalancerIngressSelector(selector labels.Selec
 				continue
 			}
 
-			lbIngs = append(lbIngs, corev1.LoadBalancerIngress{IP: pod.Status.PodIP})
+			lbIngs = append(lbIngs, networkingv1.IngressLoadBalancerIngress{IP: pod.Status.PodIP})
 
 			continue
 		}
@@ -2644,7 +2644,7 @@ func (lc *LeaderController) getLoadBalancerIngressSelector(selector labels.Selec
 			continue
 		}
 
-		lbIng := corev1.LoadBalancerIngress{}
+		lbIng := networkingv1.IngressLoadBalancerIngress{}
 		// This is really a messy specification.
 		if net.ParseIP(externalIP) != nil {
 			lbIng.IP = externalIP
@@ -2686,18 +2686,4 @@ func (lc *LeaderController) getPodNodeAddress(pod *corev1.Pod) (string, error) {
 	}
 
 	return externalIP, nil
-}
-
-// getLoadBalancerIngressFromService returns the set of addresses from svc.
-func (lc *LeaderController) getLoadBalancerIngressFromService(svc *corev1.Service) []corev1.LoadBalancerIngress {
-	lbIngs := make([]corev1.LoadBalancerIngress, len(svc.Status.LoadBalancer.Ingress)+len(svc.Spec.ExternalIPs))
-	copy(lbIngs, svc.Status.LoadBalancer.Ingress)
-
-	i := len(svc.Status.LoadBalancer.Ingress)
-	for _, ip := range svc.Spec.ExternalIPs {
-		lbIngs[i].IP = ip
-		i++
-	}
-
-	return lbIngs
 }

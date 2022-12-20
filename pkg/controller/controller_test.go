@@ -771,7 +771,7 @@ func (b *ingressBuilder) WithIngressClass(ingressClass string) *ingressBuilder {
 	return b
 }
 
-func (b *ingressBuilder) WithLoadBalancerIngress(lbIngs []corev1.LoadBalancerIngress) *ingressBuilder {
+func (b *ingressBuilder) WithLoadBalancerIngress(lbIngs []networkingv1.IngressLoadBalancerIngress) *ingressBuilder {
 	b.Status.LoadBalancer.Ingress = lbIngs
 
 	return b
@@ -1593,7 +1593,7 @@ func TestGetLoadBalancerIngressSelector(t *testing.T) {
 
 			sortLoadBalancerIngress(lbIngs)
 
-			ans := []corev1.LoadBalancerIngress{
+			ans := []networkingv1.IngressLoadBalancerIngress{
 				{IP: "192.168.0.1"}, {IP: "192.168.0.2"},
 			}
 
@@ -1614,31 +1614,31 @@ func TestSyncIngress(t *testing.T) {
 	tests := []struct {
 		desc                      string
 		ingress                   *networkingv1.Ingress
-		wantLoadBalancerIngresses []corev1.LoadBalancerIngress
+		wantLoadBalancerIngresses []networkingv1.IngressLoadBalancerIngress
 	}{
 		{
 			desc: "Update Ingress status",
 			ingress: newIngressBuilder(metav1.NamespaceDefault, "delta-ing").
 				WithRule("/", "delta", serviceBackendPortNumber(80)).
 				Complete(),
-			wantLoadBalancerIngresses: []corev1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}},
+			wantLoadBalancerIngresses: []networkingv1.IngressLoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}},
 		},
 		{
 			desc: "Not Ingress controlled by the controller",
 			ingress: newIngressBuilder(metav1.NamespaceDefault, "foxtrot-ing").
 				WithRule("/", "foxtrot", serviceBackendPortNumber(80)).
 				WithIngressClass("not-nghttpx").
-				WithLoadBalancerIngress([]corev1.LoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}}).
+				WithLoadBalancerIngress([]networkingv1.IngressLoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}}).
 				Complete(),
-			wantLoadBalancerIngresses: []corev1.LoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}},
+			wantLoadBalancerIngresses: []networkingv1.IngressLoadBalancerIngress{{IP: "192.168.0.100"}, {IP: "192.168.0.101"}},
 		},
 		{
 			desc: "Ingress already has correct load balancer addresses",
 			ingress: newIngressBuilder(metav1.NamespaceDefault, "golf-ing").
 				WithRule("/", "golf", serviceBackendPortNumber(80)).
-				WithLoadBalancerIngress([]corev1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}).
+				WithLoadBalancerIngress([]networkingv1.IngressLoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}}).
 				Complete(),
-			wantLoadBalancerIngresses: []corev1.LoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}},
+			wantLoadBalancerIngresses: []networkingv1.IngressLoadBalancerIngress{{IP: "192.168.0.1"}, {IP: "192.168.0.2"}},
 		},
 	}
 
@@ -1675,63 +1675,6 @@ func TestSyncIngress(t *testing.T) {
 				t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
 			}
 		})
-	}
-}
-
-// TestGetLoadBalancerIngressFromService verifies getLoadBalancerIngressFromService.
-func TestGetLoadBalancerIngressFromService(t *testing.T) {
-	f := newFixture(t)
-	f.publishService = &types.NamespacedName{
-		Namespace: "alpha",
-		Name:      "bravo",
-	}
-
-	svc := &corev1.Service{
-		Spec: corev1.ServiceSpec{
-			ExternalIPs: []string{
-				"192.168.0.2",
-				"192.168.0.1",
-				"192.168.0.3",
-			},
-		},
-		Status: corev1.ServiceStatus{
-			LoadBalancer: corev1.LoadBalancerStatus{
-				Ingress: []corev1.LoadBalancerIngress{
-					{
-						Hostname: "charlie.example.com",
-					},
-					{
-						IP: "10.0.0.1",
-					},
-				},
-			},
-		},
-	}
-
-	want := []corev1.LoadBalancerIngress{
-		{
-			Hostname: "charlie.example.com",
-		},
-		{
-			IP: "10.0.0.1",
-		},
-		{
-			IP: "192.168.0.2",
-		},
-		{
-			IP: "192.168.0.1",
-		},
-		{
-			IP: "192.168.0.3",
-		},
-	}
-
-	f.prepare()
-
-	got := f.lc.getLoadBalancerIngressFromService(svc)
-
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("f.lc.getLoadBalancerIngressFromService(...) = %#v, want %#v", got, want)
 	}
 }
 

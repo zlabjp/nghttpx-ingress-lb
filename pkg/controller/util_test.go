@@ -13,18 +13,19 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 )
 
 // TestSortLoadBalancerIngress verifies that sortLoadBalancerIngress sorts given items.
 func TestSortLoadBalancerIngress(t *testing.T) {
-	input := []corev1.LoadBalancerIngress{
+	input := []networkingv1.IngressLoadBalancerIngress{
 		{IP: "delta", Hostname: "alpha"},
 		{IP: "alpha", Hostname: "delta"},
 		{IP: "alpha", Hostname: "charlie"},
 		{IP: "bravo", Hostname: ""},
 	}
 
-	ans := []corev1.LoadBalancerIngress{
+	ans := []networkingv1.IngressLoadBalancerIngress{
 		{IP: "alpha", Hostname: "charlie"},
 		{IP: "alpha", Hostname: "delta"},
 		{IP: "bravo", Hostname: ""},
@@ -42,22 +43,22 @@ func TestSortLoadBalancerIngress(t *testing.T) {
 func TestUniqLoadBalancerIngress(t *testing.T) {
 	tests := []struct {
 		desc  string
-		input []corev1.LoadBalancerIngress
-		ans   []corev1.LoadBalancerIngress
+		input []networkingv1.IngressLoadBalancerIngress
+		ans   []networkingv1.IngressLoadBalancerIngress
 	}{
 		{
 			desc: "Emptry input",
 		},
 		{
 			desc: "With duplicates",
-			input: []corev1.LoadBalancerIngress{
+			input: []networkingv1.IngressLoadBalancerIngress{
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "bravo", Hostname: "alpha"},
 				{IP: "delta", Hostname: ""},
 				{IP: "delta", Hostname: ""},
 			},
-			ans: []corev1.LoadBalancerIngress{
+			ans: []networkingv1.IngressLoadBalancerIngress{
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "bravo", Hostname: "alpha"},
 				{IP: "delta", Hostname: ""},
@@ -129,5 +130,52 @@ func TestUtilRemoveAddressFromLoadBalancerIngress(t *testing.T) {
 				t.Errorf("removeAddressFromLoadBalancerIngress(...) = %+v, want %+v", got, want)
 			}
 		})
+	}
+}
+
+// TestIngressLoadBalancerIngressFromService verifies ingressLoadBalancerIngressFromService.
+func TestIngressLoadBalancerIngressFromService(t *testing.T) {
+	svc := &corev1.Service{
+		Spec: corev1.ServiceSpec{
+			ExternalIPs: []string{
+				"192.168.0.2",
+				"192.168.0.1",
+				"192.168.0.3",
+			},
+		},
+		Status: corev1.ServiceStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{
+				Ingress: []corev1.LoadBalancerIngress{
+					{
+						Hostname: "charlie.example.com",
+					},
+					{
+						IP: "10.0.0.1",
+					},
+				},
+			},
+		},
+	}
+
+	want := []networkingv1.IngressLoadBalancerIngress{
+		{
+			Hostname: "charlie.example.com",
+		},
+		{
+			IP: "10.0.0.1",
+		},
+		{
+			IP: "192.168.0.2",
+		},
+		{
+			IP: "192.168.0.1",
+		},
+		{
+			IP: "192.168.0.3",
+		},
+	}
+
+	if got, want := ingressLoadBalancerIngressFromService(svc), want; !reflect.DeepEqual(got, want) {
+		t.Errorf("ingressLoadBalancerIngressFromService(...) = %#v, want %#v", got, want)
 	}
 }
