@@ -79,35 +79,6 @@ func uniqLoadBalancerIngress(a []networkingv1.IngressLoadBalancerIngress) []netw
 	return a[:p+1]
 }
 
-// removeAddressFromLoadBalancerIngress removes addr from a.  addr may match IP or Hostname.
-func removeAddressFromLoadBalancerIngress(a []corev1.LoadBalancerIngress, addr string) []corev1.LoadBalancerIngress {
-	var cnt int
-	for i := range a {
-		if a[i].IP == addr || a[i].Hostname == addr {
-			cnt++
-		}
-	}
-
-	if cnt == 0 {
-		return a
-	}
-	if cnt == len(a) {
-		return nil
-	}
-
-	dst := make([]corev1.LoadBalancerIngress, len(a)-cnt)
-
-	p := 0
-	for i := range a {
-		if a[i].IP == addr || a[i].Hostname == addr {
-			continue
-		}
-		dst[p] = a[i]
-		p++
-	}
-	return dst
-}
-
 // podFindPort is copied from
 // https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/api/v1/pod/util.go#L29 because original
 // FindPort requires k8s.io/kubernetes/pkg/api/v1 while we use k8s.io/client-go/pkg/api/v1.

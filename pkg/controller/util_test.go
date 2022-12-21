@@ -75,64 +75,6 @@ func TestUniqLoadBalancerIngress(t *testing.T) {
 	}
 }
 
-// TestUtilRemoveAddressFromLoadBalancerIngress verifies that removeAddressFromLoadBalancerIngress removes given address.
-func TestUtilRemoveAddressFromLoadBalancerIngress(t *testing.T) {
-	tests := []struct {
-		desc  string
-		addr  string
-		input []corev1.LoadBalancerIngress
-		ans   []corev1.LoadBalancerIngress
-	}{
-		{
-			desc: "Empty input",
-			addr: "alpha",
-		},
-		{
-			desc: "Remove specified address",
-			addr: "alpha",
-			input: []corev1.LoadBalancerIngress{
-				{IP: "alpha"},
-				{IP: "bravo"},
-				{Hostname: "alpha"},
-				{IP: "charlie"},
-				{IP: "alpha"},
-			},
-			ans: []corev1.LoadBalancerIngress{
-				{IP: "bravo"},
-				{IP: "charlie"},
-			},
-		},
-		{
-			desc: "No change is made if address is not found",
-			addr: "alpha",
-			input: []corev1.LoadBalancerIngress{
-				{IP: "bravo"},
-				{IP: "charlie"},
-			},
-			ans: []corev1.LoadBalancerIngress{
-				{IP: "bravo"},
-				{IP: "charlie"},
-			},
-		},
-		{
-			desc: "Removing address creates empty array",
-			addr: "alpha",
-			input: []corev1.LoadBalancerIngress{
-				{IP: "alpha"},
-			},
-			ans: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := removeAddressFromLoadBalancerIngress(tt.input, tt.addr), tt.ans; !reflect.DeepEqual(got, want) {
-				t.Errorf("removeAddressFromLoadBalancerIngress(...) = %+v, want %+v", got, want)
-			}
-		})
-	}
-}
-
 // TestIngressLoadBalancerIngressFromService verifies ingressLoadBalancerIngressFromService.
 func TestIngressLoadBalancerIngressFromService(t *testing.T) {
 	svc := &corev1.Service{
