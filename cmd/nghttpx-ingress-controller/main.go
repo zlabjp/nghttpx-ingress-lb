@@ -353,7 +353,10 @@ func run(cmd *cobra.Command, args []string) {
 		klog.Exit(err)
 	}
 
-	lbc := controller.NewLoadBalancerController(clientset, lb, controllerConfig)
+	lbc, err := controller.NewLoadBalancerController(clientset, lb, controllerConfig)
+	if err != nil {
+		klog.Exit(err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

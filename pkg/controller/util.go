@@ -39,7 +39,7 @@ import (
 
 // loadBalancerIngressesIPEqual compares a and b, and if their IP fields are equal, returns true.  a and b might not be sorted in the
 // particular order.  They just compared from first to last, and if there is a difference, this function returns false.
-func loadBalancerIngressesIPEqual(a, b []corev1.LoadBalancerIngress) bool {
+func loadBalancerIngressesIPEqual(a, b []networkingv1.IngressLoadBalancerIngress) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -54,14 +54,14 @@ func loadBalancerIngressesIPEqual(a, b []corev1.LoadBalancerIngress) bool {
 }
 
 // sortLoadBalancerIngress sorts a by IP and Hostname in the ascending order.
-func sortLoadBalancerIngress(a []corev1.LoadBalancerIngress) {
+func sortLoadBalancerIngress(a []networkingv1.IngressLoadBalancerIngress) {
 	sort.Slice(a, func(i, j int) bool {
 		return a[i].IP < a[j].IP || (a[i].IP == a[j].IP && a[i].Hostname < a[j].Hostname)
 	})
 }
 
 // uniqLoadBalancerIngress removes duplicated items from a.  This function assumes a is sorted by sortLoadBalancerIngress.
-func uniqLoadBalancerIngress(a []corev1.LoadBalancerIngress) []corev1.LoadBalancerIngress {
+func uniqLoadBalancerIngress(a []networkingv1.IngressLoadBalancerIngress) []networkingv1.IngressLoadBalancerIngress {
 	if len(a) == 0 {
 		return a
 	}
@@ -201,4 +201,49 @@ func validateIngressClass(ing *networkingv1.Ingress, ingressClassController stri
 
 	// If there is no default IngressClass, process the Ingress.
 	return true
+}
+
+func ingressLoadBalancerIngressFromService(svc *corev1.Service) []networkingv1.IngressLoadBalancerIngress {
+	l := len(svc.Status.LoadBalancer.Ingress) + len(svc.Spec.ExternalIPs)
+	if l == 0 {
+		return nil
+	}
+
+	lbIngs := make([]networkingv1.IngressLoadBalancerIngress, l)
+
+	for i := range svc.Status.LoadBalancer.Ingress {
+		dst := &lbIngs[i]
+		src := &svc.Status.LoadBalancer.Ingress[i]
+
+		dst.IP = src.IP
+		dst.Hostname = src.Hostname
+		dst.Ports = ingressPortStatusFromPortStatus(src.Ports)
+	}
+
+	i := len(svc.Status.LoadBalancer.Ingress)
+	for _, ip := range svc.Spec.ExternalIPs {
+		lbIngs[i].IP = ip
+		i++
+	}
+
+	return lbIngs
+}
+
+func ingressPortStatusFromPortStatus(ports []corev1.PortStatus) []networkingv1.IngressPortStatus {
+	if len(ports) == 0 {
+		return nil
+	}
+
+	ingPorts := make([]networkingv1.IngressPortStatus, len(ports))
+
+	for i := range ports {
+		dst := &ingPorts[i]
+		src := &ports[i]
+
+		dst.Port = src.Port
+		dst.Protocol = src.Protocol
+		dst.Error = src.Error
+	}
+
+	return ingPorts
 }
