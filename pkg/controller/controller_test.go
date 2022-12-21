@@ -200,68 +200,70 @@ func (f *fixture) runShouldFail() {
 
 func (f *fixture) setupStore() {
 	for _, ing := range f.ingStore {
-		if err := f.lbc.ingInformer.GetIndexer().Add(ing); err != nil {
+		if err := f.lbc.ingIndexer.Add(ing); err != nil {
 			panic(err)
 		}
-		if err := f.lc.ingInformer.GetIndexer().Add(ing); err != nil {
+		if err := f.lc.ingIndexer.Add(ing); err != nil {
 			panic(err)
 		}
 	}
 	for _, ingClass := range f.ingClassStore {
-		if err := f.lbc.ingClassInformer.GetIndexer().Add(ingClass); err != nil {
+		if err := f.lbc.ingClassIndexer.Add(ingClass); err != nil {
 			panic(err)
 		}
-		if err := f.lc.ingClassInformer.GetIndexer().Add(ingClass); err != nil {
+		if err := f.lc.ingClassIndexer.Add(ingClass); err != nil {
 			panic(err)
 		}
 	}
 	if f.enableEndpointSlice {
 		for _, es := range f.epSliceStore {
-			if err := f.lbc.epSliceInformer.GetIndexer().Add(es); err != nil {
+			if err := f.lbc.epSliceIndexer.Add(es); err != nil {
 				panic(err)
 			}
 		}
 	}
 	for _, ep := range f.epStore {
-		if err := f.lbc.epInformer.GetIndexer().Add(ep); err != nil {
+		if err := f.lbc.epIndexer.Add(ep); err != nil {
 			panic(err)
 		}
 	}
 	for _, svc := range f.svcStore {
-		if err := f.lbc.svcInformer.GetIndexer().Add(svc); err != nil {
+		if err := f.lbc.svcIndexer.Add(svc); err != nil {
 			panic(err)
 		}
-		if f.lc.svcInformer != nil {
-			if err := f.lc.svcInformer.GetIndexer().Add(svc); err != nil {
+		if f.lc.svcIndexer != nil {
+			if err := f.lc.svcIndexer.Add(svc); err != nil {
 				panic(err)
 			}
 		}
 	}
 	for _, secret := range f.secretStore {
-		if err := f.lbc.secretInformer.GetIndexer().Add(secret); err != nil {
+		if err := f.lbc.secretIndexer.Add(secret); err != nil {
 			panic(err)
 		}
-		if f.lc.secretInformer != nil {
-			if err := f.lc.secretInformer.GetIndexer().Add(secret); err != nil {
+		if f.lc.secretIndexer != nil {
+			if err := f.lc.secretIndexer.Add(secret); err != nil {
 				panic(err)
 			}
 		}
 	}
-	for _, cm := range f.cmStore {
-		if err := f.lbc.cmInformer.GetIndexer().Add(cm); err != nil {
-			panic(err)
+	if f.lbc.cmIndexer != nil {
+		for _, cm := range f.cmStore {
+			if err := f.lbc.cmIndexer.Add(cm); err != nil {
+				panic(err)
+			}
 		}
 	}
 	for _, pod := range f.podStore {
-		if err := f.lbc.podInformer.GetIndexer().Add(pod); err != nil {
+		if err := f.lbc.podIndexer.Add(pod); err != nil {
 			panic(err)
 		}
-		if err := f.lc.podInformer.GetIndexer().Add(pod); err != nil {
+		if err := f.lc.podIndexer.Add(pod); err != nil {
 			panic(err)
 		}
 	}
 	for _, node := range f.nodeStore {
-		if err := f.lc.nodeInformer.GetIndexer().Add(node); err != nil {
+		if err := f.lc.nodeIndexer.Add(node); err != nil {
 			panic(err)
 		}
 	}
