@@ -86,15 +86,23 @@ const (
 
 // LoadBalancerController watches the kubernetes api and adds/removes services from the loadbalancer
 type LoadBalancerController struct {
-	clientset                 clientset.Interface
-	ingInformer               cache.SharedIndexInformer
-	ingClassInformer          cache.SharedIndexInformer
-	epInformer                cache.SharedIndexInformer
-	epSliceInformer           cache.SharedIndexInformer
-	svcInformer               cache.SharedIndexInformer
-	secretInformer            cache.SharedIndexInformer
-	cmInformer                cache.SharedIndexInformer
-	podInformer               cache.SharedIndexInformer
+	clientset clientset.Interface
+
+	watchNSInformers informers.SharedInformerFactory
+	allNSInformers   informers.SharedInformerFactory
+	epSliceInformers informers.SharedInformerFactory
+	cmNSInformers    informers.SharedInformerFactory
+
+	// For tests
+	ingIndexer      cache.Indexer
+	ingClassIndexer cache.Indexer
+	epIndexer       cache.Indexer
+	epSliceIndexer  cache.Indexer
+	svcIndexer      cache.Indexer
+	secretIndexer   cache.Indexer
+	cmIndexer       cache.Indexer
+	podIndexer      cache.Indexer
+
 	ingLister                 listersnetworkingv1.IngressLister
 	ingClassLister            listersnetworkingv1.IngressClassLister
 	svcLister                 listerscorev1.ServiceLister
@@ -205,6 +213,8 @@ type Config struct {
 func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.ServerReloader, config Config) (*LoadBalancerController, error) {
 	lbc := LoadBalancerController{
 		clientset:                 clientset,
+		watchNSInformers:          informers.NewSharedInformerFactoryWithOptions(clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace)),
+		allNSInformers:            informers.NewSharedInformerFactory(clientset, noResyncPeriod),
 		pod:                       config.Pod,
 		nghttpx:                   nghttpx,
 		nghttpxConfigMap:          config.NghttpxConfigMap,
@@ -237,13 +247,11 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 		reloadRateLimiter:         flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
 	}
 
-	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace))
-
 	{
-		f := watchNSInformers.Networking().V1().Ingresses()
+		f := lbc.watchNSInformers.Networking().V1().Ingresses()
 		lbc.ingLister = f.Lister()
-		lbc.ingInformer = f.Informer()
-		if _, err := lbc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addIngressNotification,
 			UpdateFunc: lbc.updateIngressNotification,
 			DeleteFunc: lbc.deleteIngressNotification,
@@ -251,15 +259,14 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			klog.Errorf("Unable to add Ingress event handler: %v", err)
 			return nil, err
 		}
+		lbc.ingIndexer = inf.GetIndexer()
 	}
 
-	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod)
-
 	{
-		f := allNSInformers.Core().V1().Endpoints()
+		f := lbc.allNSInformers.Core().V1().Endpoints()
 		lbc.epLister = f.Lister()
-		lbc.epInformer = f.Informer()
-		if _, err := lbc.epInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addEndpointsNotification,
 			UpdateFunc: lbc.updateEndpointsNotification,
 			DeleteFunc: lbc.deleteEndpointsNotification,
@@ -267,19 +274,20 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			klog.Errorf("Unable to add Endpoints event handler: %v", err)
 			return nil, err
 		}
+		lbc.epIndexer = inf.GetIndexer()
 	}
 
 	if config.EnableEndpointSlice {
-		epSliceInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+		lbc.epSliceInformers = informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
 			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
 				opts.LabelSelector =
 					discoveryv1.LabelManagedBy + "=endpointslice-controller.k8s.io," + discoveryv1.LabelServiceName
 			}))
 
-		f := epSliceInformers.Discovery().V1().EndpointSlices()
+		f := lbc.epSliceInformers.Discovery().V1().EndpointSlices()
 		lbc.epSliceLister = f.Lister()
-		lbc.epSliceInformer = f.Informer()
-		if _, err := lbc.epSliceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addEndpointSliceNotification,
 			UpdateFunc: lbc.updateEndpointSliceNotification,
 			DeleteFunc: lbc.deleteEndpointSliceNotification,
@@ -287,13 +295,14 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			klog.Errorf("Unable to add EndpointSlice event handler: %v", err)
 			return nil, err
 		}
+		lbc.epSliceIndexer = inf.GetIndexer()
 	}
 
 	{
-		f := allNSInformers.Core().V1().Services()
+		f := lbc.allNSInformers.Core().V1().Services()
 		lbc.svcLister = f.Lister()
-		lbc.svcInformer = f.Informer()
-		if _, err := lbc.svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addServiceNotification,
 			UpdateFunc: lbc.updateServiceNotification,
 			DeleteFunc: lbc.deleteServiceNotification,
@@ -301,13 +310,14 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			klog.Errorf("Unable to add Service event handler: %v", err)
 			return nil, err
 		}
+		lbc.svcIndexer = inf.GetIndexer()
 	}
 
 	{
-		f := allNSInformers.Core().V1().Secrets()
+		f := lbc.allNSInformers.Core().V1().Secrets()
 		lbc.secretLister = f.Lister()
-		lbc.secretInformer = f.Informer()
-		if _, err := lbc.secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addSecretNotification,
 			UpdateFunc: lbc.updateSecretNotification,
 			DeleteFunc: lbc.deleteSecretNotification,
@@ -315,13 +325,14 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			klog.Errorf("Unable to add Secret event handler: %v", err)
 			return nil, err
 		}
+		lbc.secretIndexer = inf.GetIndexer()
 	}
 
 	{
-		f := allNSInformers.Core().V1().Pods()
+		f := lbc.allNSInformers.Core().V1().Pods()
 		lbc.podLister = f.Lister()
-		lbc.podInformer = f.Informer()
-		if _, err := lbc.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addPodNotification,
 			UpdateFunc: lbc.updatePodNotification,
 			DeleteFunc: lbc.deletePodNotification,
@@ -329,14 +340,14 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			klog.Errorf("Unable to add Pod event handler: %v", err)
 			return nil, err
 		}
-
+		lbc.podIndexer = inf.GetIndexer()
 	}
 
 	{
-		f := allNSInformers.Networking().V1().IngressClasses()
+		f := lbc.allNSInformers.Networking().V1().IngressClasses()
 		lbc.ingClassLister = f.Lister()
-		lbc.ingClassInformer = f.Informer()
-		if _, err := lbc.ingClassInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addIngressClassNotification,
 			UpdateFunc: lbc.updateIngressClassNotification,
 			DeleteFunc: lbc.deleteIngressClassNotification,
@@ -344,23 +355,20 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			klog.Errorf("Unable to add IngressClass event handler: %v", err)
 			return nil, err
 		}
+		lbc.ingClassIndexer = inf.GetIndexer()
 	}
 
-	var cmNamespace string
 	if lbc.nghttpxConfigMap != nil {
-		cmNamespace = lbc.nghttpxConfigMap.Namespace
-	} else {
-		// Just watch config.Pod.Namespace to make codebase simple
-		cmNamespace = config.Pod.Namespace
-	}
-
-	cmNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(cmNamespace))
-
-	{
-		f := cmNSInformers.Core().V1().ConfigMaps()
+		lbc.cmNSInformers = informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+			informers.WithNamespace(lbc.nghttpxConfigMap.Namespace),
+			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+				opts.FieldSelector = "metadata.name=" + lbc.nghttpxConfigMap.Name
+			}),
+		)
+		f := lbc.cmNSInformers.Core().V1().ConfigMaps()
 		lbc.cmLister = f.Lister()
-		lbc.cmInformer = f.Informer()
-		if _, err := lbc.cmInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lbc.addConfigMapNotification,
 			UpdateFunc: lbc.updateConfigMapNotification,
 			DeleteFunc: lbc.deleteConfigMapNotification,
@@ -368,7 +376,7 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			klog.Errorf("Unable to add ConfigMap event handler: %v", err)
 			return nil, err
 		}
-
+		lbc.cmIndexer = inf.GetIndexer()
 	}
 
 	return &lbc, nil
@@ -678,18 +686,12 @@ func (lbc *LoadBalancerController) deleteSecretNotification(obj interface{}) {
 
 func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 	c := obj.(*corev1.ConfigMap)
-	if lbc.nghttpxConfigMap == nil || c.Namespace != lbc.nghttpxConfigMap.Namespace || c.Name != lbc.nghttpxConfigMap.Name {
-		return
-	}
 	klog.V(4).Infof("ConfigMap %v/%v added", c.Namespace, c.Name)
 	lbc.enqueue()
 }
 
 func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interface{}) {
 	curC := cur.(*corev1.ConfigMap)
-	if lbc.nghttpxConfigMap == nil || curC.Namespace != lbc.nghttpxConfigMap.Namespace || curC.Name != lbc.nghttpxConfigMap.Name {
-		return
-	}
 	// updates to configuration configmaps can trigger an update
 	klog.V(4).Infof("ConfigMap %v/%v updated", curC.Namespace, curC.Name)
 	lbc.enqueue()
@@ -708,9 +710,6 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(obj interface{}) 
 			klog.Errorf("Tombstone contained object that is not a ConfigMap %+v", obj)
 			return
 		}
-	}
-	if lbc.nghttpxConfigMap == nil || c.Namespace != lbc.nghttpxConfigMap.Namespace || c.Name != lbc.nghttpxConfigMap.Name {
-		return
 	}
 	klog.V(4).Infof("ConfigMap %v/%v deleted", c.Namespace, c.Name)
 	lbc.enqueue()
@@ -1873,31 +1872,28 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		}
 	}()
 
-	go lbc.ingInformer.Run(ctrlCtx.Done())
-	go lbc.svcInformer.Run(ctrlCtx.Done())
-	go lbc.secretInformer.Run(ctrlCtx.Done())
-	go lbc.cmInformer.Run(ctrlCtx.Done())
-	go lbc.podInformer.Run(ctrlCtx.Done())
-	go lbc.ingClassInformer.Run(ctrlCtx.Done())
-	go lbc.epInformer.Run(ctrlCtx.Done())
+	allInformers := []informers.SharedInformerFactory{lbc.watchNSInformers, lbc.allNSInformers}
 
-	hasSynced := []cache.InformerSynced{
-		lbc.ingInformer.HasSynced,
-		lbc.svcInformer.HasSynced,
-		lbc.secretInformer.HasSynced,
-		lbc.cmInformer.HasSynced,
-		lbc.podInformer.HasSynced,
-		lbc.ingClassInformer.HasSynced,
-		lbc.epInformer.HasSynced,
+	if lbc.epSliceInformers != nil {
+		allInformers = append(allInformers, lbc.epSliceInformers)
 	}
 
-	if lbc.epSliceInformer != nil {
-		go lbc.epSliceInformer.Run(ctrlCtx.Done())
-		hasSynced = append(hasSynced, lbc.epSliceInformer.HasSynced)
+	if lbc.cmNSInformers != nil {
+		allInformers = append(allInformers, lbc.cmNSInformers)
 	}
 
-	if !cache.WaitForCacheSync(ctrlCtx.Done(), hasSynced...) {
-		return
+	for _, f := range allInformers {
+		f.Start(ctrlCtx.Done())
+		defer f.Shutdown()
+	}
+
+	for _, f := range allInformers {
+		for v, ok := range f.WaitForCacheSync(ctrlCtx.Done()) {
+			if !ok {
+				klog.Errorf("Unable to sync cache %v", v)
+				return
+			}
+		}
 	}
 
 	rlc := resourcelock.ResourceLockConfig{
@@ -2008,12 +2004,19 @@ func (lbc *LoadBalancerController) validateIngressClass(ing *networkingv1.Ingres
 type LeaderController struct {
 	lbc *LoadBalancerController
 
-	ingInformer      cache.SharedIndexInformer
-	ingClassInformer cache.SharedIndexInformer
-	svcInformer      cache.SharedIndexInformer
-	podInformer      cache.SharedIndexInformer
-	secretInformer   cache.SharedIndexInformer
-	nodeInformer     cache.SharedIndexInformer
+	watchNSInformers informers.SharedInformerFactory
+	podNSInformers   informers.SharedInformerFactory
+	secretInformers  informers.SharedInformerFactory
+	svcInformers     informers.SharedInformerFactory
+	allNSInformers   informers.SharedInformerFactory
+
+	// For tests
+	ingIndexer      cache.Indexer
+	ingClassIndexer cache.Indexer
+	svcIndexer      cache.Indexer
+	podIndexer      cache.Indexer
+	secretIndexer   cache.Indexer
+	nodeIndexer     cache.Indexer
 
 	ingLister      listersnetworkingv1.IngressLister
 	ingClassLister listersnetworkingv1.IngressClassLister
@@ -2028,7 +2031,15 @@ type LeaderController struct {
 
 func NewLeaderController(lbc *LoadBalancerController) (*LeaderController, error) {
 	lc := &LeaderController{
-		lbc: lbc,
+		lbc:              lbc,
+		watchNSInformers: informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(lbc.watchNamespace)),
+		podNSInformers: informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+			informers.WithNamespace(lbc.pod.Namespace),
+			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+				opts.LabelSelector = podLabelSelector(lbc.pod.Labels).String()
+			}),
+		),
+		allNSInformers: informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod),
 		ingQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
 			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
@@ -2039,33 +2050,25 @@ func NewLeaderController(lbc *LoadBalancerController) (*LeaderController, error)
 		)),
 	}
 
-	watchNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod, informers.WithNamespace(lbc.watchNamespace))
-
 	{
-		f := watchNSInformers.Networking().V1().Ingresses()
+		f := lc.watchNSInformers.Networking().V1().Ingresses()
 		lc.ingLister = f.Lister()
-		lc.ingInformer = f.Informer()
-		if _, err := lc.ingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addIngressNotification,
 			UpdateFunc: lc.updateIngressNotification,
 		}); err != nil {
 			klog.Errorf("Unable to add Ingress event handler: %v", err)
 			return nil, err
 		}
+		lc.ingIndexer = inf.GetIndexer()
 	}
 
-	podNSInformers := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
-		informers.WithNamespace(lbc.pod.Namespace),
-		informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
-			opts.LabelSelector = podLabelSelector(lbc.pod.Labels).String()
-		}),
-	)
-
 	{
-		f := podNSInformers.Core().V1().Pods()
+		f := lc.podNSInformers.Core().V1().Pods()
 		lc.podLister = f.Lister()
-		lc.podInformer = f.Informer()
-		if _, err := lc.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addPodNotification,
 			UpdateFunc: lc.updatePodNotification,
 			DeleteFunc: lc.deletePodNotification,
@@ -2073,19 +2076,20 @@ func NewLeaderController(lbc *LoadBalancerController) (*LeaderController, error)
 			klog.Errorf("Unable to add Pod event handler: %v", err)
 			return nil, err
 		}
+		lc.podIndexer = inf.GetIndexer()
 	}
 
 	if lbc.http3 {
-		factory := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+		lc.secretInformers = informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
 			informers.WithNamespace(lbc.quicKeyingMaterialsSecret.Namespace),
 			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
 				opts.FieldSelector = "metadata.name=" + lbc.quicKeyingMaterialsSecret.Name
 			}),
 		)
-		f := factory.Core().V1().Secrets()
+		f := lc.secretInformers.Core().V1().Secrets()
 		lc.secretLister = f.Lister()
-		lc.secretInformer = f.Informer()
-		if _, err := lc.secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addSecretNotification,
 			UpdateFunc: lc.updateSecretNotification,
 			DeleteFunc: lc.deleteSecretNotification,
@@ -2093,19 +2097,20 @@ func NewLeaderController(lbc *LoadBalancerController) (*LeaderController, error)
 			klog.Errorf("Unable to add Secret event handler: %v", err)
 			return nil, err
 		}
+		lc.secretIndexer = inf.GetIndexer()
 	}
 
 	if lbc.publishService != nil {
-		factory := informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+		lc.svcInformers = informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
 			informers.WithNamespace(lbc.publishService.Namespace),
 			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
 				opts.FieldSelector = "metadata.name=" + lbc.publishService.Name
 			}),
 		)
-		f := factory.Core().V1().Services()
+		f := lc.svcInformers.Core().V1().Services()
 		lc.svcLister = f.Lister()
-		lc.svcInformer = f.Informer()
-		if _, err := lc.svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addServiceNotification,
 			UpdateFunc: lc.updateServiceNotification,
 			DeleteFunc: lc.deleteServiceNotification,
@@ -2113,27 +2118,27 @@ func NewLeaderController(lbc *LoadBalancerController) (*LeaderController, error)
 			klog.Errorf("Unable to add Service event handler: %v", err)
 			return nil, err
 		}
+		lc.svcIndexer = inf.GetIndexer()
 	}
 
-	allNSInformers := informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod)
-
 	{
-		f := allNSInformers.Networking().V1().IngressClasses()
+		f := lc.allNSInformers.Networking().V1().IngressClasses()
 		lc.ingClassLister = f.Lister()
-		lc.ingClassInformer = f.Informer()
-		if _, err := lc.ingClassInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    lc.addIngressClassNotification,
 			UpdateFunc: lc.updateIngressClassNotification,
 			DeleteFunc: lc.deleteIngressClassNotification,
 		}); err != nil {
 			klog.Errorf("Unable to add IngressClass event handler: %v", err)
 		}
+		lc.ingClassIndexer = inf.GetIndexer()
 	}
 
 	{
-		f := allNSInformers.Core().V1().Nodes()
+		f := lc.allNSInformers.Core().V1().Nodes()
 		lc.nodeLister = f.Lister()
-		lc.nodeInformer = f.Informer()
+		lc.nodeIndexer = f.Informer().GetIndexer()
 	}
 
 	return lc, nil
@@ -2144,30 +2149,27 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 
 	var wg sync.WaitGroup
 
-	go lc.ingInformer.Run(ctx.Done())
-	go lc.ingClassInformer.Run(ctx.Done())
-	go lc.podInformer.Run(ctx.Done())
-	go lc.nodeInformer.Run(ctx.Done())
+	allInformers := []informers.SharedInformerFactory{lc.watchNSInformers, lc.podNSInformers, lc.allNSInformers}
 
-	hasSynced := []cache.InformerSynced{
-		lc.ingInformer.HasSynced,
-		lc.ingClassInformer.HasSynced,
-		lc.podInformer.HasSynced,
-		lc.nodeInformer.HasSynced,
+	if lc.secretInformers != nil {
+		allInformers = append(allInformers, lc.secretInformers)
 	}
 
-	if lc.secretInformer != nil {
-		go lc.secretInformer.Run(ctx.Done())
-		hasSynced = append(hasSynced, lc.secretInformer.HasSynced)
+	if lc.svcInformers != nil {
+		allInformers = append(allInformers, lc.svcInformers)
 	}
 
-	if lc.svcInformer != nil {
-		go lc.svcInformer.Run(ctx.Done())
-		hasSynced = append(hasSynced, lc.svcInformer.HasSynced)
+	for _, f := range allInformers {
+		f.Start(ctx.Done())
+		defer f.Shutdown()
 	}
 
-	if !cache.WaitForCacheSync(ctx.Done(), hasSynced...) {
-		return errors.New("Could not sync cache")
+	for _, f := range allInformers {
+		for v, ok := range f.WaitForCacheSync(ctx.Done()) {
+			if !ok {
+				return fmt.Errorf("Unable to sync cache %v", v)
+			}
+		}
 	}
 
 	if lc.lbc.http3 {
