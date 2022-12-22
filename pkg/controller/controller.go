@@ -90,7 +90,6 @@ type LoadBalancerController struct {
 
 	watchNSInformers informers.SharedInformerFactory
 	allNSInformers   informers.SharedInformerFactory
-	epSliceInformers informers.SharedInformerFactory
 	cmNSInformers    informers.SharedInformerFactory
 
 	// For tests
@@ -262,7 +261,20 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 		lbc.ingIndexer = inf.GetIndexer()
 	}
 
-	{
+	if config.EnableEndpointSlice {
+		f := lbc.allNSInformers.Discovery().V1().EndpointSlices()
+		lbc.epSliceLister = f.Lister()
+		inf := f.Informer()
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    lbc.addEndpointSliceNotification,
+			UpdateFunc: lbc.updateEndpointSliceNotification,
+			DeleteFunc: lbc.deleteEndpointSliceNotification,
+		}); err != nil {
+			klog.Errorf("Unable to add EndpointSlice event handler: %v", err)
+			return nil, err
+		}
+		lbc.epSliceIndexer = inf.GetIndexer()
+	} else {
 		f := lbc.allNSInformers.Core().V1().Endpoints()
 		lbc.epLister = f.Lister()
 		inf := f.Informer()
@@ -275,27 +287,6 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 			return nil, err
 		}
 		lbc.epIndexer = inf.GetIndexer()
-	}
-
-	if config.EnableEndpointSlice {
-		lbc.epSliceInformers = informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
-			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
-				opts.LabelSelector =
-					discoveryv1.LabelManagedBy + "=endpointslice-controller.k8s.io," + discoveryv1.LabelServiceName
-			}))
-
-		f := lbc.epSliceInformers.Discovery().V1().EndpointSlices()
-		lbc.epSliceLister = f.Lister()
-		inf := f.Informer()
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    lbc.addEndpointSliceNotification,
-			UpdateFunc: lbc.updateEndpointSliceNotification,
-			DeleteFunc: lbc.deleteEndpointSliceNotification,
-		}); err != nil {
-			klog.Errorf("Unable to add EndpointSlice event handler: %v", err)
-			return nil, err
-		}
-		lbc.epSliceIndexer = inf.GetIndexer()
 	}
 
 	{
@@ -1594,6 +1585,10 @@ func (lbc *LoadBalancerController) getEndpoints(svc *corev1.Service, svcPort *co
 
 	switch {
 	case len(svc.Spec.Selector) == 0:
+		if lbc.epSliceLister != nil {
+			return lbc.getEndpointsFromEndpointSliceWithoutServiceSelectors(svc, svcPort, backendConfig)
+		}
+
 		return lbc.getEndpointsWithoutServiceSelectors(svc, svcPort, backendConfig)
 	case lbc.epSliceLister != nil:
 		return lbc.getEndpointsFromEndpointSlice(svc, svcPort, backendConfig)
@@ -1644,6 +1639,70 @@ func (lbc *LoadBalancerController) getEndpointsWithoutServiceSelectors(svc *core
 				}
 
 				backends = append(backends, lbc.createBackend(svc, epAddr.IP, targetPort, backendConfig))
+			}
+		}
+	}
+
+	klog.V(3).Infof("endpoints found: %+v", backends)
+	return backends, nil
+}
+
+func (lbc *LoadBalancerController) getEndpointsFromEndpointSliceWithoutServiceSelectors(
+	svc *corev1.Service, svcPort *corev1.ServicePort, backendConfig *nghttpx.BackendConfig) ([]nghttpx.Backend, error) {
+	var targetPort int32
+
+	switch {
+	case svcPort.TargetPort.IntVal != 0:
+		targetPort = svcPort.TargetPort.IntVal
+	case svcPort.TargetPort.StrVal == "":
+		targetPort = svcPort.Port
+	default:
+		return nil, fmt.Errorf("Service %v/%v must have integer target port if specified: %v", svc.Namespace, svc.Name, svcPort.TargetPort)
+	}
+
+	ess, err := lbc.epSliceLister.EndpointSlices(svc.Namespace).List(newEndpointSliceSelector(svc))
+	if err != nil {
+		klog.Errorf("unexpected error obtaining EndpointSlice: %v", err)
+		return nil, err
+	}
+
+	var backends []nghttpx.Backend
+
+	for _, es := range ess {
+		switch es.AddressType {
+		case discoveryv1.AddressTypeIPv4, discoveryv1.AddressTypeIPv6:
+		default:
+			klog.Warningf("EndpointSlice %v/%v has unsupported address type %v", es.Namespace, es.Name, es.AddressType)
+			continue
+		}
+
+		if len(es.Ports) == 0 {
+			klog.Warningf("EndpointSlice %v/%v has no port defined", es.Namespace, es.Name)
+			continue
+		}
+
+		for i := range es.Ports {
+			epPort := &es.Ports[i]
+
+			if epPort.Protocol != nil && *epPort.Protocol != corev1.ProtocolTCP {
+				continue
+			}
+
+			if epPort.Port == nil || *epPort.Port != targetPort {
+				continue
+			}
+
+			for i := range es.Endpoints {
+				ep := &es.Endpoints[i]
+				if ep.Conditions.Ready != nil && !*ep.Conditions.Ready {
+					continue
+				}
+
+				// TODO We historically added all addresses in Endpoints code.  Not sure we should just pick one here
+				// instead.
+				for _, addr := range ep.Addresses {
+					backends = append(backends, lbc.createBackend(svc, addr, targetPort, backendConfig))
+				}
 			}
 		}
 	}
@@ -1873,10 +1932,6 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	}()
 
 	allInformers := []informers.SharedInformerFactory{lbc.watchNSInformers, lbc.allNSInformers}
-
-	if lbc.epSliceInformers != nil {
-		allInformers = append(allInformers, lbc.epSliceInformers)
-	}
 
 	if lbc.cmNSInformers != nil {
 		allInformers = append(allInformers, lbc.cmNSInformers)
