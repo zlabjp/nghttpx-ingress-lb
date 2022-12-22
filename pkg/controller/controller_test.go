@@ -221,10 +221,11 @@ func (f *fixture) setupStore() {
 				panic(err)
 			}
 		}
-	}
-	for _, ep := range f.epStore {
-		if err := f.lbc.epIndexer.Add(ep); err != nil {
-			panic(err)
+	} else {
+		for _, ep := range f.epStore {
+			if err := f.lbc.epIndexer.Add(ep); err != nil {
+				panic(err)
+			}
 		}
 	}
 	for _, svc := range f.svcStore {
@@ -492,7 +493,7 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 }
 
 // newDefaultBackendWithoutSelectors returns Service and Endpoints for default backend without Service selectors.
-func newDefaultBackendWithoutSelectors() (*corev1.Service, *corev1.Endpoints) {
+func newDefaultBackendWithoutSelectors() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.EndpointSlice) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      defaultBackendName,
@@ -537,7 +538,60 @@ func newDefaultBackendWithoutSelectors() (*corev1.Service, *corev1.Endpoints) {
 		},
 	}
 
-	return svc, eps
+	ess := []*discoveryv1.EndpointSlice{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      defaultBackendName + "-a",
+				Namespace: defaultBackendNamespace,
+				Labels: map[string]string{
+					discoveryv1.LabelServiceName: defaultBackendName,
+				},
+			},
+			AddressType: discoveryv1.AddressTypeIPv4,
+			Ports: []discoveryv1.EndpointPort{
+				{
+					Port: toPtr(int32(8081)),
+				},
+				{
+					Port: toPtr(int32(8080)),
+				},
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{
+					Addresses: []string{
+						"192.168.100.1",
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      defaultBackendName + "-b",
+				Namespace: defaultBackendNamespace,
+				Labels: map[string]string{
+					discoveryv1.LabelServiceName: defaultBackendName,
+				},
+			},
+			AddressType: discoveryv1.AddressTypeIPv4,
+			Ports: []discoveryv1.EndpointPort{
+				{
+					Port: toPtr(int32(8081)),
+				},
+				{
+					Port: toPtr(int32(8080)),
+				},
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{
+					Addresses: []string{
+						"192.168.100.2",
+					},
+				},
+			},
+		},
+	}
+
+	return svc, eps, ess
 }
 
 func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
@@ -631,7 +685,7 @@ func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev
 	return svc, eps, es
 }
 
-func newBackendWithoutSelectors(namespace, name string, addrs []string) (*corev1.Service, *corev1.Endpoints) {
+func newBackendWithoutSelectors(namespace, name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -677,7 +731,36 @@ func newBackendWithoutSelectors(namespace, name string, addrs []string) (*corev1
 
 	eps.Subsets[0].Addresses = endpointAddrs
 
-	return svc, eps
+	proto := corev1.ProtocolTCP
+
+	es := &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-aaaa",
+			Namespace: namespace,
+			Labels: map[string]string{
+				discoveryv1.LabelServiceName: name,
+			},
+		},
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Ports: []discoveryv1.EndpointPort{
+			{
+				Protocol: &proto,
+				Port:     toPtr(int32(81)),
+			},
+			{
+				Protocol: &proto,
+				Port:     toPtr(int32(80)),
+			},
+		},
+	}
+
+	for _, addr := range addrs {
+		es.Endpoints = append(es.Endpoints, discoveryv1.Endpoint{
+			Addresses: []string{addr},
+		})
+	}
+
+	return svc, eps, es
 }
 
 type ingressBuilder struct {
@@ -855,7 +938,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 				ess []*discoveryv1.EndpointSlice
 			)
 			if tt.withoutSelectors {
-				svc, eps = newDefaultBackendWithoutSelectors()
+				svc, eps, ess = newDefaultBackendWithoutSelectors()
 			} else {
 				svc, eps, ess = newDefaultBackend()
 			}
@@ -1268,38 +1351,58 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 
 // TestSyncWithoutSelectors verifies that the controller deals with Service without selectors.
 func TestSyncWithoutSelectors(t *testing.T) {
-	f := newFixture(t)
-
-	svc, eps, _ := newDefaultBackend()
-
-	bs1, be1 := newBackendWithoutSelectors(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
-		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
-		Complete()
-
-	f.svcStore = append(f.svcStore, svc, bs1)
-	f.epStore = append(f.epStore, eps, be1)
-	f.ingStore = append(f.ingStore, ing1)
-
-	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
-
-	f.prepare()
-	f.run()
-
-	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
-	ingConfig := flb.ingConfig
-
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+	tests := []struct {
+		desc                string
+		enableEndpointSlice bool
+	}{
+		{
+			desc: "With Endpoints",
+		},
+		{
+			desc:                "With EndpointSlice",
+			enableEndpointSlice: true,
+		},
 	}
 
-	if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-		t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
-	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+			f.enableEndpointSlice = tt.enableEndpointSlice
 
-	backend := ingConfig.Upstreams[1].Backends[0]
-	if got, want := backend.Port, "80"; got != want {
-		t.Errorf("backend.Port = %v, want %v", got, want)
+			svc, eps, ess := newDefaultBackend()
+
+			bs1, be1, bes1 := newBackendWithoutSelectors(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+			ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
+				WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
+				Complete()
+
+			f.svcStore = append(f.svcStore, svc, bs1)
+			f.epStore = append(f.epStore, eps, be1)
+			f.epSliceStore = append(f.epSliceStore, ess...)
+			f.epSliceStore = append(f.epSliceStore, bes1)
+			f.ingStore = append(f.ingStore, ing1)
+
+			f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+
+			f.prepare()
+			f.run()
+
+			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+			ingConfig := flb.ingConfig
+
+			if got, want := len(ingConfig.Upstreams), 2; got != want {
+				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
+			}
+
+			if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+				t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
+			}
+
+			backend := ingConfig.Upstreams[1].Backends[0]
+			if got, want := backend.Port, "80"; got != want {
+				t.Errorf("backend.Port = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
