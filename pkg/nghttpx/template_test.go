@@ -59,11 +59,10 @@ frontend=127.0.0.1,0;api;no-tls
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
-# configurations that cannot be overridden by ExtraConfig
 worker-process-grace-shutdown-period=60s
 max-worker-processes=100
+# OCSP
+fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -108,11 +107,10 @@ frontend=*,443;no-tls
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
-# configurations that cannot be overridden by ExtraConfig
 worker-process-grace-shutdown-period=60s
 max-worker-processes=100
+# OCSP
+fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -173,11 +171,10 @@ certificate-file=/tls/server.crt
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
-# configurations that cannot be overridden by ExtraConfig
 worker-process-grace-shutdown-period=60s
 max-worker-processes=100
+# OCSP
+fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -266,11 +263,10 @@ subcert=/tls/server3.key:/tls/server3.crt
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
-# configurations that cannot be overridden by ExtraConfig
 worker-process-grace-shutdown-period=60s
 max-worker-processes=100
+# OCSP
+fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -317,14 +313,13 @@ frontend=*,443;no-tls
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
+worker-process-grace-shutdown-period=60s
+max-worker-processes=100
 # ExtraConfig
 log-level=INFO
 foo=bar
 # OCSP
 fetch-ocsp-response-file=/fetch-ocsp-response
-# configurations that cannot be overridden by ExtraConfig
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -374,14 +369,13 @@ frontend=*,443;no-tls
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
+worker-process-grace-shutdown-period=60s
+max-worker-processes=100
 # mruby file
 # checksum: a3b3c8e58869776c6ab92b545454eea9e8db3b460bc1b6b9684323e3bb70a005
 mruby-file=/mruby.rb
 # OCSP
 fetch-ocsp-response-file=/fetch-ocsp-response
-# configurations that cannot be overridden by ExtraConfig
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -427,11 +421,10 @@ frontend=*,443;no-tls
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
-# OCSP
-fetch-ocsp-response-file=/cat-ocsp-resp
-# configurations that cannot be overridden by ExtraConfig
 worker-process-grace-shutdown-period=60s
 max-worker-processes=100
+# OCSP
+fetch-ocsp-response-file=/cat-ocsp-resp
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -506,11 +499,10 @@ certificate-file=/tls/server.crt
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
-# configurations that cannot be overridden by ExtraConfig
 worker-process-grace-shutdown-period=60s
 max-worker-processes=100
+# OCSP
+fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -554,11 +546,10 @@ frontend=127.0.0.1,0;api;no-tls
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
-# configurations that cannot be overridden by ExtraConfig
 worker-process-grace-shutdown-period=60s
 max-worker-processes=100
+# OCSP
+fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -617,11 +608,10 @@ frontend=127.0.0.1,0;api;no-tls
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
 workers=0
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
-# configurations that cannot be overridden by ExtraConfig
 worker-process-grace-shutdown-period=60s
 max-worker-processes=100
+# OCSP
+fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;tls;sni=foo.example.com;dns;group=group1;group-weight=100;affinity=cookie;affinity-cookie-name=sticky;affinity-cookie-path=/;affinity-cookie-secure=auto;affinity-cookie-stickiness=strict;redirect-if-not-tls;mruby=/mruby.rb;read-timeout=180;write-timeout=300;dnf
