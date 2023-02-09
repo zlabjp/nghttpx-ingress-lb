@@ -102,44 +102,47 @@ type LoadBalancerController struct {
 	cmIndexer       cache.Indexer
 	podIndexer      cache.Indexer
 
-	ingLister                 listersnetworkingv1.IngressLister
-	ingClassLister            listersnetworkingv1.IngressClassLister
-	svcLister                 listerscorev1.ServiceLister
-	epLister                  listerscorev1.EndpointsLister
-	epSliceLister             listersdiscoveryv1.EndpointSliceLister
-	secretLister              listerscorev1.SecretLister
-	cmLister                  listerscorev1.ConfigMapLister
-	podLister                 listerscorev1.PodLister
-	nghttpx                   nghttpx.ServerReloader
-	pod                       *corev1.Pod
-	defaultSvc                *types.NamespacedName
-	nghttpxConfigMap          *types.NamespacedName
-	defaultTLSSecret          *types.NamespacedName
-	publishService            *types.NamespacedName
-	nghttpxHealthPort         int32
-	nghttpxAPIPort            int32
-	nghttpxConfDir            string
-	nghttpxExecPath           string
-	nghttpxHTTPPort           int32
-	nghttpxHTTPSPort          int32
-	watchNamespace            string
-	ingressClassController    string
-	allowInternalIP           bool
-	ocspRespKey               string
-	fetchOCSPRespFromSecret   bool
-	proxyProto                bool
-	noDefaultBackendOverride  bool
-	deferredShutdownPeriod    time.Duration
-	healthzPort               int32
-	internalDefaultBackend    bool
-	http3                     bool
-	quicKeyingMaterialsSecret *types.NamespacedName
-	reconcileTimeout          time.Duration
-	leaderElectionConfig      componentbaseconfig.LeaderElectionConfiguration
-	requireIngressClass       bool
-	reloadRateLimiter         flowcontrol.RateLimiter
-	eventRecorder             events.EventRecorder
-	syncQueue                 workqueue.Interface
+	ingLister                               listersnetworkingv1.IngressLister
+	ingClassLister                          listersnetworkingv1.IngressClassLister
+	svcLister                               listerscorev1.ServiceLister
+	epLister                                listerscorev1.EndpointsLister
+	epSliceLister                           listersdiscoveryv1.EndpointSliceLister
+	secretLister                            listerscorev1.SecretLister
+	cmLister                                listerscorev1.ConfigMapLister
+	podLister                               listerscorev1.PodLister
+	nghttpx                                 nghttpx.ServerReloader
+	pod                                     *corev1.Pod
+	defaultSvc                              *types.NamespacedName
+	nghttpxConfigMap                        *types.NamespacedName
+	defaultTLSSecret                        *types.NamespacedName
+	publishService                          *types.NamespacedName
+	nghttpxHealthPort                       int32
+	nghttpxAPIPort                          int32
+	nghttpxConfDir                          string
+	nghttpxExecPath                         string
+	nghttpxHTTPPort                         int32
+	nghttpxHTTPSPort                        int32
+	nghttpxWorkers                          int32
+	nghttpxWorkerProcessGraceShutdownPeriod time.Duration
+	nghttpxMaxWorkerProcesses               int32
+	watchNamespace                          string
+	ingressClassController                  string
+	allowInternalIP                         bool
+	ocspRespKey                             string
+	fetchOCSPRespFromSecret                 bool
+	proxyProto                              bool
+	noDefaultBackendOverride                bool
+	deferredShutdownPeriod                  time.Duration
+	healthzPort                             int32
+	internalDefaultBackend                  bool
+	http3                                   bool
+	quicKeyingMaterialsSecret               *types.NamespacedName
+	reconcileTimeout                        time.Duration
+	leaderElectionConfig                    componentbaseconfig.LeaderElectionConfiguration
+	requireIngressClass                     bool
+	reloadRateLimiter                       flowcontrol.RateLimiter
+	eventRecorder                           events.EventRecorder
+	syncQueue                               workqueue.Interface
 
 	// shutdownMu protects shutdown from the concurrent read/write.
 	shutdownMu sync.RWMutex
@@ -165,6 +168,12 @@ type Config struct {
 	NghttpxHTTPPort int32
 	// NghttpxHTTPSPort is a port to listen to for HTTPS (TLS) requests.
 	NghttpxHTTPSPort int32
+	// NghttpxWorkers is the number of nghttpx worker threads.
+	NghttpxWorkers int32
+	// NghttpxWorkerProcessGraceShutdownPeriod is the maximum period for an nghttpx worker process to terminate gracefully.
+	NghttpxWorkerProcessGraceShutdownPeriod time.Duration
+	// NghttpxMaxWorkerProcesses is the maximum number of nghttpx worker processes which are spawned in every configuration reload.
+	NghttpxMaxWorkerProcesses int32
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret *types.NamespacedName
 	// IngressClassController is the name of IngressClass controller for this controller.
@@ -211,39 +220,42 @@ type Config struct {
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
 func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.ServerReloader, config Config) (*LoadBalancerController, error) {
 	lbc := LoadBalancerController{
-		clientset:                 clientset,
-		watchNSInformers:          informers.NewSharedInformerFactoryWithOptions(clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace)),
-		allNSInformers:            informers.NewSharedInformerFactory(clientset, noResyncPeriod),
-		pod:                       config.Pod,
-		nghttpx:                   nghttpx,
-		nghttpxConfigMap:          config.NghttpxConfigMap,
-		nghttpxHealthPort:         config.NghttpxHealthPort,
-		nghttpxAPIPort:            config.NghttpxAPIPort,
-		nghttpxConfDir:            config.NghttpxConfDir,
-		nghttpxExecPath:           config.NghttpxExecPath,
-		nghttpxHTTPPort:           config.NghttpxHTTPPort,
-		nghttpxHTTPSPort:          config.NghttpxHTTPSPort,
-		defaultSvc:                config.DefaultBackendService,
-		defaultTLSSecret:          config.DefaultTLSSecret,
-		watchNamespace:            config.WatchNamespace,
-		ingressClassController:    config.IngressClassController,
-		allowInternalIP:           config.AllowInternalIP,
-		ocspRespKey:               config.OCSPRespKey,
-		fetchOCSPRespFromSecret:   config.FetchOCSPRespFromSecret,
-		proxyProto:                config.ProxyProto,
-		publishService:            config.PublishService,
-		noDefaultBackendOverride:  config.NoDefaultBackendOverride,
-		deferredShutdownPeriod:    config.DeferredShutdownPeriod,
-		healthzPort:               config.HealthzPort,
-		internalDefaultBackend:    config.InternalDefaultBackend,
-		http3:                     config.HTTP3,
-		quicKeyingMaterialsSecret: config.QUICKeyingMaterialsSecret,
-		reconcileTimeout:          config.ReconcileTimeout,
-		leaderElectionConfig:      config.LeaderElectionConfig,
-		requireIngressClass:       config.RequireIngressClass,
-		eventRecorder:             config.EventRecorder,
-		syncQueue:                 workqueue.New(),
-		reloadRateLimiter:         flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
+		clientset:                               clientset,
+		watchNSInformers:                        informers.NewSharedInformerFactoryWithOptions(clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace)),
+		allNSInformers:                          informers.NewSharedInformerFactory(clientset, noResyncPeriod),
+		pod:                                     config.Pod,
+		nghttpx:                                 nghttpx,
+		nghttpxConfigMap:                        config.NghttpxConfigMap,
+		nghttpxHealthPort:                       config.NghttpxHealthPort,
+		nghttpxAPIPort:                          config.NghttpxAPIPort,
+		nghttpxConfDir:                          config.NghttpxConfDir,
+		nghttpxExecPath:                         config.NghttpxExecPath,
+		nghttpxHTTPPort:                         config.NghttpxHTTPPort,
+		nghttpxHTTPSPort:                        config.NghttpxHTTPSPort,
+		nghttpxWorkers:                          config.NghttpxWorkers,
+		nghttpxWorkerProcessGraceShutdownPeriod: config.NghttpxWorkerProcessGraceShutdownPeriod,
+		nghttpxMaxWorkerProcesses:               config.NghttpxMaxWorkerProcesses,
+		defaultSvc:                              config.DefaultBackendService,
+		defaultTLSSecret:                        config.DefaultTLSSecret,
+		watchNamespace:                          config.WatchNamespace,
+		ingressClassController:                  config.IngressClassController,
+		allowInternalIP:                         config.AllowInternalIP,
+		ocspRespKey:                             config.OCSPRespKey,
+		fetchOCSPRespFromSecret:                 config.FetchOCSPRespFromSecret,
+		proxyProto:                              config.ProxyProto,
+		publishService:                          config.PublishService,
+		noDefaultBackendOverride:                config.NoDefaultBackendOverride,
+		deferredShutdownPeriod:                  config.DeferredShutdownPeriod,
+		healthzPort:                             config.HealthzPort,
+		internalDefaultBackend:                  config.InternalDefaultBackend,
+		http3:                                   config.HTTP3,
+		quicKeyingMaterialsSecret:               config.QUICKeyingMaterialsSecret,
+		reconcileTimeout:                        config.ReconcileTimeout,
+		leaderElectionConfig:                    config.LeaderElectionConfig,
+		requireIngressClass:                     config.RequireIngressClass,
+		eventRecorder:                           config.EventRecorder,
+		syncQueue:                               workqueue.New(),
+		reloadRateLimiter:                       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
 	}
 
 	{
@@ -989,15 +1001,19 @@ App.new
 
 // createIngressConfig creates nghttpx.IngressConfig.  In nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
 func (lbc *LoadBalancerController) createIngressConfig(ings []*networkingv1.Ingress) (*nghttpx.IngressConfig, error) {
-	ingConfig := nghttpx.NewIngressConfig()
-	ingConfig.HealthPort = lbc.nghttpxHealthPort
-	ingConfig.APIPort = lbc.nghttpxAPIPort
-	ingConfig.ConfDir = lbc.nghttpxConfDir
-	ingConfig.HTTPPort = lbc.nghttpxHTTPPort
-	ingConfig.HTTPSPort = lbc.nghttpxHTTPSPort
-	ingConfig.FetchOCSPRespFromSecret = lbc.fetchOCSPRespFromSecret
-	ingConfig.ProxyProto = lbc.proxyProto
-	ingConfig.HTTP3 = lbc.http3
+	ingConfig := &nghttpx.IngressConfig{
+		HealthPort:                       lbc.nghttpxHealthPort,
+		APIPort:                          lbc.nghttpxAPIPort,
+		ConfDir:                          lbc.nghttpxConfDir,
+		HTTPPort:                         lbc.nghttpxHTTPPort,
+		HTTPSPort:                        lbc.nghttpxHTTPSPort,
+		Workers:                          lbc.nghttpxWorkers,
+		WorkerProcessGraceShutdownPeriod: lbc.nghttpxWorkerProcessGraceShutdownPeriod,
+		MaxWorkerProcesses:               lbc.nghttpxMaxWorkerProcesses,
+		FetchOCSPRespFromSecret:          lbc.fetchOCSPRespFromSecret,
+		ProxyProto:                       lbc.proxyProto,
+		HTTP3:                            lbc.http3,
+	}
 
 	var (
 		upstreams []*nghttpx.Upstream

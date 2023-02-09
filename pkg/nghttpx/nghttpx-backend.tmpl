@@ -15,8 +15,8 @@ backend={{ $backend.Address }},{{ $backend.Port }};{{ $upstream.Host }}{{ $upstr
 {{ end -}}
 {{ if $upstream.RedirectIfNotTLS }};redirect-if-not-tls{{ end -}}
 {{ if $upstream.Mruby }};mruby={{ $upstream.Mruby.Path }}{{ end -}}
-{{ if $upstream.ReadTimeout }};read-timeout={{ duration $upstream.ReadTimeout }}{{ end -}}
-{{ if $upstream.WriteTimeout }};write-timeout={{ duration $upstream.WriteTimeout }}{{ end -}}
+{{ if $upstream.ReadTimeout }};read-timeout={{ duration $upstream.ReadTimeout.Duration }}{{ end -}}
+{{ if $upstream.WriteTimeout }};write-timeout={{ duration $upstream.WriteTimeout.Duration }}{{ end -}}
 {{if $upstream.DoNotForward }};dnf{{ end }}
 {{ end -}}
 {{ end -}}

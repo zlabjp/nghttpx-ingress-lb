@@ -48,6 +48,9 @@ func TestLoadBalancerGenerateCfg(t *testing.T) {
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -58,9 +61,9 @@ frontend=127.0.0.1,0;api;no-tls
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # OCSP
 fetch-ocsp-response-file=/fetch-ocsp-response
 `,
@@ -94,6 +97,9 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -106,9 +112,9 @@ frontend=*,443;no-tls
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # OCSP
 fetch-ocsp-response-file=/fetch-ocsp-response
 `,
@@ -155,6 +161,9 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -170,9 +179,9 @@ certificate-file=/tls/server.crt
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # OCSP
 fetch-ocsp-response-file=/fetch-ocsp-response
 `,
@@ -245,6 +254,9 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -262,9 +274,9 @@ subcert=/tls/server3.key:/tls/server3.crt
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # OCSP
 fetch-ocsp-response-file=/fetch-ocsp-response
 `,
@@ -300,6 +312,9 @@ foo=bar`,
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -312,9 +327,9 @@ frontend=*,443;no-tls
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # ExtraConfig
 log-level=INFO
 foo=bar
@@ -356,6 +371,9 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -368,9 +386,9 @@ frontend=*,443;no-tls
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # mruby file
 # checksum: a3b3c8e58869776c6ab92b545454eea9e8db3b460bc1b6b9684323e3bb70a005
 mruby-file=/mruby.rb
@@ -408,6 +426,9 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -420,9 +441,9 @@ frontend=*,443;no-tls
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # OCSP
 fetch-ocsp-response-file=/cat-ocsp-resp
 `,
@@ -475,6 +496,9 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -498,9 +522,9 @@ certificate-file=/tls/server.crt
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # OCSP
 fetch-ocsp-response-file=/fetch-ocsp-response
 `,
@@ -537,6 +561,9 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -545,9 +572,9 @@ frontend=127.0.0.1,0;api;no-tls
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # OCSP
 fetch-ocsp-response-file=/fetch-ocsp-response
 `,
@@ -599,6 +626,9 @@ backend=127.0.0.1,9999;/nghttpx-healthz;mruby=/healthz.rb;dnf
 						},
 					},
 				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
 			},
 			wantMainConfig: `accesslog-file=/dev/stdout
 include=/nghttpx-backend.conf
@@ -607,9 +637,9 @@ frontend=127.0.0.1,0;api;no-tls
 # for health check
 frontend=127.0.0.1,0;healthmon;no-tls
 # default configuration by controller
-workers=0
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
 # OCSP
 fetch-ocsp-response-file=/fetch-ocsp-response
 `,
