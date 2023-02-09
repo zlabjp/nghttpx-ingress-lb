@@ -27,7 +27,7 @@ package nghttpx
 import (
 	"bytes"
 	"context"
-	"runtime"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -54,6 +54,12 @@ type IngressConfig struct {
 	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-n
 	// Set the number of worker threads.
 	Workers int32
+	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-worker-process-grace-shutdown-period
+	// WorkerProcessGraceShutdownPeriod is the maximum period for an nghttpx worker process to terminate gracefully.
+	WorkerProcessGraceShutdownPeriod time.Duration
+	// https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx-max-worker-processes
+	// MaxWorkerProcesses is the maximum number of nghttpx worker processes which are spawned in every configuration reload.
+	MaxWorkerProcesses int32
 	// ExtraConfig is the extra configurations in a format that nghttpx accepts in --conf.
 	ExtraConfig string
 	// MrubyFileContent is the extra mruby script.  It is saved in the container disk space, and will be referenced by mruby-file from
@@ -79,13 +85,6 @@ type IngressConfig struct {
 	HTTP3 bool
 	// QUICSecretFile is the file which contains QUIC keying materials.
 	QUICSecretFile *PrivateChecksumFile
-}
-
-// NewIngressConfig returns new IngressConfig.  Workers is initialized as the number of CPU cores.
-func NewIngressConfig() *IngressConfig {
-	return &IngressConfig{
-		Workers: int32(runtime.NumCPU()),
-	}
 }
 
 // Upstream describes an nghttpx upstream

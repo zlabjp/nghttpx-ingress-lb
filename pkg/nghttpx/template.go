@@ -30,15 +30,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"text/template"
+	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
 var (
 	funcMap = template.FuncMap{
-		"duration": func(d *metav1.Duration) string {
-			return nghttpxDuration(d.Duration)
+		"duration": func(d time.Duration) string {
+			return nghttpxDuration(d)
 		},
 		"encodeHex": func(b []byte) string {
 			return hex.EncodeToString(b)

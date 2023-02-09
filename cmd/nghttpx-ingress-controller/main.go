@@ -34,6 +34,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -98,8 +99,11 @@ var (
 		RetryPeriod:   metav1.Duration{Duration: 2 * time.Second},
 		ResourceName:  "nghttpx-ingress-lb",
 	}
-	requireIngressClass  = false
-	nghttpxHealthTimeout = 30 * time.Second
+	requireIngressClass                     = false
+	nghttpxHealthTimeout                    = 30 * time.Second
+	nghttpxWorkers                          = int32(runtime.NumCPU())
+	nghttpxWorkerProcessGraceShutdownPeriod = time.Minute
+	nghttpxMaxWorkerProcesses               = int32(100)
 )
 
 func main() {
@@ -202,6 +206,15 @@ func main() {
 
 	rootCmd.Flags().DurationVar(&nghttpxHealthTimeout, "nghttpx-health-timeout", nghttpxHealthTimeout,
 		`Timeout for a request to nghttpx health monitor endpoint.`)
+
+	rootCmd.Flags().Int32Var(&nghttpxWorkers, "nghttpx-workers", nghttpxWorkers,
+		`The number of nghttpx worker threads.`)
+
+	rootCmd.Flags().DurationVar(&nghttpxWorkerProcessGraceShutdownPeriod, "nghttpx-worker-process-grace-shutdown-period", nghttpxWorkerProcessGraceShutdownPeriod,
+		`The maximum period for an nghttpx worker process to terminate gracefully.  Specifying 0 means no limit.`)
+
+	rootCmd.Flags().Int32Var(&nghttpxMaxWorkerProcesses, "nghttpx-max-worker-processes", nghttpxMaxWorkerProcesses,
+		`The maximum number of nghttpx worker processes which are spawned in every configuration reload.`)
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
@@ -308,36 +321,39 @@ func run(cmd *cobra.Command, args []string) {
 	eventRecorder := eventBroadcaster.NewRecorder(scheme.Scheme, "nghttpx-ingress-controller")
 
 	controllerConfig := controller.Config{
-		DefaultBackendService:     defaultSvcKey,
-		WatchNamespace:            watchNamespace,
-		NghttpxConfigMap:          nghttpxConfigMapKey,
-		NghttpxHealthPort:         nghttpxHealthPort,
-		NghttpxAPIPort:            nghttpxAPIPort,
-		NghttpxConfDir:            nghttpxConfDir,
-		NghttpxExecPath:           nghttpxExecPath,
-		NghttpxHTTPPort:           nghttpxHTTPPort,
-		NghttpxHTTPSPort:          nghttpxHTTPSPort,
-		DefaultTLSSecret:          defaultTLSSecretKey,
-		IngressClassController:    ingressClassController,
-		AllowInternalIP:           allowInternalIP,
-		OCSPRespKey:               ocspRespKey,
-		FetchOCSPRespFromSecret:   fetchOCSPRespFromSecret,
-		ProxyProto:                proxyProto,
-		PublishService:            publishSvcKey,
-		EnableEndpointSlice:       endpointSlices,
-		ReloadRate:                reloadRate,
-		ReloadBurst:               reloadBurst,
-		NoDefaultBackendOverride:  noDefaultBackendOverride,
-		DeferredShutdownPeriod:    deferredShutdownPeriod,
-		HealthzPort:               healthzPort,
-		InternalDefaultBackend:    internalDefaultBackend,
-		HTTP3:                     http3,
-		QUICKeyingMaterialsSecret: &types.NamespacedName{Name: quicKeyingMaterialsSecret, Namespace: thisPod.Namespace},
-		ReconcileTimeout:          reconcileTimeout,
-		LeaderElectionConfig:      leaderElectionConfig,
-		RequireIngressClass:       requireIngressClass,
-		Pod:                       thisPod,
-		EventRecorder:             eventRecorder,
+		DefaultBackendService:                   defaultSvcKey,
+		WatchNamespace:                          watchNamespace,
+		NghttpxConfigMap:                        nghttpxConfigMapKey,
+		NghttpxHealthPort:                       nghttpxHealthPort,
+		NghttpxAPIPort:                          nghttpxAPIPort,
+		NghttpxConfDir:                          nghttpxConfDir,
+		NghttpxExecPath:                         nghttpxExecPath,
+		NghttpxHTTPPort:                         nghttpxHTTPPort,
+		NghttpxHTTPSPort:                        nghttpxHTTPSPort,
+		NghttpxWorkers:                          nghttpxWorkers,
+		NghttpxWorkerProcessGraceShutdownPeriod: nghttpxWorkerProcessGraceShutdownPeriod,
+		NghttpxMaxWorkerProcesses:               nghttpxMaxWorkerProcesses,
+		DefaultTLSSecret:                        defaultTLSSecretKey,
+		IngressClassController:                  ingressClassController,
+		AllowInternalIP:                         allowInternalIP,
+		OCSPRespKey:                             ocspRespKey,
+		FetchOCSPRespFromSecret:                 fetchOCSPRespFromSecret,
+		ProxyProto:                              proxyProto,
+		PublishService:                          publishSvcKey,
+		EnableEndpointSlice:                     endpointSlices,
+		ReloadRate:                              reloadRate,
+		ReloadBurst:                             reloadBurst,
+		NoDefaultBackendOverride:                noDefaultBackendOverride,
+		DeferredShutdownPeriod:                  deferredShutdownPeriod,
+		HealthzPort:                             healthzPort,
+		InternalDefaultBackend:                  internalDefaultBackend,
+		HTTP3:                                   http3,
+		QUICKeyingMaterialsSecret:               &types.NamespacedName{Name: quicKeyingMaterialsSecret, Namespace: thisPod.Namespace},
+		ReconcileTimeout:                        reconcileTimeout,
+		LeaderElectionConfig:                    leaderElectionConfig,
+		RequireIngressClass:                     requireIngressClass,
+		Pod:                                     thisPod,
+		EventRecorder:                           eventRecorder,
 	}
 
 	lbConfig := nghttpx.LoadBalancerConfig{

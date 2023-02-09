@@ -33,8 +33,8 @@ frontend=*,{{ .HTTPSPort }};no-tls{{ if .ProxyProto }};proxyproto{{ end }}
 frontend=127.0.0.1,{{ .HealthPort }};healthmon;no-tls
 # default configuration by controller
 workers={{ .Workers }}
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
+worker-process-grace-shutdown-period={{ duration .WorkerProcessGraceShutdownPeriod }}
+max-worker-processes={{ .MaxWorkerProcesses }}
 {{ if .ExtraConfig -}}
 # ExtraConfig
 {{ .ExtraConfig }}
