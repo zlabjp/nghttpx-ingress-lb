@@ -33,6 +33,8 @@ frontend=*,{{ .HTTPSPort }};no-tls{{ if .ProxyProto }};proxyproto{{ end }}
 frontend=127.0.0.1,{{ .HealthPort }};healthmon;no-tls
 # default configuration by controller
 workers={{ .Workers }}
+worker-process-grace-shutdown-period=60s
+max-worker-processes=100
 {{ if .ExtraConfig -}}
 # ExtraConfig
 {{ .ExtraConfig }}
@@ -48,6 +50,3 @@ fetch-ocsp-response-file=/cat-ocsp-resp
 {{ else -}}
 fetch-ocsp-response-file=/fetch-ocsp-response
 {{ end -}}
-# configurations that cannot be overridden by ExtraConfig
-worker-process-grace-shutdown-period=60s
-max-worker-processes=100
