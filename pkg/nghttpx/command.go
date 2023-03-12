@@ -338,7 +338,7 @@ func (lb *LoadBalancer) getNghttpxConfigRevision(ctx context.Context) (int64, er
 func (lb *LoadBalancer) waitUntilConfigRevisionChanges(ctx context.Context, oldConfRev int64) error {
 	klog.Infof("Waiting for nghttpx to finish reloading configuration")
 
-	if err := wait.Poll(time.Second, 30*time.Second, func() (bool, error) {
+	if err := wait.Poll(time.Second, lb.reloadTimeout, func() (bool, error) {
 		newConfRev, err := lb.getNghttpxConfigRevision(ctx)
 		if err != nil {
 			klog.Error(err)
