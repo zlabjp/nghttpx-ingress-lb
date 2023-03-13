@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"os/exec"
 	"text/template"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/events"
@@ -40,6 +41,7 @@ type LoadBalancerConfig struct {
 	NghttpxConfDir    string
 	Pod               *corev1.Pod
 	EventRecorder     events.EventRecorder
+	ReloadTimeout     time.Duration
 }
 
 // LoadBalancer starts nghttpx and reloads its configuration on demand.  It implements ServerReloader.
@@ -60,6 +62,8 @@ type LoadBalancer struct {
 	backendconfigURI string
 	// configrevisionURI is the nghttpx configrevision endpoint.
 	configrevisionURI string
+	// reloadTimeout is the timeout before controller gives up to wait for configRevision to change.
+	reloadTimeout time.Duration
 
 	// cmd is nghttpx command.
 	cmd *exec.Cmd
@@ -79,6 +83,7 @@ func NewLoadBalancer(config LoadBalancerConfig) (*LoadBalancer, error) {
 		eventRecorder:     config.EventRecorder,
 		backendconfigURI:  fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", config.NghttpxAPIPort),
 		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", config.NghttpxAPIPort),
+		reloadTimeout:     config.ReloadTimeout,
 	}
 
 	lb.loadTemplate()

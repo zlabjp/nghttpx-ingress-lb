@@ -104,6 +104,7 @@ var (
 	nghttpxWorkers                          = int32(runtime.NumCPU())
 	nghttpxWorkerProcessGraceShutdownPeriod = time.Minute
 	nghttpxMaxWorkerProcesses               = int32(100)
+	reloadTimeout                           = 30 * time.Second
 )
 
 func main() {
@@ -215,6 +216,9 @@ func main() {
 
 	rootCmd.Flags().Int32Var(&nghttpxMaxWorkerProcesses, "nghttpx-max-worker-processes", nghttpxMaxWorkerProcesses,
 		`The maximum number of nghttpx worker processes which are spawned in every configuration reload.`)
+
+	rootCmd.Flags().DurationVar(&reloadTimeout, "reload-timeout", reloadTimeout,
+		`Timeout before confirming that nghttpx reloads configuration.`)
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
@@ -362,6 +366,7 @@ func run(cmd *cobra.Command, args []string) {
 		NghttpxConfDir:    nghttpxConfDir,
 		Pod:               thisPod,
 		EventRecorder:     eventRecorder,
+		ReloadTimeout:     reloadTimeout,
 	}
 
 	lb, err := nghttpx.NewLoadBalancer(lbConfig)
