@@ -105,6 +105,8 @@ var (
 	nghttpxWorkerProcessGraceShutdownPeriod = time.Minute
 	nghttpxMaxWorkerProcesses               = int32(100)
 	reloadTimeout                           = 30 * time.Second
+	clientQPS                               = float32(200)
+	clientBurst                             = 300
 )
 
 func main() {
@@ -220,6 +222,12 @@ func main() {
 	rootCmd.Flags().DurationVar(&reloadTimeout, "reload-timeout", reloadTimeout,
 		`Timeout before confirming that nghttpx reloads configuration.`)
 
+	rootCmd.Flags().Float32Var(&clientQPS, "client-qps", clientQPS,
+		`QPS for Kubernetes API client request`)
+
+	rootCmd.Flags().IntVar(&clientBurst, "client-burst", clientBurst,
+		`Burst for Kubernetes API client request`)
+
 	code := cli.Run(rootCmd)
 	os.Exit(code)
 }
@@ -297,6 +305,9 @@ func run(cmd *cobra.Command, args []string) {
 	if err != nil {
 		klog.Exitf("Could not get clientConfig: %v", err)
 	}
+
+	config.QPS = clientQPS
+	config.Burst = clientBurst
 
 	clientset, err := clientset.NewForConfig(config)
 	if err != nil {
