@@ -76,7 +76,7 @@ simple we will use the [echoheaders app](https://github.com/kubernetes/contrib/b
 that just returns information about the HTTP request as output
 
 ```
-kubectl create deployment echoheaders --image=k8s.gcr.io/echoserver:1.10
+kubectl create deployment echoheaders --image=registry.k8s.io/echoserver:1.10
 ```
 
 Now we expose the same application in two different services (so we can create different Ingress rules)
