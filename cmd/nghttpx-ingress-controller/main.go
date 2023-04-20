@@ -29,7 +29,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -110,9 +109,6 @@ var (
 )
 
 func main() {
-	// We use math/rand to choose interval of resync
-	rand.Seed(time.Now().UTC().UnixNano())
-
 	rootCmd := &cobra.Command{
 		Use: "nghttpx-ingress-controller",
 		Run: run,
