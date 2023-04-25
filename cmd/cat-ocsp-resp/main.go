@@ -21,7 +21,7 @@ func main() {
 	}
 }
 
-func run(cmd *cobra.Command, args []string) {
+func run(_ *cobra.Command, args []string) {
 	path := args[0]
 
 	if !strings.HasSuffix(path, ".crt") {

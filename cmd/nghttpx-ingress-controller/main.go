@@ -228,7 +228,7 @@ func main() {
 	os.Exit(code)
 }
 
-func run(cmd *cobra.Command, args []string) {
+func run(*cobra.Command, []string) {
 	klog.Infof("Using build: %v - %v", gitRepo, version)
 
 	var (
