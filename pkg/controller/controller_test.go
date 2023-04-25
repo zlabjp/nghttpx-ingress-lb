@@ -306,11 +306,11 @@ func newFakeLoadBalancer() *fakeLoadBalancer {
 	return flb
 }
 
-func (flb *fakeLoadBalancer) Start(ctx context.Context, path, confPath string) error {
+func (flb *fakeLoadBalancer) Start(context.Context, string, string) error {
 	return nil
 }
 
-func (flb *fakeLoadBalancer) CheckAndReload(ctx context.Context, ingConfig *nghttpx.IngressConfig) (bool, error) {
+func (flb *fakeLoadBalancer) CheckAndReload(_ context.Context, ingConfig *nghttpx.IngressConfig) (bool, error) {
 	return flb.checkAndReloadHandler(ingConfig)
 }
 
@@ -594,7 +594,9 @@ func newDefaultBackendWithoutSelectors() (*corev1.Service, *corev1.Endpoints, []
 	return svc, eps, ess
 }
 
-func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
+func newBackend(name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
+	const namespace = metav1.NamespaceDefault
+
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -685,7 +687,9 @@ func newBackend(namespace, name string, addrs []string) (*corev1.Service, *corev
 	return svc, eps, es
 }
 
-func newBackendWithoutSelectors(namespace, name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
+func newBackendWithoutSelectors(name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
+	const namespace = metav1.NamespaceDefault
+
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -1072,7 +1076,7 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
 	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
 	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithTLS(tlsSecret.Name).
@@ -1148,7 +1152,7 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	tlsSecret := newTLSSecret(metav1.NamespaceDefault, "tls", dCrt, dKey)
 	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
 	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithTLS(tlsSecret.Name).
@@ -1218,7 +1222,7 @@ func TestSyncStringNamedPort(t *testing.T) {
 
 			svc, eps, ess := newDefaultBackend()
 
-			bs1, be1, bes1 := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1", "192.168.10.2"})
+			bs1, be1, bes1 := newBackend("alpha", []string{"192.168.10.1", "192.168.10.2"})
 			bs1.Spec.Ports[0] = corev1.ServicePort{
 				Port:       1234,
 				TargetPort: intstr.FromString("my-port"),
@@ -1313,7 +1317,7 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 
 	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
 	bs1.Spec.Ports[0] = corev1.ServicePort{
 		Port:       80,
 		TargetPort: intstr.FromString(""),
@@ -1371,7 +1375,7 @@ func TestSyncWithoutSelectors(t *testing.T) {
 
 			svc, eps, ess := newDefaultBackend()
 
-			bs1, be1, bes1 := newBackendWithoutSelectors(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+			bs1, be1, bes1 := newBackendWithoutSelectors("alpha", []string{"192.168.10.1"})
 			ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
 				WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 				Complete()
@@ -1513,8 +1517,8 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 
 	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "bravo", []string{"192.168.10.2"})
+	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
+	bs2, be2, _ := newBackend("bravo", []string{"192.168.10.2"})
 	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithDefaultBackend("bravo", serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
@@ -1551,8 +1555,8 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 
 // TestSyncIngressNoDefaultBackendOverride verifies that any settings or rules which override default backend are ignored.
 func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
-	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
-	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "bravo", []string{"192.168.10.2"})
+	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
+	bs2, be2, _ := newBackend("bravo", []string{"192.168.10.2"})
 
 	tests := []struct {
 		desc     string
@@ -1799,7 +1803,7 @@ func TestSyncNamedServicePort(t *testing.T) {
 
 	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
 	bs1.Spec.Ports[0] = corev1.ServicePort{
 		Name:     "namedport",
 		Port:     80,
@@ -1966,7 +1970,7 @@ func TestSyncNormalizePath(t *testing.T) {
 
 			svc, eps, _ := newDefaultBackend()
 
-			bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha", []string{"192.168.10.1"})
+			bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
 			ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
 				WithRule(tt.path, bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 				Complete()
@@ -2598,7 +2602,7 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 
 	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha1", []string{"192.168.10.1"})
+	bs1, be1, _ := newBackend("alpha1", []string{"192.168.10.1"})
 	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha1").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2607,7 +2611,7 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 `}).
 		Complete()
 
-	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "alpha2", []string{"192.168.10.2"})
+	bs2, be2, _ := newBackend("alpha2", []string{"192.168.10.2"})
 	ing2 := newIngressBuilder(metav1.NamespaceDefault, "alpha2").
 		WithRuleHost("alpha1.default.test", "/", bs2.Name, serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2616,7 +2620,7 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 `}).
 		Complete()
 
-	bs3, be3, _ := newBackend(metav1.NamespaceDefault, "alpha3", []string{"192.168.10.3"})
+	bs3, be3, _ := newBackend("alpha3", []string{"192.168.10.3"})
 	ing3 := newIngressBuilder(metav1.NamespaceDefault, "alpha3").
 		WithRule("/examples", bs3.Name, serviceBackendPortNumber(bs3.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2658,7 +2662,7 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 
 	svc, eps, _ := newDefaultBackend()
 
-	bs1, be1, _ := newBackend(metav1.NamespaceDefault, "alpha1", []string{"192.168.10.1"})
+	bs1, be1, _ := newBackend("alpha1", []string{"192.168.10.1"})
 	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha1").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2667,7 +2671,7 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 `}).
 		Complete()
 
-	bs2, be2, _ := newBackend(metav1.NamespaceDefault, "alpha2", []string{"192.168.10.2"})
+	bs2, be2, _ := newBackend("alpha2", []string{"192.168.10.2"})
 	ing2 := newIngressBuilder(metav1.NamespaceDefault, "alpha2").
 		WithRule("/", bs2.Name, serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2677,7 +2681,7 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 `}).
 		Complete()
 
-	bs3, be3, _ := newBackend(metav1.NamespaceDefault, "alpha3", []string{"192.168.10.3"})
+	bs3, be3, _ := newBackend("alpha3", []string{"192.168.10.3"})
 	ing3 := newIngressBuilder(metav1.NamespaceDefault, "alpha3").
 		WithRule("/", bs3.Name, serviceBackendPortNumber(bs3.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{

@@ -431,7 +431,7 @@ func (lbc *LoadBalancerController) addIngressClassNotification(obj interface{}) 
 	lbc.enqueue()
 }
 
-func (lbc *LoadBalancerController) updateIngressClassNotification(old interface{}, cur interface{}) {
+func (lbc *LoadBalancerController) updateIngressClassNotification(_, cur interface{}) {
 	ingClass := cur.(*networkingv1.IngressClass)
 	klog.V(4).Infof("IngressClass %v updated", ingClass.Name)
 	lbc.enqueue()
@@ -693,7 +693,7 @@ func (lbc *LoadBalancerController) addConfigMapNotification(obj interface{}) {
 	lbc.enqueue()
 }
 
-func (lbc *LoadBalancerController) updateConfigMapNotification(old, cur interface{}) {
+func (lbc *LoadBalancerController) updateConfigMapNotification(_, cur interface{}) {
 	curC := cur.(*corev1.ConfigMap)
 	// updates to configuration configmaps can trigger an update
 	klog.V(4).Infof("ConfigMap %v/%v updated", curC.Namespace, curC.Name)
@@ -1040,13 +1040,14 @@ func (lbc *LoadBalancerController) createIngressConfig(ings []*networkingv1.Ingr
 		klog.Infof("Processing Ingress %v/%v", ing.Namespace, ing.Name)
 
 		var requireTLS bool
-		if ingPems, err := lbc.getTLSCredFromIngress(ing); err != nil {
+		ingPems, err := lbc.getTLSCredFromIngress(ing)
+		if err != nil {
 			klog.Warningf("Ingress %v/%v is disabled because its TLS Secret cannot be processed: %v", ing.Namespace, ing.Name, err)
 			continue
-		} else {
-			pems = append(pems, ingPems...)
-			requireTLS = len(ingPems) > 0
 		}
+
+		pems = append(pems, ingPems...)
+		requireTLS = len(ingPems) > 0
 
 		bcm := ingressAnnotation(ing.Annotations).NewBackendConfigMapper()
 		pcm := ingressAnnotation(ing.Annotations).NewPathConfigMapper()
@@ -1095,12 +1096,13 @@ func (lbc *LoadBalancerController) createIngressConfig(ings []*networkingv1.Ingr
 					continue
 				}
 
-				if ups, err := lbc.createUpstream(ing, rule.Host, reqPath, isb, requireTLS, pcm, bcm); err != nil {
+				ups, err := lbc.createUpstream(ing, rule.Host, reqPath, isb, requireTLS, pcm, bcm)
+				if err != nil {
 					klog.Errorf("Could not create backend for Ingress %v/%v: %v", ing.Namespace, ing.Name, err)
 					continue
-				} else {
-					upstreams = append(upstreams, ups)
 				}
+
+				upstreams = append(upstreams, ups)
 			}
 		}
 	}
@@ -1305,11 +1307,7 @@ func validateUpstreamBackendParams(upstream *nghttpx.Upstream, opts backendOpts)
 		return err
 	}
 
-	if err := validateUpstreamBackendParamsWriteTimeout(upstream, opts); err != nil {
-		return err
-	}
-
-	return nil
+	return validateUpstreamBackendParamsWriteTimeout(upstream, opts)
 }
 
 func validateUpstreamBackendParamsMruby(upstream *nghttpx.Upstream, opts backendOpts) error {
@@ -2304,7 +2302,7 @@ func (lc *LeaderController) addPodNotification(obj interface{}) {
 	lc.enqueueIngressAll()
 }
 
-func (lc *LeaderController) updatePodNotification(old, cur interface{}) {
+func (lc *LeaderController) updatePodNotification(_, cur interface{}) {
 	curPod := cur.(*corev1.Pod)
 
 	klog.V(4).Infof("Pod %v/%v updated", curPod.Namespace, curPod.Name)
@@ -2340,7 +2338,7 @@ func (lc *LeaderController) addServiceNotification(obj interface{}) {
 	lc.enqueueIngressAll()
 }
 
-func (lc *LeaderController) updateServiceNotification(old, cur interface{}) {
+func (lc *LeaderController) updateServiceNotification(_, cur interface{}) {
 	curSvc := cur.(*corev1.Service)
 
 	klog.V(4).Infof("Service %v/%v updated", curSvc.Namespace, curSvc.Name)
@@ -2375,7 +2373,7 @@ func (lc *LeaderController) addSecretNotification(obj interface{}) {
 	lc.enqueueQUICSecret()
 }
 
-func (lc *LeaderController) updateSecretNotification(old, cur interface{}) {
+func (lc *LeaderController) updateSecretNotification(_, cur interface{}) {
 	curS := cur.(*corev1.Secret)
 
 	klog.V(4).Infof("Secret %v/%v updated", curS.Namespace, curS.Name)
@@ -2407,7 +2405,7 @@ func (lc *LeaderController) addIngressClassNotification(obj interface{}) {
 	lc.enqueueIngressWithIngressClass(ingClass)
 }
 
-func (lc *LeaderController) updateIngressClassNotification(old interface{}, cur interface{}) {
+func (lc *LeaderController) updateIngressClassNotification(_, cur interface{}) {
 	ingClass := cur.(*networkingv1.IngressClass)
 	klog.V(4).Infof("IngressClass %v updated", ingClass.Name)
 	lc.enqueueIngressWithIngressClass(ingClass)

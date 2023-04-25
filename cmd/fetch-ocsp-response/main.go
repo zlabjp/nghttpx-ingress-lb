@@ -35,7 +35,7 @@ func main() {
 	}
 }
 
-func run(cmd *cobra.Command, args []string) {
+func run(_ *cobra.Command, args []string) {
 	certs, err := loadCertificates(args[0])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to load certificate: %v\n", err)
