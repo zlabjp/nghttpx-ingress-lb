@@ -1,0 +1,14 @@
+run:
+  timeout: 5m
+linters:
+  enable:
+  - bodyclose
+  - exportloopref
+  - gofmt
+  - importas
+  - logrlint
+  - noctx
+  - prealloc
+  - revive
+  - unparam
+  - usestdlibvars

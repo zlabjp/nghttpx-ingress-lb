@@ -18,6 +18,10 @@ jobs:
     - uses: actions/setup-go@v4
       with:
         go-version-file: go.mod
+    - uses: golangci/golangci-lint-action@v3
+      with:
+        skip-pkg-cache: true
+        skip-build-cache: true
     - name: Build
       run: |
         make vet check controller
