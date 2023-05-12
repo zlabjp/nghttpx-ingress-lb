@@ -19,7 +19,7 @@
 
 FROM debian:11 as build
 
-COPY patches/extra-mrbgem.patch patches/0001-nghttpx-Fix-bug-that-causes-400-response-after-upgra.patch patches/nghttpx-reload.patch /
+COPY patches/extra-mrbgem.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
@@ -35,7 +35,7 @@ RUN git clone --depth 1 -b OpenSSL_1_1_1t+quic https://github.com/quictls/openss
     cd .. && \
     rm -rf openssl
 
-RUN git clone --depth 1 -b v0.8.0 https://github.com/ngtcp2/nghttp3 && \
+RUN git clone --depth 1 -b v0.11.0 https://github.com/ngtcp2/nghttp3 && \
     cd nghttp3 && \
     autoreconf -i && \
     ./configure --enable-lib-only && \
@@ -44,7 +44,7 @@ RUN git clone --depth 1 -b v0.8.0 https://github.com/ngtcp2/nghttp3 && \
     cd .. && \
     rm -rf nghttp3
 
-RUN git clone --depth 1 -b v0.13.1 https://github.com/ngtcp2/ngtcp2 && \
+RUN git clone --depth 1 -b v0.15.0 https://github.com/ngtcp2/ngtcp2 && \
     cd ngtcp2 && \
     autoreconf -i && \
     ./configure --enable-lib-only \
@@ -62,11 +62,9 @@ RUN git clone --depth 1 -b v1.0.1 https://github.com/libbpf/libbpf && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --depth 1 -b v1.52.0 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --depth 1 -b v1.53.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
-    patch -p1 < /0001-nghttpx-Fix-bug-that-causes-400-response-after-upgra.patch && \
-    patch -p1 < /nghttpx-reload.patch && \
     git submodule update --init && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --with-mruby --with-neverbleed \
