@@ -27,7 +27,7 @@ RUN apt-get update && \
         git clang make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison libelf-dev patch
 
-RUN git clone --depth 1 -b OpenSSL_1_1_1t+quic https://github.com/quictls/openssl && \
+RUN git clone --depth 1 -b OpenSSL_1_1_1u+quic https://github.com/quictls/openssl && \
     cd openssl && \
     ./config --openssldir=/etc/ssl && \
     make -j$(nproc) && \
@@ -35,7 +35,7 @@ RUN git clone --depth 1 -b OpenSSL_1_1_1t+quic https://github.com/quictls/openss
     cd .. && \
     rm -rf openssl
 
-RUN git clone --depth 1 -b v0.11.0 https://github.com/ngtcp2/nghttp3 && \
+RUN git clone --depth 1 -b v0.12.0 https://github.com/ngtcp2/nghttp3 && \
     cd nghttp3 && \
     autoreconf -i && \
     ./configure --enable-lib-only && \
@@ -44,7 +44,7 @@ RUN git clone --depth 1 -b v0.11.0 https://github.com/ngtcp2/nghttp3 && \
     cd .. && \
     rm -rf nghttp3
 
-RUN git clone --depth 1 -b v0.15.0 https://github.com/ngtcp2/ngtcp2 && \
+RUN git clone --depth 1 -b v0.16.0 https://github.com/ngtcp2/ngtcp2 && \
     cd ngtcp2 && \
     autoreconf -i && \
     ./configure --enable-lib-only \
@@ -56,13 +56,13 @@ RUN git clone --depth 1 -b v0.15.0 https://github.com/ngtcp2/ngtcp2 && \
     cd .. && \
     rm -rf ngtcp2
 
-RUN git clone --depth 1 -b v1.0.1 https://github.com/libbpf/libbpf && \
+RUN git clone --depth 1 -b v1.2.0 https://github.com/libbpf/libbpf && \
     cd libbpf && \
     PREFIX=/usr/local make -C src install && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --depth 1 -b v1.53.0 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --depth 1 -b v1.54.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     git submodule update --init && \
