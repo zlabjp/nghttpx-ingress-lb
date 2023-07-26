@@ -106,6 +106,7 @@ var (
 	reloadTimeout                           = 30 * time.Second
 	clientQPS                               = float32(200)
 	clientBurst                             = 300
+	staleAssetsThreshold                    = time.Hour
 )
 
 func main() {
@@ -223,6 +224,9 @@ func main() {
 
 	rootCmd.Flags().IntVar(&clientBurst, "client-burst", clientBurst,
 		`Burst for Kubernetes API client request`)
+
+	rootCmd.Flags().DurationVar(&staleAssetsThreshold, "stale-assets-threshold", staleAssetsThreshold,
+		`Duration that asset files (e.g., TLS keys and certificates, and mruby files) are considered stale`)
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
@@ -368,12 +372,13 @@ func run(*cobra.Command, []string) {
 	}
 
 	lbConfig := nghttpx.LoadBalancerConfig{
-		NghttpxHealthPort: nghttpxHealthPort,
-		NghttpxAPIPort:    nghttpxAPIPort,
-		NghttpxConfDir:    nghttpxConfDir,
-		Pod:               thisPod,
-		EventRecorder:     eventRecorder,
-		ReloadTimeout:     reloadTimeout,
+		NghttpxHealthPort:    nghttpxHealthPort,
+		NghttpxAPIPort:       nghttpxAPIPort,
+		NghttpxConfDir:       nghttpxConfDir,
+		Pod:                  thisPod,
+		EventRecorder:        eventRecorder,
+		ReloadTimeout:        reloadTimeout,
+		StaleAssetsThreshold: staleAssetsThreshold,
 	}
 
 	lb, err := nghttpx.NewLoadBalancer(lbConfig)
