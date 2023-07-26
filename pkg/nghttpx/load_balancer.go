@@ -36,12 +36,13 @@ import (
 )
 
 type LoadBalancerConfig struct {
-	NghttpxHealthPort int32
-	NghttpxAPIPort    int32
-	NghttpxConfDir    string
-	Pod               *corev1.Pod
-	EventRecorder     events.EventRecorder
-	ReloadTimeout     time.Duration
+	NghttpxHealthPort    int32
+	NghttpxAPIPort       int32
+	NghttpxConfDir       string
+	Pod                  *corev1.Pod
+	EventRecorder        events.EventRecorder
+	ReloadTimeout        time.Duration
+	StaleAssetsThreshold time.Duration
 }
 
 // LoadBalancer starts nghttpx and reloads its configuration on demand.  It implements ServerReloader.
@@ -64,6 +65,8 @@ type LoadBalancer struct {
 	configrevisionURI string
 	// reloadTimeout is the timeout before controller gives up to wait for configRevision to change.
 	reloadTimeout time.Duration
+	// staleAssetsThreshold is the duration that asset files are considered stale.
+	staleAssetsThreshold time.Duration
 
 	// cmd is nghttpx command.
 	cmd *exec.Cmd
@@ -79,11 +82,12 @@ func NewLoadBalancer(config LoadBalancerConfig) (*LoadBalancer, error) {
 		httpClient: &http.Client{
 			Transport: tr,
 		},
-		pod:               config.Pod,
-		eventRecorder:     config.EventRecorder,
-		backendconfigURI:  fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", config.NghttpxAPIPort),
-		configrevisionURI: fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", config.NghttpxAPIPort),
-		reloadTimeout:     config.ReloadTimeout,
+		pod:                  config.Pod,
+		eventRecorder:        config.EventRecorder,
+		backendconfigURI:     fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", config.NghttpxAPIPort),
+		configrevisionURI:    fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", config.NghttpxAPIPort),
+		reloadTimeout:        config.ReloadTimeout,
+		staleAssetsThreshold: config.StaleAssetsThreshold,
 	}
 
 	lb.loadTemplate()

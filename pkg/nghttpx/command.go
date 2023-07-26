@@ -138,7 +138,7 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 
 		klog.Info("nghttpx has finished reloading new configuration")
 
-		if err := deleteStaleAssets(ingressCfg); err != nil {
+		if err := lb.deleteStaleAssets(ingressCfg, time.Now()); err != nil {
 			klog.Errorf("Could not delete stale assets: %v", err)
 		}
 	case backendConfigChanged:
@@ -152,7 +152,7 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 
 		lb.eventRecorder.Eventf(lb.pod, nil, corev1.EventTypeNormal, "ReplaceBackend", "ReplaceBackend", "nghttpx replaced its backend servers")
 
-		if err := deleteStaleMrubyAssets(ingressCfg); err != nil {
+		if err := lb.deleteStaleMrubyAssets(ingressCfg, time.Now()); err != nil {
 			klog.Errorf("Could not delete stale assets: %v", err)
 		}
 	}
@@ -161,57 +161,28 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 }
 
 // deleteStaleAssets deletes asset files which are no longer used.
-func deleteStaleAssets(ingConfig *IngressConfig) error {
-	if err := deleteStaleTLSAssets(ingConfig); err != nil {
+func (lb *LoadBalancer) deleteStaleAssets(ingConfig *IngressConfig, t time.Time) error {
+	if err := lb.deleteStaleTLSAssets(ingConfig, t); err != nil {
 		return fmt.Errorf("could not delete stale TLS assets: %w", err)
 	}
-	if err := deleteStaleMrubyAssets(ingConfig); err != nil {
+	if err := lb.deleteStaleMrubyAssets(ingConfig, t); err != nil {
 		return fmt.Errorf("could not delete stale mruby assets: %w", err)
 	}
 	return nil
 }
 
 // deleteStaleTLSAssets deletes TLS asset files which are no longer used.
-func deleteStaleTLSAssets(ingConfig *IngressConfig) error {
-	keep := make(map[string]bool)
-	if ingConfig.DefaultTLSCred != nil {
-		gatherTLSAssets(keep, ingConfig.DefaultTLSCred)
-	}
-	for _, tlsCred := range ingConfig.SubTLSCred {
-		gatherTLSAssets(keep, tlsCred)
-	}
-
-	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, tlsDir), keep)
-}
-
-// gatherTLSAssets collects file path from tlsCred, and set its associated value to true in dst.
-func gatherTLSAssets(dst map[string]bool, tlsCred *TLSCred) {
-	dst[tlsCred.Key.Path] = true
-	dst[tlsCred.Cert.Path] = true
-	if tlsCred.OCSPResp != nil {
-		dst[tlsCred.OCSPResp.Path] = true
-	}
+func (lb *LoadBalancer) deleteStaleTLSAssets(ingConfig *IngressConfig, t time.Time) error {
+	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, tlsDir), t, lb.staleAssetsThreshold)
 }
 
 // deleteStaleMrubyAssets deletes mruby asset files which are no longer used.
-func deleteStaleMrubyAssets(ingConfig *IngressConfig) error {
-	keep := make(map[string]bool)
-	for _, upstream := range ingConfig.Upstreams {
-		if upstream.Mruby == nil {
-			continue
-		}
-		keep[upstream.Mruby.Path] = true
-	}
-
-	if ingConfig.HealthzMruby != nil {
-		keep[ingConfig.HealthzMruby.Path] = true
-	}
-
-	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, mrubyDir), keep)
+func (lb *LoadBalancer) deleteStaleMrubyAssets(ingConfig *IngressConfig, t time.Time) error {
+	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, mrubyDir), t, lb.staleAssetsThreshold)
 }
 
-// deleteAssetFiles deletes files under dir but keeps files if they are included in keep.
-func deleteAssetFiles(dir string, keep map[string]bool) error {
+// deleteAssetFiles deletes stale files under dir.  A file is stale when its modification time + staleAssetsThreshold <= t.
+func deleteAssetFiles(dir string, t time.Time, staleAssetsThreshold time.Duration) error {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return err
@@ -222,9 +193,17 @@ func deleteAssetFiles(dir string, keep map[string]bool) error {
 			continue
 		}
 		path := filepath.Join(dir, f.Name())
-		if keep[path] {
+
+		info, err := f.Info()
+		if err != nil {
+			return err
+		}
+
+		modTime := info.ModTime()
+		if modTime.Add(staleAssetsThreshold).After(t) {
 			continue
 		}
+
 		klog.V(4).Infof("Removing stale asset file %v", path)
 		if err := os.Remove(path); err != nil {
 			return err
