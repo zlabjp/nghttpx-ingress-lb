@@ -35,7 +35,7 @@ RUN git clone --depth 1 -b OpenSSL_1_1_1v+quic https://github.com/quictls/openss
     cd .. && \
     rm -rf openssl
 
-RUN git clone --depth 1 -b v0.13.0 https://github.com/ngtcp2/nghttp3 && \
+RUN git clone --depth 1 -b v0.15.0 https://github.com/ngtcp2/nghttp3 && \
     cd nghttp3 && \
     autoreconf -i && \
     ./configure --enable-lib-only && \
@@ -44,7 +44,7 @@ RUN git clone --depth 1 -b v0.13.0 https://github.com/ngtcp2/nghttp3 && \
     cd .. && \
     rm -rf nghttp3
 
-RUN git clone --depth 1 -b v0.17.0 https://github.com/ngtcp2/ngtcp2 && \
+RUN git clone --depth 1 -b v0.19.1 https://github.com/ngtcp2/ngtcp2 && \
     cd ngtcp2 && \
     autoreconf -i && \
     ./configure --enable-lib-only \
@@ -56,13 +56,13 @@ RUN git clone --depth 1 -b v0.17.0 https://github.com/ngtcp2/ngtcp2 && \
     cd .. && \
     rm -rf ngtcp2
 
-RUN git clone --depth 1 -b v1.2.0 https://github.com/libbpf/libbpf && \
+RUN git clone --depth 1 -b v1.2.2 https://github.com/libbpf/libbpf && \
     cd libbpf && \
     PREFIX=/usr/local make -C src install && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --depth 1 -b v1.55.1 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --depth 1 -b v1.56.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     git submodule update --init && \
