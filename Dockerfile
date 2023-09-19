@@ -17,14 +17,14 @@
 # For the full copyright and license information, please view the LICENSE
 # file that was distributed with this source code.
 
-FROM debian:11 as build
+FROM debian:12 as build
 
 COPY patches/extra-mrbgem.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        git clang make binutils autoconf automake autotools-dev libtool pkg-config \
+        git clang gcc make binutils autoconf automake autotools-dev libtool pkg-config \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison libelf-dev patch
 
 RUN git clone --depth 1 -b OpenSSL_1_1_1v+quic https://github.com/quictls/openssl && \
@@ -82,7 +82,7 @@ RUN git clone --depth 1 -b v1.56.0 https://github.com/nghttp2/nghttp2.git && \
     cd .. && \
     rm -rf nghttp2
 
-FROM gcr.io/distroless/cc-debian11:latest
+FROM gcr.io/distroless/cc-debian12:latest
 
 COPY --from=build /usr/local/bin/nghttpx /usr/local/bin/
 COPY --from=build /usr/local/lib/nghttp2/reuseport_kern.o \
