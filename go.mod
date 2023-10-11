@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/spf13/cobra v1.7.0
-	golang.org/x/crypto v0.11.0
+	golang.org/x/crypto v0.14.0
 	golang.org/x/time v0.3.0
 	k8s.io/api v0.28.1
 	k8s.io/apimachinery v0.28.1
@@ -49,11 +49,11 @@ require (
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/net v0.13.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
-	golang.org/x/sys v0.10.0 // indirect
-	golang.org/x/term v0.10.0 // indirect
-	golang.org/x/text v0.11.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/term v0.13.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
