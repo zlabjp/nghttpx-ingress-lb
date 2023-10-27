@@ -325,7 +325,7 @@ func run(*cobra.Command, []string) {
 
 	thisPod, err := getThisPod(clientset, podInfo)
 	if err != nil {
-		klog.Exit("Could not get Pod %v/%v: %v", podInfo.Namespace, podInfo.Name, err)
+		klog.Exitf("Could not get Pod %v/%v: %v", podInfo.Namespace, podInfo.Name, err)
 	}
 
 	eventBroadcasterCtx, cancel := context.WithCancel(context.Background())
