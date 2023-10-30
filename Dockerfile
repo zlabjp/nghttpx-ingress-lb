@@ -35,7 +35,7 @@ RUN git clone --depth 1 -b OpenSSL_1_1_1w+quic https://github.com/quictls/openss
     cd .. && \
     rm -rf openssl
 
-RUN git clone --depth 1 -b v0.15.0 https://github.com/ngtcp2/nghttp3 && \
+RUN git clone --depth 1 -b v1.0.0 https://github.com/ngtcp2/nghttp3 && \
     cd nghttp3 && \
     autoreconf -i && \
     ./configure --enable-lib-only && \
@@ -44,7 +44,7 @@ RUN git clone --depth 1 -b v0.15.0 https://github.com/ngtcp2/nghttp3 && \
     cd .. && \
     rm -rf nghttp3
 
-RUN git clone --depth 1 -b v0.19.1 https://github.com/ngtcp2/ngtcp2 && \
+RUN git clone --depth 1 -b v1.0.1 https://github.com/ngtcp2/ngtcp2 && \
     cd ngtcp2 && \
     autoreconf -i && \
     ./configure --enable-lib-only \
@@ -62,7 +62,7 @@ RUN git clone --depth 1 -b v1.2.2 https://github.com/libbpf/libbpf && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --depth 1 -b v1.57.0 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --depth 1 -b v1.58.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     git submodule update --init && \
