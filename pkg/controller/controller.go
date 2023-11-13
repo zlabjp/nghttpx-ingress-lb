@@ -155,7 +155,7 @@ type LoadBalancerController struct {
 
 	// certCacheMu protects certCache from the concurrent read/write.
 	certCacheMu sync.Mutex
-	certCache   map[string]*CertificateCacheEntry
+	certCache   map[string]*certificateCacheEntry
 }
 
 type Config struct {
@@ -265,7 +265,7 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 		eventRecorder:                           config.EventRecorder,
 		syncQueue:                               workqueue.New(),
 		reloadRateLimiter:                       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
-		certCache:                               make(map[string]*CertificateCacheEntry),
+		certCache:                               make(map[string]*certificateCacheEntry),
 	}
 
 	{
@@ -1555,10 +1555,10 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *corev1.Secret
 	var leafCert *x509.Certificate
 
 	cache, ok := lbc.getCertificateFromCache(cacheKey)
-	if ok && bytes.Equal(certHash, cache.CertificateHash) {
-		leafCert = cache.LeafCertificate
-		cert = cache.Certificate
-		key = cache.Key
+	if ok && bytes.Equal(certHash, cache.certificateHash) {
+		leafCert = cache.leafCertificate
+		cert = cache.certificate
+		key = cache.key
 	} else {
 		var err error
 
@@ -1581,11 +1581,11 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *corev1.Secret
 			return nil, err
 		}
 
-		lbc.cacheCertificate(cacheKey, &CertificateCacheEntry{
-			LeafCertificate: leafCert,
-			CertificateHash: certHash,
-			Certificate:     cert,
-			Key:             key,
+		lbc.cacheCertificate(cacheKey, &certificateCacheEntry{
+			leafCertificate: leafCert,
+			certificateHash: certHash,
+			certificate:     cert,
+			key:             key,
 		})
 	}
 
@@ -1597,18 +1597,18 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *corev1.Secret
 	return nghttpx.CreateTLSCred(lbc.nghttpxConfDir, strings.Join([]string{secret.Namespace, secret.Name}, "/"), cert, key, secret.Data[lbc.ocspRespKey]), nil
 }
 
-type CertificateCacheEntry struct {
-	// LeafCertificate is a parsed form of Certificate.
-	LeafCertificate *x509.Certificate
-	// CertificateHash is the hash of certificate and private key which are not yet normalized.
-	CertificateHash []byte
-	// Certificate is a normalized certificate in PEM format.
-	Certificate []byte
-	// Key is a normalized private key in PEM format.
-	Key []byte
+type certificateCacheEntry struct {
+	// leafCertificate is a parsed form of Certificate.
+	leafCertificate *x509.Certificate
+	// certificateHash is the hash of certificate and private key which are not yet normalized.
+	certificateHash []byte
+	// certificate is a normalized certificate in PEM format.
+	certificate []byte
+	// key is a normalized private key in PEM format.
+	key []byte
 }
 
-func (lbc *LoadBalancerController) getCertificateFromCache(key string) (*CertificateCacheEntry, bool) {
+func (lbc *LoadBalancerController) getCertificateFromCache(key string) (*certificateCacheEntry, bool) {
 	lbc.certCacheMu.Lock()
 	ent, ok := lbc.certCache[key]
 	lbc.certCacheMu.Unlock()
@@ -1616,7 +1616,7 @@ func (lbc *LoadBalancerController) getCertificateFromCache(key string) (*Certifi
 	return ent, ok
 }
 
-func (lbc *LoadBalancerController) cacheCertificate(key string, entry *CertificateCacheEntry) {
+func (lbc *LoadBalancerController) cacheCertificate(key string, entry *certificateCacheEntry) {
 	lbc.certCacheMu.Lock()
 	lbc.certCache[key] = entry
 	lbc.certCacheMu.Unlock()

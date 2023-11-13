@@ -2737,16 +2737,16 @@ func TestCreateTLSCredFromSecret(t *testing.T) {
 
 	certHash := calculateCertificateHash(s.Data[corev1.TLSCertKey], s.Data[corev1.TLSPrivateKeyKey])
 
-	if got, want := ent.CertificateHash, certHash; !bytes.Equal(got, want) {
-		t.Errorf("ent.CertificateHash = %s, want %s", got, want)
+	if got, want := ent.certificateHash, certHash; !bytes.Equal(got, want) {
+		t.Errorf("ent.certificateHash = %s, want %s", got, want)
 	}
 
-	if got, want := ent.Certificate, s.Data[corev1.TLSCertKey]; !bytes.Equal(got, want) {
-		t.Errorf("ent.Certificate = %s, want %s", got, want)
+	if got, want := ent.certificate, s.Data[corev1.TLSCertKey]; !bytes.Equal(got, want) {
+		t.Errorf("ent.certificate = %s, want %s", got, want)
 	}
 
-	if got, want := ent.Key, s.Data[corev1.TLSPrivateKeyKey]; !bytes.Equal(got, want) {
-		t.Errorf("ent.Key = %s, want %s", got, want)
+	if got, want := ent.key, s.Data[corev1.TLSPrivateKeyKey]; !bytes.Equal(got, want) {
+		t.Errorf("ent.key = %s, want %s", got, want)
 	}
 
 	// Should use cache.
