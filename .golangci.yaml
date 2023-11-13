@@ -12,3 +12,4 @@ linters:
   - revive
   - unparam
   - usestdlibvars
+  - errorlint
