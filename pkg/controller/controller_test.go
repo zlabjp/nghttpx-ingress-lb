@@ -2717,3 +2717,44 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 		t.Errorf("upstream.Ingress = %v, want %v", got, want)
 	}
 }
+
+func TestCreateTLSCredFromSecret(t *testing.T) {
+	f := newFixture(t)
+	f.prepare()
+
+	s := newTLSSecret("ns", "cert", []byte(tlsCrt), []byte(tlsKey))
+
+	if _, err := f.lbc.createTLSCredFromSecret(s); err != nil {
+		t.Fatalf("f.lbc.createTLSCredFromSecret: %v", err)
+	}
+
+	cacheKey := createCertCacheKey(s)
+
+	ent := f.lbc.certCache[cacheKey]
+	if ent == nil {
+		t.Fatalf("Certificate from Secret %s/%s is not cached", s.Namespace, s.Name)
+	}
+
+	certHash := calculateCertificateHash(s.Data[corev1.TLSCertKey], s.Data[corev1.TLSPrivateKeyKey])
+
+	if got, want := ent.CertificateHash, certHash; !bytes.Equal(got, want) {
+		t.Errorf("ent.CertificateHash = %s, want %s", got, want)
+	}
+
+	if got, want := ent.Certificate, s.Data[corev1.TLSCertKey]; !bytes.Equal(got, want) {
+		t.Errorf("ent.Certificate = %s, want %s", got, want)
+	}
+
+	if got, want := ent.Key, s.Data[corev1.TLSPrivateKeyKey]; !bytes.Equal(got, want) {
+		t.Errorf("ent.Key = %s, want %s", got, want)
+	}
+
+	// Should use cache.
+	if _, err := f.lbc.createTLSCredFromSecret(s); err != nil {
+		t.Fatalf("f.lbc.createTLSCredFromSecret: %v", err)
+	}
+
+	if got, want := f.lbc.certCache[cacheKey], ent; got != want {
+		t.Errorf("f.lbc.certCache[%q] = %v, want %v", cacheKey, got, want)
+	}
+}

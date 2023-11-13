@@ -242,8 +242,14 @@ func TestVerifyCertificate(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
+
+			cert, err := ReadLeafCertificate(certPEM)
+			if err != nil {
+				panic(err)
+			}
+
 			var errMsg string
-			if err := VerifyCertificate(certPEM, time.Now()); err != nil {
+			if err := VerifyCertificate(cert, time.Now()); err != nil {
 				errMsg = err.Error()
 			}
 			if got, want := errMsg, tt.wantErr; got != want {

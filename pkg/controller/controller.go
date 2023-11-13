@@ -25,8 +25,10 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -82,6 +84,9 @@ const (
 	// quicKeyingMaterialsUpdateTimestampKey is an annotation key which is associated to the value that contains the timestamp when QUIC
 	// secret is last updated.
 	quicKeyingMaterialsUpdateTimestampKey = "ingress.zlab.co.jp/quic-keying-materials-update-timestamp"
+
+	// certificateGarbageCollectionPeriod is the period between garbage collection against certificate cache is performed.
+	certificateGarbageCollectionPeriod = time.Hour
 )
 
 // LoadBalancerController watches the kubernetes api and adds/removes services from the loadbalancer
@@ -147,6 +152,10 @@ type LoadBalancerController struct {
 	// shutdownMu protects shutdown from the concurrent read/write.
 	shutdownMu sync.RWMutex
 	shutdown   bool
+
+	// certCacheMu protects certCache from the concurrent read/write.
+	certCacheMu sync.Mutex
+	certCache   map[string]*CertificateCacheEntry
 }
 
 type Config struct {
@@ -256,6 +265,7 @@ func NewLoadBalancerController(clientset clientset.Interface, nghttpx nghttpx.Se
 		eventRecorder:                           config.EventRecorder,
 		syncQueue:                               workqueue.New(),
 		reloadRateLimiter:                       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
+		certCache:                               make(map[string]*CertificateCacheEntry),
 	}
 
 	{
@@ -1539,28 +1549,106 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(secret *corev1.Secret
 		return nil, fmt.Errorf("Secret %v/%v has no private key", secret.Namespace, secret.Name)
 	}
 
-	var err error
+	cacheKey := createCertCacheKey(secret)
+	certHash := calculateCertificateHash(cert, key)
 
-	cert, err = nghttpx.NormalizePEM(cert)
-	if err != nil {
-		return nil, fmt.Errorf("could not normalize certificate in Secret %v/%v: %w", secret.Namespace, secret.Name, err)
+	var leafCert *x509.Certificate
+
+	cache, ok := lbc.getCertificateFromCache(cacheKey)
+	if ok && bytes.Equal(certHash, cache.CertificateHash) {
+		leafCert = cache.LeafCertificate
+		cert = cache.Certificate
+		key = cache.Key
+	} else {
+		var err error
+
+		cert, err = nghttpx.NormalizePEM(cert)
+		if err != nil {
+			return nil, fmt.Errorf("could not normalize certificate in Secret %v/%v: %w", secret.Namespace, secret.Name, err)
+		}
+
+		key, err = nghttpx.NormalizePEM(key)
+		if err != nil {
+			return nil, fmt.Errorf("could not normalize private key in Secret %v/%v: %w", secret.Namespace, secret.Name, err)
+		}
+
+		if _, err := tls.X509KeyPair(cert, key); err != nil {
+			return nil, err
+		}
+
+		leafCert, err = nghttpx.ReadLeafCertificate(cert)
+		if err != nil {
+			return nil, err
+		}
+
+		lbc.cacheCertificate(cacheKey, &CertificateCacheEntry{
+			LeafCertificate: leafCert,
+			CertificateHash: certHash,
+			Certificate:     cert,
+			Key:             key,
+		})
 	}
 
-	key, err = nghttpx.NormalizePEM(key)
-	if err != nil {
-		return nil, fmt.Errorf("could not normalize private key in Secret %v/%v: %w", secret.Namespace, secret.Name, err)
-	}
-
-	if _, err := tls.X509KeyPair(cert, key); err != nil {
-		return nil, err
-	}
-
-	if err := nghttpx.VerifyCertificate(cert, time.Now()); err != nil {
+	if err := nghttpx.VerifyCertificate(leafCert, time.Now()); err != nil {
 		return nil, err
 	}
 
 	// OCSP response in TLS secret is optional feature.
 	return nghttpx.CreateTLSCred(lbc.nghttpxConfDir, strings.Join([]string{secret.Namespace, secret.Name}, "/"), cert, key, secret.Data[lbc.ocspRespKey]), nil
+}
+
+type CertificateCacheEntry struct {
+	// LeafCertificate is a parsed form of Certificate.
+	LeafCertificate *x509.Certificate
+	// CertificateHash is the hash of certificate and private key which are not yet normalized.
+	CertificateHash []byte
+	// Certificate is a normalized certificate in PEM format.
+	Certificate []byte
+	// Key is a normalized private key in PEM format.
+	Key []byte
+}
+
+func (lbc *LoadBalancerController) getCertificateFromCache(key string) (*CertificateCacheEntry, bool) {
+	lbc.certCacheMu.Lock()
+	ent, ok := lbc.certCache[key]
+	lbc.certCacheMu.Unlock()
+
+	return ent, ok
+}
+
+func (lbc *LoadBalancerController) cacheCertificate(key string, entry *CertificateCacheEntry) {
+	lbc.certCacheMu.Lock()
+	lbc.certCache[key] = entry
+	lbc.certCacheMu.Unlock()
+}
+
+func (lbc *LoadBalancerController) garbageCollectCertificate(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(certificateGarbageCollectionPeriod):
+		}
+
+		lbc.certCacheMu.Lock()
+
+		for key := range lbc.certCache {
+			ns, name, err := cache.SplitMetaNamespaceKey(key)
+			if err != nil {
+				continue
+			}
+
+			if _, err := lbc.secretLister.Secrets(ns).Get(name); err != nil {
+				if apierrors.IsNotFound(err) {
+					delete(lbc.certCache, key)
+				}
+
+				continue
+			}
+		}
+
+		lbc.certCacheMu.Unlock()
+	}
 }
 
 func (lbc *LoadBalancerController) secretReferenced(s *corev1.Secret) bool {
@@ -2031,6 +2119,14 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		defer wg.Done()
 
 		lbc.worker()
+	}()
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		lbc.garbageCollectCertificate(ctrlCtx)
 	}()
 
 	go func() {
