@@ -170,18 +170,17 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 	return pems[:j+1]
 }
 
-// VerifyCertificate verifies certPEM passed in PEM format.
-func VerifyCertificate(certPEM []byte, currentTime time.Time) error {
+func ReadLeafCertificate(certPEM []byte) (*x509.Certificate, error) {
 	certDER, err := readLeafCertificate(certPEM)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		return err
-	}
+	return x509.ParseCertificate(certDER)
+}
 
+// VerifyCertificate verifies cert.
+func VerifyCertificate(cert *x509.Certificate, currentTime time.Time) error {
 	klog.V(4).Infof("Signature algorithm is %v", cert.SignatureAlgorithm)
 
 	switch cert.SignatureAlgorithm {

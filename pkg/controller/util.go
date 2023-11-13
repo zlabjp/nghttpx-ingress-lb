@@ -25,6 +25,7 @@ limitations under the License.
 package controller
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"sort"
 
@@ -217,4 +218,15 @@ func ingressPortStatusFromPortStatus(ports []corev1.PortStatus) []networkingv1.I
 	}
 
 	return ingPorts
+}
+
+func createCertCacheKey(s *corev1.Secret) string {
+	return fmt.Sprintf("%v/%v", s.Namespace, s.Name)
+}
+
+func calculateCertificateHash(cert, key []byte) []byte {
+	h := sha256.New()
+	h.Write(cert)
+	h.Write(key)
+	return h.Sum(nil)
 }
