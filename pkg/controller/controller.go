@@ -897,11 +897,17 @@ func (lbc *LoadBalancerController) getQUICKeyingMaterials(key types.NamespacedNa
 }
 
 func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
-	klog.V(2).Info("Syncing load balancer")
+	start := time.Now()
+
+	klog.Info("Syncing load balancer")
 
 	retry := false
 
-	defer func() { lbc.retryOrForget(key, retry) }()
+	defer func() {
+		lbc.retryOrForget(key, retry)
+
+		klog.Infof("Finished syncing load balancer in %s", time.Since(start))
+	}()
 
 	ings, err := lbc.ingLister.List(labels.Everything())
 	if err != nil {
