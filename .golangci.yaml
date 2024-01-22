@@ -13,3 +13,7 @@ linters:
   - unparam
   - usestdlibvars
   - errorlint
+  - misspell
+  - unconvert
+  - perfsprint
+  - mirror
