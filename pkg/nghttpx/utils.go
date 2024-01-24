@@ -97,7 +97,7 @@ func diff(b1, b2 []byte) (string, error) {
 	d := difflib.UnifiedDiff{
 		A:        difflib.SplitLines(string(b1)),
 		B:        difflib.SplitLines(string(b2)),
-		FromFile: "currnet",
+		FromFile: "current",
 		ToFile:   "new",
 		Context:  3,
 	}

@@ -47,7 +47,7 @@ func TestUniqLoadBalancerIngress(t *testing.T) {
 		ans   []networkingv1.IngressLoadBalancerIngress
 	}{
 		{
-			desc: "Emptry input",
+			desc: "Empty input",
 		},
 		{
 			desc: "With duplicates",
