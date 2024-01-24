@@ -666,7 +666,7 @@ In particular:
 
 ```
 I0323 04:39:16.552830       8 utils.go:90] nghttpx configuration diff /etc/nghttpx/nghttpx.conf
---- currnet
+--- current
 +++ new
 @@ -1,7 +1,41 @@
 -# A very simple nghttpx configuration file that forces nghttpx to start.
