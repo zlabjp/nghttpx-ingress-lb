@@ -26,6 +26,7 @@ package nghttpx
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -62,7 +63,9 @@ func ReadConfig(ingConfig *IngressConfig, config *corev1.ConfigMap) {
 // needsReload first checks that configuration is changed.  filename is the current configuration file path, and data includes the new
 // configuration.  If they differ, we write data into filename, and return true.  Otherwise, just return false without altering existing
 // file.
-func needsReload(filename string, newCfg []byte) (bool, error) {
+func needsReload(ctx context.Context, filename string, newCfg []byte) (bool, error) {
+	log := klog.FromContext(ctx)
+
 	in, err := os.Open(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -81,13 +84,13 @@ func needsReload(filename string, newCfg []byte) (bool, error) {
 		return false, nil
 	}
 
-	if klog.V(2).Enabled() {
+	if log.V(2).Enabled() {
 		dData, err := diff(oldCfg, newCfg)
 		if err != nil {
-			klog.Errorf("error computing diff: %s", err)
+			log.Error(err, "Error while computing diff")
 			return true, nil
 		}
-		klog.Infof("nghttpx configuration diff %s\n%v", filename, dData)
+		log.V(2).Info("nghttpx configuration diff", "path", filename, "diff", dData)
 	}
 
 	return true, nil
@@ -105,30 +108,34 @@ func diff(b1, b2 []byte) (string, error) {
 }
 
 // FixupBackendConfig validates config, and fixes the invalid values inside it.
-func FixupBackendConfig(config *BackendConfig) {
+func FixupBackendConfig(ctx context.Context, config *BackendConfig) {
+	log := klog.FromContext(ctx)
+
 	switch config.GetProto() {
 	case ProtocolH2, ProtocolH1:
 		// OK
 	default:
-		klog.Errorf("unrecognized backend protocol %q", config.GetProto())
+		log.Error(nil, "Unrecognized backend protocol", "protocol", config.GetProto())
 		config.SetProto(ProtocolH1)
 	}
 	if config.Weight != nil {
 		weight := config.GetWeight()
 		switch {
 		case weight < 1:
-			klog.Errorf("invalid weight %v.  It must be [1, 256], inclusive", weight)
+			log.Error(nil, "Invalid weight.  It must be [1, 256], inclusive", "weight", weight)
 			config.SetWeight(1)
 		case weight > 256:
-			klog.Errorf("invalid weight %v.  It must be [1, 256], inclusive", weight)
+			log.Error(nil, "Invalid weight.  It must be [1, 256], inclusive", "weight", weight)
 			config.SetWeight(256)
 		}
 	}
 }
 
 // ApplyDefaultBackendConfig applies default field value specified in defaultConfig to config if a corresponding field is missing.
-func ApplyDefaultBackendConfig(config *BackendConfig, defaultConfig *BackendConfig) {
-	klog.V(4).Info("Applying default-backend-config annotation")
+func ApplyDefaultBackendConfig(ctx context.Context, config *BackendConfig, defaultConfig *BackendConfig) {
+	log := klog.FromContext(ctx)
+
+	log.V(4).Info("Applying default-backend-config annotation")
 	if defaultConfig.Proto != nil && config.Proto == nil {
 		config.SetProto(*defaultConfig.Proto)
 	}
@@ -147,32 +154,36 @@ func ApplyDefaultBackendConfig(config *BackendConfig, defaultConfig *BackendConf
 }
 
 // FixupPathConfig validates config and fixes the invalid values inside it.
-func FixupPathConfig(config *PathConfig) {
+func FixupPathConfig(ctx context.Context, config *PathConfig) {
+	log := klog.FromContext(ctx)
+
 	switch config.GetAffinity() {
 	case AffinityNone, AffinityIP, AffinityCookie:
 		// OK
 	default:
-		klog.Errorf("unsupported affinity method %v", config.GetAffinity())
+		log.Error(nil, "Unsupported affinity method", "affinity", config.GetAffinity())
 		config.SetAffinity(AffinityNone)
 	}
 	switch config.GetAffinityCookieSecure() {
 	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo:
 		// OK
 	default:
-		klog.Errorf("unsupported affinity cookie secure %v", config.GetAffinityCookieSecure())
+		log.Error(nil, "Unsupported affinity cookie secure", "cookieSecure", config.GetAffinityCookieSecure())
 		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
 	}
 	switch config.GetAffinityCookieStickiness() {
 	case AffinityCookieStickinessLoose, AffinityCookieStickinessStrict:
 		// OK
 	default:
-		klog.Errorf("unsupported affinity cookie stickiness %v", config.GetAffinityCookieStickiness())
+		log.Error(nil, "Unsupported affinity cookie stickiness", "cookieStickiness", config.GetAffinityCookieStickiness())
 		config.SetAffinityCookieStickiness(AffinityCookieStickinessLoose)
 	}
 }
 
-func ApplyDefaultPathConfig(config *PathConfig, defaultConfig *PathConfig) {
-	klog.V(4).Info("Applying default-path-config annotation")
+func ApplyDefaultPathConfig(ctx context.Context, config *PathConfig, defaultConfig *PathConfig) {
+	log := klog.FromContext(ctx)
+
+	log.V(4).Info("Applying default-path-config annotation")
 	if defaultConfig.Mruby != nil && config.Mruby == nil {
 		config.SetMruby(*defaultConfig.Mruby)
 	}

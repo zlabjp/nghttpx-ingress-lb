@@ -1,6 +1,7 @@
 package nghttpx
 
 import (
+	"context"
 	"encoding/hex"
 	"testing"
 	"time"
@@ -655,7 +656,7 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=cookie;affinity-cookie-nam
 			lb := &LoadBalancer{}
 			lb.loadTemplate()
 
-			mainConfig, backendConfig, err := lb.generateCfg(tt.ingConfig)
+			mainConfig, backendConfig, err := lb.generateCfg(context.Background(), tt.ingConfig)
 			if err != nil {
 				t.Fatalf("lb.generateCfg: %v", err)
 			}

@@ -9,6 +9,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -36,39 +37,41 @@ type ingressAnnotation map[string]string
 // NewBackendConfigMapper returns nghttpx.BackendConfigMapper by reading default-backend-config and backend-config annotations.  This
 // function applies default-backend-config to backend-config if it exists.  If invalid value is found, this function replaces them with the
 // default value (e.g., nghttpx.ProtocolH1 for proto).
-func (ia ingressAnnotation) NewBackendConfigMapper() *nghttpx.BackendConfigMapper {
+func (ia ingressAnnotation) NewBackendConfigMapper(ctx context.Context) *nghttpx.BackendConfigMapper {
+	log := klog.FromContext(ctx)
+
 	data := ia[backendConfigKey]
 	// the first key specifies service name, and secondary key specifies port name.
 	var config nghttpx.BackendConfigMapping
 	if data != "" {
-		if err := unmarshal([]byte(data), &config); err != nil {
-			klog.Errorf("unexpected error reading %v annotation: %v", backendConfigKey, err)
+		if err := unmarshal(ctx, []byte(data), &config); err != nil {
+			log.Error(err, "Unexpected error while reading annotation", "annotation", backendConfigKey)
 			return nghttpx.NewBackendConfigMapper(nil, nil)
 		}
 	}
 
 	for _, v := range config {
 		for _, vv := range v {
-			nghttpx.FixupBackendConfig(vv)
+			nghttpx.FixupBackendConfig(ctx, vv)
 		}
 	}
 
 	data = ia[defaultBackendConfigKey]
 	if data == "" {
-		klog.V(4).Infof("%v annotation not found", defaultBackendConfigKey)
+		log.V(4).Info("Annotation not found", "annoation", defaultBackendConfigKey)
 		return nghttpx.NewBackendConfigMapper(nil, config)
 	}
 
 	var defaultConfig nghttpx.BackendConfig
-	if err := unmarshal([]byte(data), &defaultConfig); err != nil {
-		klog.Errorf("unexpected error reading %v annotation: %v", defaultBackendConfigKey, err)
+	if err := unmarshal(ctx, []byte(data), &defaultConfig); err != nil {
+		log.Error(err, "Unexpected error while reading annotation", "annotation", defaultBackendConfigKey)
 		return nghttpx.NewBackendConfigMapper(nil, nil)
 	}
-	nghttpx.FixupBackendConfig(&defaultConfig)
+	nghttpx.FixupBackendConfig(ctx, &defaultConfig)
 
 	for _, v := range config {
 		for _, vv := range v {
-			nghttpx.ApplyDefaultBackendConfig(vv, &defaultConfig)
+			nghttpx.ApplyDefaultBackendConfig(ctx, vv, &defaultConfig)
 		}
 	}
 
@@ -77,12 +80,14 @@ func (ia ingressAnnotation) NewBackendConfigMapper() *nghttpx.BackendConfigMappe
 
 // NewPathConfigMapper returns nghttpx.PathConfigMapper by reading default-path-config and path-config annotation.  This function applies
 // default-path-config to path-config if a value is missing.
-func (ia ingressAnnotation) NewPathConfigMapper() *nghttpx.PathConfigMapper {
+func (ia ingressAnnotation) NewPathConfigMapper(ctx context.Context) *nghttpx.PathConfigMapper {
+	log := klog.FromContext(ctx)
+
 	data := ia[pathConfigKey]
 	var config nghttpx.PathConfigMapping
 	if data != "" {
-		if err := unmarshal([]byte(data), &config); err != nil {
-			klog.Errorf("unexpected error reading %v annotation: %v", pathConfigKey, err)
+		if err := unmarshal(ctx, []byte(data), &config); err != nil {
+			log.Error(err, "Unexpected error while reading annotation", "annotation", pathConfigKey)
 			return nghttpx.NewPathConfigMapper(nil, nil)
 		}
 	}
@@ -90,24 +95,24 @@ func (ia ingressAnnotation) NewPathConfigMapper() *nghttpx.PathConfigMapper {
 	config = normalizePathKey(config)
 
 	for _, v := range config {
-		nghttpx.FixupPathConfig(v)
+		nghttpx.FixupPathConfig(ctx, v)
 	}
 
 	data = ia[defaultPathConfigKey]
 	if data == "" {
-		klog.V(4).Infof("%v annotation not found", defaultPathConfigKey)
+		log.V(4).Info("Annotation not found", "annotation", defaultPathConfigKey)
 		return nghttpx.NewPathConfigMapper(nil, config)
 	}
 
 	var defaultConfig nghttpx.PathConfig
-	if err := unmarshal([]byte(data), &defaultConfig); err != nil {
-		klog.Errorf("unexpected error reading %v annotation: %v", defaultPathConfigKey, err)
+	if err := unmarshal(ctx, []byte(data), &defaultConfig); err != nil {
+		log.Error(err, "Unexpected error while reading annotation", "annotation", defaultPathConfigKey)
 		return nghttpx.NewPathConfigMapper(nil, nil)
 	}
-	nghttpx.FixupPathConfig(&defaultConfig)
+	nghttpx.FixupPathConfig(ctx, &defaultConfig)
 
 	for _, v := range config {
-		nghttpx.ApplyDefaultPathConfig(v, &defaultConfig)
+		nghttpx.ApplyDefaultPathConfig(ctx, v, &defaultConfig)
 	}
 
 	return nghttpx.NewPathConfigMapper(&defaultConfig, config)
@@ -132,13 +137,15 @@ func normalizePathKey(src map[string]*nghttpx.PathConfig) map[string]*nghttpx.Pa
 }
 
 // unmarshal deserializes data into dest.  This function first tries YAML and then JSON.
-func unmarshal(data []byte, dest interface{}) error {
+func unmarshal(ctx context.Context, data []byte, dest interface{}) error {
+	log := klog.FromContext(ctx)
+
 	err := yaml.Unmarshal(data, dest)
 	if err == nil {
 		return nil
 	}
 
-	klog.Infof("Could not unmarshal YAML string; fall back to JSON: %v", err)
+	log.Error(err, "Unable to unmarshal YAML string; fall back to JSON")
 
 	if err := json.Unmarshal(data, dest); err != nil {
 		return fmt.Errorf("could not unmarshal JSON string: %w", err)

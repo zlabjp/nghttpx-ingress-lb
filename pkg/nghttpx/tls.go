@@ -26,15 +26,17 @@ package nghttpx
 
 import (
 	"bytes"
+	"context"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"k8s.io/klog/v2"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -180,15 +182,17 @@ func ReadLeafCertificate(certPEM []byte) (*x509.Certificate, error) {
 }
 
 // VerifyCertificate verifies cert.
-func VerifyCertificate(cert *x509.Certificate, currentTime time.Time) error {
-	klog.V(4).Infof("Signature algorithm is %v", cert.SignatureAlgorithm)
+func VerifyCertificate(ctx context.Context, cert *x509.Certificate, currentTime time.Time) error {
+	log := klog.FromContext(ctx)
+
+	log.V(4).Info("Certificate signature algorithm", "algorithm", cert.SignatureAlgorithm)
 
 	switch cert.SignatureAlgorithm {
 	case x509.MD2WithRSA, x509.MD5WithRSA, x509.SHA1WithRSA, x509.DSAWithSHA1, x509.ECDSAWithSHA1:
 		return fmt.Errorf("unsupported signature algorithm: %v", cert.SignatureAlgorithm)
 	}
 
-	klog.V(4).Infof("NotBefore=%v NotAfter=%v", cert.NotBefore, cert.NotAfter)
+	log.V(4).Info("Certificate validity period", "notBefore", cert.NotBefore, "notAfter", cert.NotAfter)
 
 	if currentTime.Before(cert.NotBefore) || currentTime.After(cert.NotAfter) {
 		return errors.New("certificate has expired or is not valid at the given moment of time")

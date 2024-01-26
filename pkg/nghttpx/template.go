@@ -26,6 +26,7 @@ package nghttpx
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/hex"
 	"fmt"
@@ -73,23 +74,25 @@ const (
 )
 
 // generateCfg generates nghttpx's main and backend configurations.
-func (lb *LoadBalancer) generateCfg(ingConfig *IngressConfig) ([]byte, []byte, error) {
+func (lb *LoadBalancer) generateCfg(ctx context.Context, ingConfig *IngressConfig) ([]byte, []byte, error) {
+	log := klog.FromContext(ctx)
+
 	mainConfigBuffer := new(bytes.Buffer)
 	if err := lb.template.Execute(mainConfigBuffer, ingConfig); err != nil {
-		klog.Infof("nghttpx error while executing main configuration template: %v", err)
+		log.Error(err, "nghttpx error while executing main configuration template")
 		return nil, nil, err
 	}
 
 	backendConfigBuffer := new(bytes.Buffer)
 	if err := lb.backendTemplate.Execute(backendConfigBuffer, ingConfig); err != nil {
-		klog.Infof("nghttpx error while executing backend configuration template: %v", err)
+		log.Error(err, "nghttpx error while executing backend configuration template")
 		return nil, nil, err
 	}
 
 	return mainConfigBuffer.Bytes(), backendConfigBuffer.Bytes(), nil
 }
 
-func (lb *LoadBalancer) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, backendConfig []byte) (configStatus, error) {
+func (lb *LoadBalancer) checkAndWriteCfg(ctx context.Context, ingConfig *IngressConfig, mainConfig, backendConfig []byte) (configStatus, error) {
 	configPath := ConfigPath(ingConfig.ConfDir)
 	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
 
@@ -98,14 +101,14 @@ func (lb *LoadBalancer) checkAndWriteCfg(ingConfig *IngressConfig, mainConfig, b
 	}
 
 	// If main configuration has changed, we need to reload nghttpx
-	mainChanged, err := needsReload(configPath, mainConfig)
+	mainChanged, err := needsReload(ctx, configPath, mainConfig)
 	if err != nil {
 		return configNotChanged, err
 	}
 
 	// If backend configuration has changed, we need to issue
 	// backend replace API to nghttpx
-	backendChanged, err := needsReload(backendConfigPath, backendConfig)
+	backendChanged, err := needsReload(ctx, backendConfigPath, backendConfig)
 	if err != nil {
 		return configNotChanged, err
 	}

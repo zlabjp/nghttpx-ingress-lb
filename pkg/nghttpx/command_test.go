@@ -1,6 +1,7 @@
 package nghttpx
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -41,7 +42,7 @@ func TestDeleteAssetFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if err := deleteAssetFiles(tempDir, tt.t, tt.threshold); err != nil {
+			if err := deleteAssetFiles(context.Background(), tempDir, tt.t, tt.threshold); err != nil {
 				t.Fatalf("deleteAssetFiles: %v", err)
 			}
 

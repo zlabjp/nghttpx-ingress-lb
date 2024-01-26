@@ -110,9 +110,16 @@ var (
 )
 
 func main() {
+	log := klog.NewKlogr()
+
 	rootCmd := &cobra.Command{
 		Use: "nghttpx-ingress-controller",
-		Run: run,
+		Run: func(cmd *cobra.Command, args []string) {
+			// Contextual logging is enabled by default, but cli.Run disables it.  Enable it again.
+			klog.EnableContextualLogging(true)
+
+			run(klog.NewContext(context.Background(), log), cmd, args)
+		},
 	}
 
 	rootCmd.Flags().AddGoFlagSet(flag.CommandLine)
@@ -232,8 +239,10 @@ func main() {
 	os.Exit(code)
 }
 
-func run(*cobra.Command, []string) {
-	klog.Infof("Using build: %v - %v", gitRepo, version)
+func run(ctx context.Context, _ *cobra.Command, _ []string) {
+	log := klog.FromContext(ctx)
+
+	log.Info("Using build", "repository", gitRepo, "version", version)
 
 	var (
 		defaultSvcKey       *types.NamespacedName
@@ -244,48 +253,57 @@ func run(*cobra.Command, []string) {
 
 	if !internalDefaultBackend {
 		if defaultSvc == "" {
-			klog.Exitf("default-backend-service cannot be empty")
+			log.Error(nil, "default-backend-service cannot be empty")
+			os.Exit(1)
 		}
-		if ns, name, err := cache.SplitMetaNamespaceKey(defaultSvc); err != nil {
-			klog.Exitf("default-backend-service: invalid Service identifier %v: %v", defaultSvc, err)
-		} else {
-			defaultSvcKey = &types.NamespacedName{
-				Namespace: ns,
-				Name:      name,
-			}
+		ns, name, err := cache.SplitMetaNamespaceKey(defaultSvc)
+		if err != nil {
+			log.Error(err, "default-backend-service: Invalid Service identifier", "Service", defaultSvc)
+			os.Exit(1)
+		}
+
+		defaultSvcKey = &types.NamespacedName{
+			Namespace: ns,
+			Name:      name,
 		}
 	}
 
 	if publishSvc != "" {
-		if ns, name, err := cache.SplitMetaNamespaceKey(publishSvc); err != nil {
-			klog.Exitf("publish-service: invalid Service identifier %v: %v", publishSvc, err)
-		} else {
-			publishSvcKey = &types.NamespacedName{
-				Namespace: ns,
-				Name:      name,
-			}
+		ns, name, err := cache.SplitMetaNamespaceKey(publishSvc)
+		if err != nil {
+			log.Error(err, "publish-service: Invalid Service identifier", "Service", publishSvc)
+			os.Exit(1)
+		}
+
+		publishSvcKey = &types.NamespacedName{
+			Namespace: ns,
+			Name:      name,
 		}
 	}
 
 	if ngxConfigMap != "" {
-		if ns, name, err := cache.SplitMetaNamespaceKey(ngxConfigMap); err != nil {
-			klog.Exitf("nghttpx-configmap: invalid ConfigMap identifier %v: %v", ngxConfigMap, err)
-		} else {
-			nghttpxConfigMapKey = &types.NamespacedName{
-				Namespace: ns,
-				Name:      name,
-			}
+		ns, name, err := cache.SplitMetaNamespaceKey(ngxConfigMap)
+		if err != nil {
+			log.Error(err, "nghttpx-configmap: Invalid ConfigMap identifier", "Service", ngxConfigMap)
+			os.Exit(1)
+		}
+
+		nghttpxConfigMapKey = &types.NamespacedName{
+			Namespace: ns,
+			Name:      name,
 		}
 	}
 
 	if defaultTLSSecret != "" {
-		if ns, name, err := cache.SplitMetaNamespaceKey(defaultTLSSecret); err != nil {
-			klog.Exitf("default-tls-secret: invalid Secret identifier %v: %v", defaultTLSSecret, err)
-		} else {
-			defaultTLSSecretKey = &types.NamespacedName{
-				Namespace: ns,
-				Name:      name,
-			}
+		ns, name, err := cache.SplitMetaNamespaceKey(defaultTLSSecret)
+		if err != nil {
+			log.Error(err, "default-tls-secret: Invalid Secret identifier", "Service", defaultTLSSecret)
+			os.Exit(1)
+		}
+
+		defaultTLSSecretKey = &types.NamespacedName{
+			Namespace: ns,
+			Name:      name,
 		}
 	}
 
@@ -303,7 +321,8 @@ func run(*cobra.Command, []string) {
 		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(&loadingRules, &configOverrides).ClientConfig()
 	}
 	if err != nil {
-		klog.Exitf("Could not get clientConfig: %v", err)
+		log.Error(err, "Unable to get clientConfig")
+		os.Exit(1)
 	}
 
 	config.QPS = clientQPS
@@ -311,24 +330,28 @@ func run(*cobra.Command, []string) {
 
 	clientset, err := clientset.NewForConfig(config)
 	if err != nil {
-		klog.Exitf("Failed to create clientset: %v", err)
+		log.Error(err, "Unable to create clientset")
+		os.Exit(1)
 	}
 
 	podInfo := types.NamespacedName{Name: os.Getenv("POD_NAME"), Namespace: os.Getenv("POD_NAMESPACE")}
 
 	if podInfo.Name == "" {
-		klog.Exit("POD_NAME environment variable cannot be empty.")
+		log.Error(nil, "POD_NAME environment variable cannot be empty.")
+		os.Exit(1)
 	}
 	if podInfo.Namespace == "" {
-		klog.Exit("POD_NAMESPACE environment variable cannot be empty.")
+		log.Error(nil, "POD_NAMESPACE environment variable cannot be empty.")
+		os.Exit(1)
 	}
 
 	thisPod, err := getThisPod(clientset, podInfo)
 	if err != nil {
-		klog.Exitf("Could not get Pod %v/%v: %v", podInfo.Namespace, podInfo.Name, err)
+		log.Error(err, "Unable to get Pod", "Pod", podInfo)
+		os.Exit(1)
 	}
 
-	eventBroadcasterCtx, cancel := context.WithCancel(context.Background())
+	eventBroadcasterCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: clientset.EventsV1()})
@@ -383,19 +406,21 @@ func run(*cobra.Command, []string) {
 
 	lb, err := nghttpx.NewLoadBalancer(lbConfig)
 	if err != nil {
-		klog.Exit(err)
+		log.Error(err, "Unable to create LoadBalancer")
+		os.Exit(1)
 	}
 
-	lbc, err := controller.NewLoadBalancerController(clientset, lb, controllerConfig)
+	lbc, err := controller.NewLoadBalancerController(ctx, clientset, lb, controllerConfig)
 	if err != nil {
-		klog.Exit(err)
+		log.Error(err, "Unable to create LoadBalancerController")
+		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
 
-	go registerHandlers(cancel)
-	go handleSigterm(cancel)
+	go registerHandlers(ctx, cancel)
+	go handleSigterm(ctx, cancel)
 
 	lbc.Run(ctx)
 
@@ -451,7 +476,9 @@ func (hc healthzChecker) Check(_ *http.Request) error {
 	return nil
 }
 
-func registerHandlers(cancel context.CancelFunc) {
+func registerHandlers(ctx context.Context, cancel context.CancelFunc) {
+	log := klog.FromContext(ctx)
+
 	mux := http.NewServeMux()
 	healthz.InstallHandler(mux, newHealthzChecker(nghttpxHealthPort))
 
@@ -474,14 +501,19 @@ func registerHandlers(cancel context.CancelFunc) {
 		Addr:    fmt.Sprintf(":%v", healthzPort),
 		Handler: mux,
 	}
-	klog.Exit(server.ListenAndServe())
+	if err := server.ListenAndServe(); err != nil {
+		log.Error(err, "Internal HTTP server returned error")
+		os.Exit(1)
+	}
 }
 
-func handleSigterm(cancel context.CancelFunc) {
+func handleSigterm(ctx context.Context, cancel context.CancelFunc) {
+	log := klog.FromContext(ctx)
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM)
 	<-signalChan
-	klog.Infof("Received SIGTERM, shutting down")
+	log.Info("Received SIGTERM, shutting down")
 
 	cancel()
 }
