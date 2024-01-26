@@ -2157,6 +2157,8 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 
 	klog.Infof("Shutting down nghttpx loadbalancer controller")
 
+	lbc.syncQueue.ShutDown()
+
 	wg.Wait()
 }
 
