@@ -148,7 +148,7 @@ func unmarshal(ctx context.Context, data []byte, dest interface{}) error {
 	log.Error(err, "Unable to unmarshal YAML string; fall back to JSON")
 
 	if err := json.Unmarshal(data, dest); err != nil {
-		return fmt.Errorf("could not unmarshal JSON string: %w", err)
+		return fmt.Errorf("unable to unmarshal JSON string: %w", err)
 	}
 
 	return nil

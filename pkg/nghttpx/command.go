@@ -94,7 +94,7 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 
 	changed, err := lb.checkAndWriteCfg(ctx, ingressCfg, mainConfig, backendConfig)
 	if err != nil {
-		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %w", err)
+		return false, fmt.Errorf("unable to write new nghttpx configuration. Avoiding reload: %w", err)
 	}
 
 	if changed == configNotChanged {
@@ -126,7 +126,7 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 
 		log.Info("Change in configuration detected. Reloading...")
 		if err := lb.cmd.Process.Signal(syscall.SIGHUP); err != nil {
-			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %w", lb.cmd.Process.Pid, err)
+			return false, fmt.Errorf("unable to to send signal to nghttpx process (PID %v): %w", lb.cmd.Process.Pid, err)
 		}
 
 		if err := lb.waitUntilConfigRevisionChanges(ctx, oldConfRev); err != nil {
@@ -146,7 +146,7 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 		}
 
 		if err := lb.issueBackendReplaceRequest(ctx, ingressCfg); err != nil {
-			return false, fmt.Errorf("failed to issue backend replace request: %w", err)
+			return false, fmt.Errorf("unable to issue backend replace request: %w", err)
 		}
 
 		lb.eventRecorder.Eventf(lb.pod, nil, corev1.EventTypeNormal, "ReplaceBackend", "ReplaceBackend", "nghttpx replaced its backend servers")
@@ -162,10 +162,10 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 // deleteStaleAssets deletes asset files which are no longer used.
 func (lb *LoadBalancer) deleteStaleAssets(ctx context.Context, ingConfig *IngressConfig, t time.Time) error {
 	if err := lb.deleteStaleTLSAssets(ctx, ingConfig, t); err != nil {
-		return fmt.Errorf("could not delete stale TLS assets: %w", err)
+		return fmt.Errorf("unable to delete stale TLS assets: %w", err)
 	}
 	if err := lb.deleteStaleMrubyAssets(ctx, ingConfig, t); err != nil {
-		return fmt.Errorf("could not delete stale mruby assets: %w", err)
+		return fmt.Errorf("unable to delete stale mruby assets: %w", err)
 	}
 	return nil
 }
@@ -223,7 +223,7 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 
 	in, err := os.Open(backendConfigPath)
 	if err != nil {
-		return fmt.Errorf("could not open backend configuration file %v: %w", backendConfigPath, err)
+		return fmt.Errorf("unable to open backend configuration file %v: %w", backendConfigPath, err)
 	}
 
 	defer in.Close()
@@ -233,7 +233,7 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, lb.backendconfigURI, in)
 	if err != nil {
-		return fmt.Errorf("could not create API request: %w", err)
+		return fmt.Errorf("unable to create API request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "text/plain")
@@ -241,7 +241,7 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 	resp, err := lb.httpClient.Do(req)
 
 	if err != nil {
-		return fmt.Errorf("could not issue API request: %w", err)
+		return fmt.Errorf("unable to issue API request: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -252,7 +252,7 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("could not read API response body: %w", err)
+		return fmt.Errorf("unable to read API response body: %w", err)
 	}
 
 	if log.V(3).Enabled() {
@@ -282,12 +282,12 @@ func (lb *LoadBalancer) getNghttpxConfigRevision(ctx context.Context) (int64, er
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, lb.configrevisionURI, nil)
 	if err != nil {
-		return 0, fmt.Errorf("could not create API request: %w", err)
+		return 0, fmt.Errorf("unable to create API request: %w", err)
 	}
 
 	resp, err := lb.httpClient.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("could not get nghttpx configRevision: %w", err)
+		return 0, fmt.Errorf("unable to get nghttpx configRevision: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -300,7 +300,7 @@ func (lb *LoadBalancer) getNghttpxConfigRevision(ctx context.Context) (int64, er
 
 	var r apiResult
 	if err := d.Decode(&r); err != nil {
-		return 0, fmt.Errorf("could not parse nghttpx configuration API result: %w", err)
+		return 0, fmt.Errorf("unable to parse nghttpx configuration API result: %w", err)
 	}
 
 	if r.Data == nil {
@@ -337,7 +337,7 @@ func (lb *LoadBalancer) waitUntilConfigRevisionChanges(ctx context.Context, oldC
 
 		return true, nil
 	}); err != nil {
-		return fmt.Errorf("could not get new nghttpx configRevision: %w", err)
+		return fmt.Errorf("unable to get new nghttpx configRevision: %w", err)
 	}
 
 	return nil

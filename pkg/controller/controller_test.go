@@ -182,7 +182,7 @@ func (f *fixture) run() {
 	f.setupStore()
 
 	if err := f.lbc.sync(context.Background(), syncKey); err != nil {
-		f.t.Errorf("Failed to sync: %v", err)
+		f.t.Errorf("Unable to sync: %v", err)
 	}
 
 	f.verifyActions()
@@ -1787,7 +1787,7 @@ func TestSyncIngress(t *testing.T) {
 			updatedIng, err := f.clientset.NetworkingV1().Ingresses(tt.ingress.Namespace).
 				Get(context.Background(), tt.ingress.Name, metav1.GetOptions{})
 			if err != nil {
-				t.Fatalf("Could not get Ingress %v/%v: %v", tt.ingress.Namespace, tt.ingress.Name, err)
+				t.Fatalf("Unable to get Ingress %v/%v: %v", tt.ingress.Namespace, tt.ingress.Name, err)
 			}
 
 			if got, want := updatedIng.Status.LoadBalancer.Ingress, tt.wantLoadBalancerIngresses; !reflect.DeepEqual(got, want) {
@@ -2089,7 +2089,7 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 
 			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultQUICSecret.Namespace).Get(context.Background(), defaultQUICSecret.Name, metav1.GetOptions{})
 			if err != nil {
-				t.Fatalf("Could not get Secret %v/%v: %v", defaultQUICSecret.Namespace, defaultQUICSecret.Name, err)
+				t.Fatalf("Unable to get Secret %v/%v: %v", defaultQUICSecret.Namespace, defaultQUICSecret.Name, err)
 			}
 
 			if tt.wantKeepTimestamp {
