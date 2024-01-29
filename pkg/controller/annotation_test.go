@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -86,7 +87,7 @@ svc:
 				defaultBackendConfigKey: tt.annotationDefaultConfig,
 				backendConfigKey:        tt.annotationConfig,
 			})
-			bcm := ann.NewBackendConfigMapper()
+			bcm := ann.NewBackendConfigMapper(context.Background())
 
 			if !reflect.DeepEqual(bcm.DefaultBackendConfig, tt.wantDefaultConfig) {
 				t.Errorf("bcm.DefaultBackendConfig = %+v, want %+v", bcm.DefaultBackendConfig, tt.wantDefaultConfig)
@@ -161,7 +162,7 @@ example.com/alpha:
 				defaultPathConfigKey: tt.annotationDefaultConfig,
 				pathConfigKey:        tt.annotationConfig,
 			})
-			pcm := ann.NewPathConfigMapper()
+			pcm := ann.NewPathConfigMapper(context.Background())
 
 			if !reflect.DeepEqual(pcm.DefaultPathConfig, tt.wantDefaultConfig) {
 				t.Errorf("pcm.DefaultPathConfig = %+v, want %+v", pcm.DefaultPathConfig, tt.wantDefaultConfig)

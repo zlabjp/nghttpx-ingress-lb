@@ -9,6 +9,7 @@
 package nghttpx
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func TestFixupBackendConfig(t *testing.T) {
 			c := &BackendConfig{}
 			c.SetProto(tt.inProto)
 			c.SetWeight(tt.inWeight)
-			FixupBackendConfig(c)
+			FixupBackendConfig(context.Background(), c)
 			if got, want := c.GetProto(), tt.outProto; got != want {
 				t.Errorf("c.GetProto() = %q, want %q", got, want)
 			}
@@ -104,7 +105,7 @@ func TestApplyDefaultBackendConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			a := &BackendConfig{}
-			ApplyDefaultBackendConfig(a, tt.defaultConf)
+			ApplyDefaultBackendConfig(context.Background(), a, tt.defaultConf)
 
 			if got, want := a.GetProto(), tt.defaultConf.GetProto(); got != want {
 				t.Errorf("a.GetProto() = %v, want %v", got, want)
@@ -165,7 +166,7 @@ func TestFixupPathConfig(t *testing.T) {
 			c.SetAffinity(tt.inAffinity)
 			c.SetAffinityCookieSecure(tt.inAffinityCookieSecure)
 			c.SetAffinityCookieStickiness(tt.inAffinityCookieStickiness)
-			FixupPathConfig(c)
+			FixupPathConfig(context.Background(), c)
 			if got, want := c.GetAffinity(), tt.outAffinity; got != want {
 				t.Errorf("c.GetAffinity() = %q, want %q", got, want)
 			}
@@ -270,7 +271,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			a := &PathConfig{}
-			ApplyDefaultPathConfig(a, tt.defaultConf)
+			ApplyDefaultPathConfig(context.Background(), a, tt.defaultConf)
 
 			if got, want := a.GetMruby(), tt.defaultConf.GetMruby(); got != want {
 				t.Errorf("a.GetMruby() = %v, want %v", got, want)

@@ -200,13 +200,13 @@ func NewBackendConfigMapper(defaultBackendConfig *BackendConfig, backendConfigMa
 
 // ConfigFor returns BackendConfig for given svc and port.  svc is Service name, and port is either a named Service port or a numeric port
 // number.
-func (bcm *BackendConfigMapper) ConfigFor(svc, port string) *BackendConfig {
+func (bcm *BackendConfigMapper) ConfigFor(ctx context.Context, svc, port string) *BackendConfig {
 	c := bcm.BackendConfigMapping[svc][port]
 	if c == nil {
 		c = new(BackendConfig)
 
 		if bcm.DefaultBackendConfig != nil {
-			ApplyDefaultBackendConfig(c, bcm.DefaultBackendConfig)
+			ApplyDefaultBackendConfig(ctx, c, bcm.DefaultBackendConfig)
 		}
 	}
 

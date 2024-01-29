@@ -6,7 +6,7 @@ linters:
   - exportloopref
   - gofmt
   - importas
-  - logrlint
+  - loggercheck
   - noctx
   - prealloc
   - revive

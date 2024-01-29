@@ -26,7 +26,6 @@ package nghttpx
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -45,12 +44,14 @@ import (
 
 // Start starts a nghttpx process using nghttpx executable at path, and wait.
 func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error {
-	klog.Infof("Starting nghttpx process: %v --conf %v", path, confPath)
+	log := klog.FromContext(ctx)
+
+	log.Info("Starting nghttpx process", "path", path, "conf", confPath)
 	lb.cmd = exec.Command(path, "--conf", confPath)
 	lb.cmd.Stdout = os.Stdout
 	lb.cmd.Stderr = os.Stderr
 	if err := lb.cmd.Start(); err != nil {
-		klog.Errorf("nghttpx did not start successfully: %v", err)
+		log.Error(err, "nghttpx did not start successfully")
 		return err
 	}
 
@@ -58,7 +59,7 @@ func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error 
 
 	go func() {
 		if err := lb.cmd.Wait(); err != nil {
-			klog.Errorf("nghttpx did not finish successfully: %v", err)
+			log.Error(err, "nghttpx did not finish successfully")
 		}
 		cancel()
 	}()
@@ -66,15 +67,15 @@ func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error 
 	select {
 	case <-waitCtx.Done():
 	case <-ctx.Done():
-		klog.Infof("Sending QUIT signal to nghttpx process (PID %v) to shut down gracefully", lb.cmd.Process.Pid)
+		log.Info("Sending QUIT signal to nghttpx process to shut down gracefully", "PID", lb.cmd.Process.Pid)
 		if err := lb.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
-			klog.Errorf("Could not send signal to nghttpx process (PID %v): %v", lb.cmd.Process.Pid, err)
+			log.Error(err, "Unable to send signal to nghttpx process", "PID", lb.cmd.Process.Pid)
 			cancel()
 		}
 		<-waitCtx.Done()
 	}
 
-	klog.Infof("nghttpx exited")
+	log.Info("nghttpx exited")
 
 	return nil
 }
@@ -84,12 +85,14 @@ func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error 
 // The current running nghttpx master process executes new nghttpx with new configuration.  If its invocation succeeds, current nghttpx is
 // going to shutdown gracefully.  The invocation of new process may fail due to invalid configurations.
 func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressConfig) (bool, error) {
-	mainConfig, backendConfig, err := lb.generateCfg(ingressCfg)
+	log := klog.FromContext(ctx)
+
+	mainConfig, backendConfig, err := lb.generateCfg(ctx, ingressCfg)
 	if err != nil {
 		return false, err
 	}
 
-	changed, err := lb.checkAndWriteCfg(ingressCfg, mainConfig, backendConfig)
+	changed, err := lb.checkAndWriteCfg(ctx, ingressCfg, mainConfig, backendConfig)
 	if err != nil {
 		return false, fmt.Errorf("failed to write new nghttpx configuration. Avoiding reload: %w", err)
 	}
@@ -98,12 +101,8 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 		return false, nil
 	}
 
-	if klog.V(3).Enabled() {
-		b, err := json.MarshalIndent(ingressCfg, "", "  ")
-		if err != nil {
-			fmt.Println("error:", err)
-		}
-		klog.Infof("nghttpx configuration:\n%s", b)
+	if log.V(3).Enabled() {
+		log.V(3).Info("nghttpx configuration", "configuration", klog.Format(ingressCfg))
 	}
 
 	switch changed {
@@ -125,7 +124,7 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 			return false, err
 		}
 
-		klog.Info("change in configuration detected. Reloading...")
+		log.Info("Change in configuration detected. Reloading...")
 		if err := lb.cmd.Process.Signal(syscall.SIGHUP); err != nil {
 			return false, fmt.Errorf("failed to send signal to nghttpx process (PID %v): %w", lb.cmd.Process.Pid, err)
 		}
@@ -136,10 +135,10 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 
 		lb.eventRecorder.Eventf(lb.pod, nil, corev1.EventTypeNormal, "Reload", "Reload", "nghttpx reloaded its configuration")
 
-		klog.Info("nghttpx has finished reloading new configuration")
+		log.Info("nghttpx has finished reloading new configuration")
 
-		if err := lb.deleteStaleAssets(ingressCfg, time.Now()); err != nil {
-			klog.Errorf("Could not delete stale assets: %v", err)
+		if err := lb.deleteStaleAssets(ctx, ingressCfg, time.Now()); err != nil {
+			log.Error(err, "Unable to delete stale assets")
 		}
 	case backendConfigChanged:
 		if err := writePerPatternMrubyFile(ingressCfg); err != nil {
@@ -152,8 +151,8 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 
 		lb.eventRecorder.Eventf(lb.pod, nil, corev1.EventTypeNormal, "ReplaceBackend", "ReplaceBackend", "nghttpx replaced its backend servers")
 
-		if err := lb.deleteStaleMrubyAssets(ingressCfg, time.Now()); err != nil {
-			klog.Errorf("Could not delete stale assets: %v", err)
+		if err := lb.deleteStaleMrubyAssets(ctx, ingressCfg, time.Now()); err != nil {
+			log.Error(err, "Unable to delete stale assets")
 		}
 	}
 
@@ -161,28 +160,30 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 }
 
 // deleteStaleAssets deletes asset files which are no longer used.
-func (lb *LoadBalancer) deleteStaleAssets(ingConfig *IngressConfig, t time.Time) error {
-	if err := lb.deleteStaleTLSAssets(ingConfig, t); err != nil {
+func (lb *LoadBalancer) deleteStaleAssets(ctx context.Context, ingConfig *IngressConfig, t time.Time) error {
+	if err := lb.deleteStaleTLSAssets(ctx, ingConfig, t); err != nil {
 		return fmt.Errorf("could not delete stale TLS assets: %w", err)
 	}
-	if err := lb.deleteStaleMrubyAssets(ingConfig, t); err != nil {
+	if err := lb.deleteStaleMrubyAssets(ctx, ingConfig, t); err != nil {
 		return fmt.Errorf("could not delete stale mruby assets: %w", err)
 	}
 	return nil
 }
 
 // deleteStaleTLSAssets deletes TLS asset files which are no longer used.
-func (lb *LoadBalancer) deleteStaleTLSAssets(ingConfig *IngressConfig, t time.Time) error {
-	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, tlsDir), t, lb.staleAssetsThreshold)
+func (lb *LoadBalancer) deleteStaleTLSAssets(ctx context.Context, ingConfig *IngressConfig, t time.Time) error {
+	return deleteAssetFiles(ctx, filepath.Join(ingConfig.ConfDir, tlsDir), t, lb.staleAssetsThreshold)
 }
 
 // deleteStaleMrubyAssets deletes mruby asset files which are no longer used.
-func (lb *LoadBalancer) deleteStaleMrubyAssets(ingConfig *IngressConfig, t time.Time) error {
-	return deleteAssetFiles(filepath.Join(ingConfig.ConfDir, mrubyDir), t, lb.staleAssetsThreshold)
+func (lb *LoadBalancer) deleteStaleMrubyAssets(ctx context.Context, ingConfig *IngressConfig, t time.Time) error {
+	return deleteAssetFiles(ctx, filepath.Join(ingConfig.ConfDir, mrubyDir), t, lb.staleAssetsThreshold)
 }
 
 // deleteAssetFiles deletes stale files under dir.  A file is stale when its modification time + staleAssetsThreshold <= t.
-func deleteAssetFiles(dir string, t time.Time, staleAssetsThreshold time.Duration) error {
+func deleteAssetFiles(ctx context.Context, dir string, t time.Time, staleAssetsThreshold time.Duration) error {
+	log := klog.FromContext(ctx)
+
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return err
@@ -204,7 +205,7 @@ func deleteAssetFiles(dir string, t time.Time, staleAssetsThreshold time.Duratio
 			continue
 		}
 
-		klog.V(4).Infof("Removing stale asset file %v", path)
+		log.V(4).Info("Removing stale asset file", "path", path)
 		if err := os.Remove(path); err != nil {
 			return err
 		}
@@ -214,7 +215,9 @@ func deleteAssetFiles(dir string, t time.Time, staleAssetsThreshold time.Duratio
 }
 
 func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfig *IngressConfig) error {
-	klog.Infof("Issuing API request %v", lb.backendconfigURI)
+	log := klog.FromContext(ctx)
+
+	log.Info("Issuing API request", "endpoint", lb.backendconfigURI)
 
 	backendConfigPath := BackendConfigPath(ingConfig.ConfDir)
 
@@ -252,11 +255,11 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 		return fmt.Errorf("could not read API response body: %w", err)
 	}
 
-	if klog.V(3).Enabled() {
-		klog.Infof("API request returned response body: %s", respBody)
+	if log.V(3).Enabled() {
+		log.Info("API request returned response body", "body", string(respBody))
 	}
 
-	klog.Info("API request has completed successfully")
+	log.Info("API request has completed successfully")
 
 	return nil
 }
@@ -270,7 +273,9 @@ type apiResult struct {
 
 // getNghttpxConfigRevision returns the current nghttpx configRevision through configrevision API call.
 func (lb *LoadBalancer) getNghttpxConfigRevision(ctx context.Context) (int64, error) {
-	klog.V(4).Infof("Issuing API request %v", lb.configrevisionURI)
+	log := klog.FromContext(ctx)
+
+	log.V(4).Info("Issuing API request", "endpoint", lb.configrevisionURI)
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -308,19 +313,21 @@ func (lb *LoadBalancer) getNghttpxConfigRevision(ctx context.Context) (int64, er
 		return 0, errors.New("nghttpx configuration API result has non int64 configRevision")
 	}
 
-	klog.V(4).Infof("nghttpx configRevision is %v", confRev)
+	log.V(4).Info("nghttpx configRevision", "configRevision", confRev)
 
 	return confRev, nil
 }
 
 // waitUntilConfigRevisionChanges waits for the current nghttpx configuration to change from old value, oldConfRev.
 func (lb *LoadBalancer) waitUntilConfigRevisionChanges(ctx context.Context, oldConfRev int64) error {
-	klog.Infof("Waiting for nghttpx to finish reloading configuration")
+	log := klog.FromContext(ctx)
+
+	log.Info("Waiting for nghttpx to finish reloading configuration")
 
 	if err := wait.PollUntilContextTimeout(ctx, time.Second, lb.reloadTimeout, false, func(ctx context.Context) (bool, error) {
 		newConfRev, err := lb.getNghttpxConfigRevision(ctx)
 		if err != nil {
-			klog.Error(err)
+			log.Error(err, "Unable to get new configRevision")
 			return false, nil
 		}
 

@@ -25,6 +25,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"sort"
@@ -129,17 +130,19 @@ func podLabelSelector(labelSet map[string]string) labels.Selector {
 }
 
 // validateIngressClass checks whether this controller should process ing or not.
-func validateIngressClass(ing *networkingv1.Ingress, ingressClassController string, ingClassLister listersnetworkingv1.IngressClassLister,
+func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingressClassController string, ingClassLister listersnetworkingv1.IngressClassLister,
 	requireIngressClass bool) bool {
+	log := klog.FromContext(ctx)
+
 	if ing.Spec.IngressClassName != nil {
 		ingClass, err := ingClassLister.Get(*ing.Spec.IngressClassName)
 		if err != nil {
-			klog.Errorf("Could not get IngressClass %v: %v", *ing.Spec.IngressClassName, err)
+			log.Error(err, "Unable to get IngressClass", "IngressClass", ing.Spec.IngressClassName)
 			return false
 		}
 		if ingClass.Spec.Controller != ingressClassController {
-			klog.V(4).Infof("Skip Ingress %v/%v which needs IngressClass %v controller %v", ing.Namespace, ing.Name,
-				ingClass.Name, ingClass.Spec.Controller)
+			log.V(4).Info("Skip Ingress", "Ingress", klog.KObj(ing), "IngressClass", klog.KObj(ingClass),
+				"controller", ingClass.Spec.Controller)
 			return false
 		}
 		return true
@@ -154,7 +157,7 @@ func validateIngressClass(ing *networkingv1.Ingress, ingressClassController stri
 
 	ingClasses, err := ingClassLister.List(labels.Everything())
 	if err != nil {
-		klog.Errorf("Could not list IngressClass: %v", err)
+		log.Error(err, "Unable to list IngressClass")
 		return false
 	}
 
@@ -164,8 +167,8 @@ func validateIngressClass(ing *networkingv1.Ingress, ingressClassController stri
 		}
 
 		if ingClass.Spec.Controller != ingressClassController {
-			klog.V(4).Infof("Skip Ingress %v/%v because it defaults to IngressClass %v controller %v", ing.Namespace, ing.Name,
-				ingClass.Name, ingClass.Spec.Controller)
+			log.V(4).Info("Skip Ingress because of default IngressClass", "Ingress", klog.KObj(ing),
+				"IngressClass", klog.KObj(ingClass), "controller", ingClass.Spec.Controller)
 			return false
 		}
 		return true

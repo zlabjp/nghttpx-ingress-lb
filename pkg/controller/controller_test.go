@@ -164,12 +164,12 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		}
 	}
 
-	lbc, err := NewLoadBalancerController(f.clientset, newFakeLoadBalancer(), config)
+	lbc, err := NewLoadBalancerController(context.Background(), f.clientset, newFakeLoadBalancer(), config)
 	if err != nil {
 		f.t.Fatalf("NewLoadBalancerController: %v", err)
 	}
 
-	lc, err := NewLeaderController(lbc)
+	lc, err := NewLeaderController(context.Background(), lbc)
 	if err != nil {
 		f.t.Fatalf("NewLeaderController: %v", err)
 	}
@@ -1504,7 +1504,7 @@ func TestValidateIngressClass(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			if got, want := f.lbc.validateIngressClass(tt.ing), tt.want; got != want {
+			if got, want := f.lbc.validateIngressClass(context.Background(), tt.ing), tt.want; got != want {
 				t.Errorf("f.lbc.validateIngressClass(...) = %v, want %v", got, want)
 			}
 		})
@@ -1698,7 +1698,7 @@ func TestGetLoadBalancerIngressSelector(t *testing.T) {
 			f.preparePod(po1)
 			f.setupStore()
 
-			lbIngs, err := f.lc.getLoadBalancerIngressSelector(labels.Set(defaultIngPodLables).AsSelector())
+			lbIngs, err := f.lc.getLoadBalancerIngressSelector(context.Background(), labels.Set(defaultIngPodLables).AsSelector())
 
 			f.verifyActions()
 
@@ -2589,7 +2589,7 @@ func TestRemoveUpstreamsWithInconsistentBackendParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := removeUpstreamsWithInconsistentBackendParams(tt.upstreams), tt.want; !equality.Semantic.DeepEqual(got, want) {
+			if got, want := removeUpstreamsWithInconsistentBackendParams(context.Background(), tt.upstreams), tt.want; !equality.Semantic.DeepEqual(got, want) {
 				t.Errorf("removeUpstreamsWithInconsistentBackendParams(...) = %v, want %v", got, want)
 			}
 		})
@@ -2724,7 +2724,7 @@ func TestCreateTLSCredFromSecret(t *testing.T) {
 
 	s := newTLSSecret("ns", "cert", []byte(tlsCrt), []byte(tlsKey))
 
-	if _, err := f.lbc.createTLSCredFromSecret(s); err != nil {
+	if _, err := f.lbc.createTLSCredFromSecret(context.Background(), s); err != nil {
 		t.Fatalf("f.lbc.createTLSCredFromSecret: %v", err)
 	}
 
@@ -2750,7 +2750,7 @@ func TestCreateTLSCredFromSecret(t *testing.T) {
 	}
 
 	// Should use cache.
-	if _, err := f.lbc.createTLSCredFromSecret(s); err != nil {
+	if _, err := f.lbc.createTLSCredFromSecret(context.Background(), s); err != nil {
 		t.Fatalf("f.lbc.createTLSCredFromSecret: %v", err)
 	}
 
