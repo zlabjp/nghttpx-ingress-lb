@@ -148,11 +148,11 @@ func (lb *LoadBalancer) writeDefaultNghttpxConfig(nghttpxConfDir string, nghttpx
 		"HealthPort": nghttpxHealthPort,
 		"APIPort":    nghttpxAPIPort,
 	}); err != nil {
-		return fmt.Errorf("could not create default configuration file for nghttpx: %w", err)
+		return fmt.Errorf("unable to not create default configuration file for nghttpx: %w", err)
 	}
 
 	if err := WriteFile(ConfigPath(nghttpxConfDir), buf.Bytes()); err != nil {
-		return fmt.Errorf("could not write default configuration file for nghttpx: %w", err)
+		return fmt.Errorf("unable to write default configuration file for nghttpx: %w", err)
 	}
 
 	return nil

@@ -35,7 +35,7 @@ func writeQUICSecretFile(ingConfig *IngressConfig) error {
 
 	f := ingConfig.QUICSecretFile
 	if err := WriteFile(f.Path, f.Content); err != nil {
-		return fmt.Errorf("failed to write QUIC secret file: %w", err)
+		return fmt.Errorf("unable to write QUIC secret file: %w", err)
 	}
 
 	return nil
@@ -56,12 +56,12 @@ func VerifyQUICKeyingMaterials(km []byte) error {
 		}
 
 		if _, err := hex.DecodeString(l); err != nil {
-			return fmt.Errorf("could not decode QUIC keying materials from hex string: %w", err)
+			return fmt.Errorf("unable to decode QUIC keying materials from hex string: %w", err)
 		}
 	}
 
 	if err := sc.Err(); err != nil {
-		return fmt.Errorf("could not read QUIC keying materials: %w", err)
+		return fmt.Errorf("unable to read QUIC keying materials: %w", err)
 	}
 
 	return nil
