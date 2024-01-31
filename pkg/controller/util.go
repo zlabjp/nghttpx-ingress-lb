@@ -137,11 +137,11 @@ func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingres
 	if ing.Spec.IngressClassName != nil {
 		ingClass, err := ingClassLister.Get(*ing.Spec.IngressClassName)
 		if err != nil {
-			log.Error(err, "Unable to get IngressClass", "IngressClass", ing.Spec.IngressClassName)
+			log.Error(err, "Unable to get IngressClass", "ingressClass", ing.Spec.IngressClassName)
 			return false
 		}
 		if ingClass.Spec.Controller != ingressClassController {
-			log.V(4).Info("Skip Ingress", "Ingress", klog.KObj(ing), "IngressClass", klog.KObj(ingClass),
+			log.V(4).Info("Skip Ingress", "ingress", klog.KObj(ing), "ingressClass", klog.KObj(ingClass),
 				"controller", ingClass.Spec.Controller)
 			return false
 		}
@@ -167,8 +167,8 @@ func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingres
 		}
 
 		if ingClass.Spec.Controller != ingressClassController {
-			log.V(4).Info("Skip Ingress because of default IngressClass", "Ingress", klog.KObj(ing),
-				"IngressClass", klog.KObj(ingClass), "controller", ingClass.Spec.Controller)
+			log.V(4).Info("Skip Ingress because of default IngressClass", "ingress", klog.KObj(ing),
+				"ingressClass", klog.KObj(ingClass), "controller", ingClass.Spec.Controller)
 			return false
 		}
 		return true

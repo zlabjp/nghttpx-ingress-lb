@@ -258,7 +258,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		}
 		ns, name, err := cache.SplitMetaNamespaceKey(defaultSvc)
 		if err != nil {
-			log.Error(err, "default-backend-service: Invalid Service identifier", "Service", defaultSvc)
+			log.Error(err, "default-backend-service: Invalid Service identifier", "service", defaultSvc)
 			os.Exit(1)
 		}
 
@@ -271,7 +271,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 	if publishSvc != "" {
 		ns, name, err := cache.SplitMetaNamespaceKey(publishSvc)
 		if err != nil {
-			log.Error(err, "publish-service: Invalid Service identifier", "Service", publishSvc)
+			log.Error(err, "publish-service: Invalid Service identifier", "service", publishSvc)
 			os.Exit(1)
 		}
 
@@ -284,7 +284,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 	if ngxConfigMap != "" {
 		ns, name, err := cache.SplitMetaNamespaceKey(ngxConfigMap)
 		if err != nil {
-			log.Error(err, "nghttpx-configmap: Invalid ConfigMap identifier", "Service", ngxConfigMap)
+			log.Error(err, "nghttpx-configmap: Invalid ConfigMap identifier", "service", ngxConfigMap)
 			os.Exit(1)
 		}
 
@@ -297,7 +297,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 	if defaultTLSSecret != "" {
 		ns, name, err := cache.SplitMetaNamespaceKey(defaultTLSSecret)
 		if err != nil {
-			log.Error(err, "default-tls-secret: Invalid Secret identifier", "Service", defaultTLSSecret)
+			log.Error(err, "default-tls-secret: Invalid Secret identifier", "service", defaultTLSSecret)
 			os.Exit(1)
 		}
 
@@ -347,7 +347,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 
 	thisPod, err := getThisPod(clientset, podInfo)
 	if err != nil {
-		log.Error(err, "Unable to get Pod", "Pod", podInfo)
+		log.Error(err, "Unable to get Pod", "pod", podInfo)
 		os.Exit(1)
 	}
 
