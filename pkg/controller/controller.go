@@ -1858,8 +1858,8 @@ func (lbc *LoadBalancerController) getEndpointsWithoutServiceSelectors(ctx conte
 		}
 	}
 
-	if log.V(3).Enabled() {
-		log.V(3).Info("Endpoints found", "backends", klog.Format(backends))
+	if log := log.V(3); log.Enabled() {
+		log.Info("Endpoints found", "backends", klog.Format(backends))
 	}
 
 	return backends, nil
@@ -1927,8 +1927,8 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSliceWithoutServiceSe
 		}
 	}
 
-	if log.V(3).Enabled() {
-		log.V(3).Info("Endpoints found", "backends", klog.Format(backends))
+	if log := log.V(3); log.Enabled() {
+		log.Info("Endpoints found", "backends", klog.Format(backends))
 	}
 
 	return backends, nil
@@ -1978,8 +1978,8 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpoints(ctx context.Context
 		}
 	}
 
-	if log.V(3).Enabled() {
-		log.V(3).Info("Endpoints found", "backends", klog.Format(backends))
+	if log := log.V(3); log.Enabled() {
+		log.Info("Endpoints found", "backends", klog.Format(backends))
 	}
 
 	return backends, nil
@@ -2043,8 +2043,8 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(ctx context.Con
 		}
 	}
 
-	if log.V(3).Enabled() {
-		log.V(3).Info("Endpoints found", "backends", klog.Format(backends))
+	if log := log.V(3); log.Enabled() {
+		log.Info("Endpoints found", "backends", klog.Format(backends))
 	}
 
 	return backends, nil
@@ -2976,8 +2976,8 @@ func (lc *LeaderController) syncIngress(ctx context.Context, key string) error {
 		return nil
 	}
 
-	if log.V(4).Enabled() {
-		log.V(4).Info("Update Ingress .Status.LoadBalancer.Ingress", "loadBalancerIngress", klog.Format(lbIngs))
+	if log := log.V(4); log.Enabled() {
+		log.Info("Update Ingress .Status.LoadBalancer.Ingress", "loadBalancerIngress", klog.Format(lbIngs))
 	}
 
 	newIng := ing.DeepCopy()
