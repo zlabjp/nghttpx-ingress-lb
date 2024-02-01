@@ -110,15 +110,13 @@ var (
 )
 
 func main() {
-	log := klog.NewKlogr()
-
 	rootCmd := &cobra.Command{
 		Use: "nghttpx-ingress-controller",
 		Run: func(cmd *cobra.Command, args []string) {
 			// Contextual logging is enabled by default, but cli.Run disables it.  Enable it again.
 			klog.EnableContextualLogging(true)
 
-			run(klog.NewContext(context.Background(), log), cmd, args)
+			run(context.Background(), cmd, args)
 		},
 	}
 

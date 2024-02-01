@@ -84,13 +84,13 @@ func needsReload(ctx context.Context, filename string, newCfg []byte) (bool, err
 		return false, nil
 	}
 
-	if log.V(2).Enabled() {
+	if log := log.V(2); log.Enabled() {
 		dData, err := diff(oldCfg, newCfg)
 		if err != nil {
 			log.Error(err, "Error while computing diff")
 			return true, nil
 		}
-		log.V(2).Info("nghttpx configuration diff", "path", filename, "diff", dData)
+		log.Info("nghttpx configuration diff", "path", filename, "diff", dData)
 	}
 
 	return true, nil

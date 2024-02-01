@@ -101,8 +101,8 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 		return false, nil
 	}
 
-	if log.V(3).Enabled() {
-		log.V(3).Info("nghttpx configuration", "configuration", klog.Format(ingressCfg))
+	if log := log.V(3); log.Enabled() {
+		log.Info("nghttpx configuration", "configuration", klog.Format(ingressCfg))
 	}
 
 	switch changed {
@@ -255,7 +255,7 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 		return fmt.Errorf("unable to read API response body: %w", err)
 	}
 
-	if log.V(3).Enabled() {
+	if log := log.V(3); log.Enabled() {
 		log.Info("API request returned response body", "body", string(respBody))
 	}
 
