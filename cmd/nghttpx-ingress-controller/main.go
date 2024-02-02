@@ -62,37 +62,37 @@ var (
 	gitRepo = ""
 
 	// Command-line flags
-	defaultSvc                string
-	ngxConfigMap              string
-	kubeconfig                string
-	watchNamespace            = metav1.NamespaceAll
-	healthzPort               = int32(11249)
-	nghttpxHealthPort         = int32(10901)
-	nghttpxAPIPort            = int32(10902)
-	profiling                 = true
-	allowInternalIP           = false
-	defaultTLSSecret          string
-	ingressClass              = "nghttpx"
-	ingressClassController    = "zlab.co.jp/nghttpx"
-	nghttpxConfDir            = "/etc/nghttpx"
-	nghttpxExecPath           = "/usr/local/bin/nghttpx"
-	nghttpxHTTPPort           = int32(80)
-	nghttpxHTTPSPort          = int32(443)
-	fetchOCSPRespFromSecret   = false
-	proxyProto                = false
-	ocspRespKey               = "tls.ocsp-resp"
-	publishSvc                string
-	endpointSlices            = true
-	reloadRate                = 1.0
-	reloadBurst               = 1
-	noDefaultBackendOverride  = false
-	deferredShutdownPeriod    time.Duration
-	configOverrides           clientcmd.ConfigOverrides
-	internalDefaultBackend    = false
-	http3                     = false
-	quicKeyingMaterialsSecret = "nghttpx-quic-km"
-	reconcileTimeout          = 10 * time.Minute
-	leaderElectionConfig      = componentbaseconfig.LeaderElectionConfiguration{
+	defaultSvc               string
+	ngxConfigMap             string
+	kubeconfig               string
+	watchNamespace           = metav1.NamespaceAll
+	healthzPort              = int32(11249)
+	nghttpxHealthPort        = int32(10901)
+	nghttpxAPIPort           = int32(10902)
+	profiling                = true
+	allowInternalIP          = false
+	defaultTLSSecret         string
+	ingressClass             = "nghttpx"
+	ingressClassController   = "zlab.co.jp/nghttpx"
+	nghttpxConfDir           = "/etc/nghttpx"
+	nghttpxExecPath          = "/usr/local/bin/nghttpx"
+	nghttpxHTTPPort          = int32(80)
+	nghttpxHTTPSPort         = int32(443)
+	fetchOCSPRespFromSecret  = false
+	proxyProto               = false
+	ocspRespKey              = "tls.ocsp-resp"
+	publishSvc               string
+	endpointSlices           = true
+	reloadRate               = 1.0
+	reloadBurst              = 1
+	noDefaultBackendOverride = false
+	deferredShutdownPeriod   time.Duration
+	configOverrides          clientcmd.ConfigOverrides
+	internalDefaultBackend   = false
+	http3                    = false
+	nghttpxSecret            = "nghttpx-km"
+	reconcileTimeout         = 10 * time.Minute
+	leaderElectionConfig     = componentbaseconfig.LeaderElectionConfiguration{
 		LeaseDuration: metav1.Duration{Duration: 15 * time.Second},
 		RenewDeadline: metav1.Duration{Duration: 10 * time.Second},
 		RetryPeriod:   metav1.Duration{Duration: 2 * time.Second},
@@ -189,7 +189,7 @@ func main() {
 
 	rootCmd.Flags().BoolVar(&http3, "http3", http3, `Enable HTTP/3.  This makes nghttpx listen to UDP port specified by nghttpx-https-port for HTTP/3 traffic.`)
 
-	rootCmd.Flags().StringVar(&quicKeyingMaterialsSecret, "quic-keying-materials-secret", quicKeyingMaterialsSecret, `The name of Secret resource which contains QUIC keying materials for nghttpx.  The resource must belong to the same namespace as the controller Pod.`)
+	rootCmd.Flags().StringVar(&nghttpxSecret, "nghttpx-secret", nghttpxSecret, `The name of Secret resource which contains the keying materials for nghttpx.  The resource must belong to the same namespace as the controller Pod.  If it is not found, the controller will create new one.`)
 
 	rootCmd.Flags().DurationVar(&reconcileTimeout, "reconcile-timeout", reconcileTimeout,
 		`A timeout for a single reconciliation.  It is a safe guard to prevent a reconciliation from getting stuck indefinitely.`)
@@ -369,6 +369,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		NghttpxWorkers:                          nghttpxWorkers,
 		NghttpxWorkerProcessGraceShutdownPeriod: nghttpxWorkerProcessGraceShutdownPeriod,
 		NghttpxMaxWorkerProcesses:               nghttpxMaxWorkerProcesses,
+		NghttpxSecret:                           types.NamespacedName{Name: nghttpxSecret, Namespace: thisPod.Namespace},
 		DefaultTLSSecret:                        defaultTLSSecretKey,
 		IngressClassController:                  ingressClassController,
 		AllowInternalIP:                         allowInternalIP,
@@ -384,7 +385,6 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		HealthzPort:                             healthzPort,
 		InternalDefaultBackend:                  internalDefaultBackend,
 		HTTP3:                                   http3,
-		QUICKeyingMaterialsSecret:               &types.NamespacedName{Name: quicKeyingMaterialsSecret, Namespace: thisPod.Namespace},
 		ReconcileTimeout:                        reconcileTimeout,
 		LeaderElectionConfig:                    leaderElectionConfig,
 		RequireIngressClass:                     requireIngressClass,

@@ -188,6 +188,15 @@ Pod.  The controller maintains the secret as a whole, and it should
 not be altered by an external tool or user. nghttpx listens on UDP
 port specified by `--nghttpx-https-port` flag.
 
+> [!WARNING]
+> As of v0.66.0, Secret is integrated to the one specified by
+> `--nghttpx-secret` flag, and `--quic-keying-materials-secret` flag
+> has been removed.  The default value is also changed.  Previously,
+> it is `nghttpx-quic-km` but now `nghttpx-km`.  To migrate from the
+> previous release, before upgrading nghttpx-ingress-controller to
+> v0.66.0, copy Secret `nghttpx-quic-km` to `nghttpx-km`, and upgrade
+> nghttpx-ingress-controller.
+
 HTTP/3 requires writing Secret and extra capabilities to load eBPF
 program.  For writing Secret, you might need to add the following
 entry to ClusterRole:
