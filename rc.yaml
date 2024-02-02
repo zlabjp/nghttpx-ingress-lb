@@ -77,17 +77,6 @@ rules:
 - apiGroups: ["discovery.k8s.io"]
   resources: ["endpointslices"]
   verbs: ["get", "list", "watch"]
-- apiGroups: ["events.k8s.io"]
-  resources: ["events"]
-  verbs: ["create", "patch"]
-- apiGroups: ["coordination.k8s.io"]
-  resources: ["leases"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-# Permission to write Secret is required for HTTP/3.
-# You can remove it if HTTP/3 is not used.
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["create", "update", "patch"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -99,6 +88,36 @@ subjects:
   namespace: kube-system
 roleRef:
   kind: ClusterRole
+  name: ingress
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ingress
+  namespace: kube-system
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "update", "patch"]
+- apiGroups: ["events.k8s.io"]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ingress
+  namespace: kube-system
+subjects:
+- kind: ServiceAccount
+  name: ingress
+  namespace: kube-system
+roleRef:
+  kind: Role
   name: ingress
   apiGroup: rbac.authorization.k8s.io
 ---

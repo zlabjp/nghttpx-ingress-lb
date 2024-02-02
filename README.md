@@ -197,23 +197,8 @@ port specified by `--nghttpx-https-port` flag.
 > v0.66.0, copy Secret `nghttpx-quic-km` to `nghttpx-km`, and upgrade
 > nghttpx-ingress-controller.
 
-HTTP/3 requires writing Secret and extra capabilities to load eBPF
-program.  For writing Secret, you might need to add the following
-entry to ClusterRole:
-
-```yaml
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-...
-rules:
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["create", "update", "patch"]
-...
-```
-
-Add the following capabilities to the nghttpx-ingress-controller
-container:
+HTTP/3 requires the extra capabilities to load eBPF program.  Add the
+following capabilities to the nghttpx-ingress-controller container:
 
 ```yaml
 apiVersion: apps/v1
