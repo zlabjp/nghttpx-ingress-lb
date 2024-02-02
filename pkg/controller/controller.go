@@ -70,8 +70,6 @@ const (
 	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
 	// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
 	syncKey = "ingress"
-	// quicSecretKey is a key to put into quicSecretQueue.
-	quicSecretKey = "quic-secret"
 	// quicSecretTimeout is the timeout for the last QUIC keying material.
 	quicSecretTimeout = time.Hour
 
@@ -139,7 +137,7 @@ type LoadBalancerController struct {
 	healthzPort                             int32
 	internalDefaultBackend                  bool
 	http3                                   bool
-	quicKeyingMaterialsSecret               *types.NamespacedName
+	nghttpxSecret                           types.NamespacedName
 	reconcileTimeout                        time.Duration
 	leaderElectionConfig                    componentbaseconfig.LeaderElectionConfiguration
 	requireIngressClass                     bool
@@ -181,6 +179,8 @@ type Config struct {
 	NghttpxWorkerProcessGraceShutdownPeriod time.Duration
 	// NghttpxMaxWorkerProcesses is the maximum number of nghttpx worker processes which are spawned in every configuration reload.
 	NghttpxMaxWorkerProcesses int32
+	// NghttpxSecret is the Secret resource which contains secrets used by nghttpx.
+	NghttpxSecret types.NamespacedName
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret *types.NamespacedName
 	// IngressClassController is the name of IngressClass controller for this controller.
@@ -212,8 +212,6 @@ type Config struct {
 	// ReconcileTimeout is a timeout for a single reconciliation.  It is a safe guard to prevent a reconciliation from getting stuck
 	// indefinitely.
 	ReconcileTimeout time.Duration
-	// QUICKeyingMaterialsSecret is the Secret resource which contains QUIC keying materials used by nghttpx.
-	QUICKeyingMaterialsSecret *types.NamespacedName
 	// LeaderElectionConfig is the configuration of leader election.
 	LeaderElectionConfig componentbaseconfig.LeaderElectionConfiguration
 	// RequireIngressClass, if set to true, ignores Ingress resource which does not specify .spec.ingressClassName.
@@ -246,6 +244,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		nghttpxWorkers:                          config.NghttpxWorkers,
 		nghttpxWorkerProcessGraceShutdownPeriod: config.NghttpxWorkerProcessGraceShutdownPeriod,
 		nghttpxMaxWorkerProcesses:               config.NghttpxMaxWorkerProcesses,
+		nghttpxSecret:                           config.NghttpxSecret,
 		defaultSvc:                              config.DefaultBackendService,
 		defaultTLSSecret:                        config.DefaultTLSSecret,
 		watchNamespace:                          config.WatchNamespace,
@@ -260,7 +259,6 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		healthzPort:                             config.HealthzPort,
 		internalDefaultBackend:                  config.InternalDefaultBackend,
 		http3:                                   config.HTTP3,
-		quicKeyingMaterialsSecret:               config.QUICKeyingMaterialsSecret,
 		reconcileTimeout:                        config.ReconcileTimeout,
 		leaderElectionConfig:                    config.LeaderElectionConfig,
 		requireIngressClass:                     config.RequireIngressClass,
@@ -963,20 +961,6 @@ func (lbc *LoadBalancerController) getConfigMap(ctx context.Context, cmKey *type
 	return cm, nil
 }
 
-func (lbc *LoadBalancerController) getQUICKeyingMaterials(key types.NamespacedName) ([]byte, error) {
-	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	km, ok := secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
-	if !ok {
-		return nil, fmt.Errorf("Secret %v does not contain %v key", key, nghttpxQUICKeyingMaterialsSecretKey)
-	}
-
-	return km, nil
-}
-
 func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
 	log := klog.FromContext(ctx)
 
@@ -1008,13 +992,20 @@ func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
 
 	nghttpx.ReadConfig(ingConfig, cm)
 
-	if lbc.http3 {
-		quicKM, err := lbc.getQUICKeyingMaterials(*lbc.quicKeyingMaterialsSecret)
-		if err != nil {
-			return err
-		}
+	secret, err := lbc.secretLister.Secrets(lbc.nghttpxSecret.Namespace).Get(lbc.nghttpxSecret.Name)
+	if err != nil {
+		log.Error(err, "nghttpx secret not found")
 
-		ingConfig.QUICSecretFile = nghttpx.CreateQUICSecretFile(ingConfig.ConfDir, quicKM)
+		// Continue to processing so that missing Secret does not prevent the controller from reconciling new configuration.
+	}
+
+	if secret != nil && lbc.http3 {
+		quicKM, ok := secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
+		if !ok {
+			log.Error(nil, "Secret does not contain QUIC keying materials")
+		} else {
+			ingConfig.QUICSecretFile = nghttpx.CreateQUICSecretFile(ingConfig.ConfDir, quicKM)
+		}
 	}
 
 	reloaded, err := lbc.nghttpx.CheckAndReload(ctx, ingConfig)
@@ -1755,7 +1746,8 @@ func (lbc *LoadBalancerController) garbageCollectCertificate(ctx context.Context
 func (lbc *LoadBalancerController) secretReferenced(ctx context.Context, s *corev1.Secret) bool {
 	log := klog.FromContext(ctx)
 
-	if lbc.defaultTLSSecret != nil && s.Namespace == lbc.defaultTLSSecret.Namespace && s.Name == lbc.defaultTLSSecret.Name {
+	if (lbc.defaultTLSSecret != nil && s.Namespace == lbc.defaultTLSSecret.Namespace && s.Name == lbc.defaultTLSSecret.Name) ||
+		(s.Namespace == lbc.nghttpxSecret.Namespace && s.Name == lbc.nghttpxSecret.Name) {
 		return true
 	}
 
@@ -2326,8 +2318,8 @@ type LeaderController struct {
 	secretLister   listerscorev1.SecretLister
 	nodeLister     listerscorev1.NodeLister
 
-	ingQueue        workqueue.RateLimitingInterface
-	quicSecretQueue workqueue.RateLimitingInterface
+	ingQueue    workqueue.RateLimitingInterface
+	secretQueue workqueue.RateLimitingInterface
 }
 
 func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*LeaderController, error) {
@@ -2345,11 +2337,17 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			}),
 		),
 		allNSInformers: informers.NewSharedInformerFactory(lbc.clientset, noResyncPeriod),
+		secretInformers: informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
+			informers.WithNamespace(lbc.nghttpxSecret.Namespace),
+			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+				opts.FieldSelector = "metadata.name=" + lbc.nghttpxSecret.Name
+			}),
+		),
 		ingQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
 			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 		)),
-		quicSecretQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
+		secretQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
 			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 		)),
@@ -2384,13 +2382,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		lc.podIndexer = inf.GetIndexer()
 	}
 
-	if lbc.http3 {
-		lc.secretInformers = informers.NewSharedInformerFactoryWithOptions(lbc.clientset, noResyncPeriod,
-			informers.WithNamespace(lbc.quicKeyingMaterialsSecret.Namespace),
-			informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
-				opts.FieldSelector = "metadata.name=" + lbc.quicKeyingMaterialsSecret.Name
-			}),
-		)
+	{
 		f := lc.secretInformers.Core().V1().Secrets()
 		lc.secretLister = f.Lister()
 		inf := f.Informer()
@@ -2481,17 +2473,16 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 		}
 	}
 
-	if lc.lbc.http3 {
-		lc.quicSecretQueue.Add(quicSecretKey)
+	// Add Secret to queue so that we can create it if missing.
+	lc.secretQueue.Add(lc.lbc.nghttpxSecret.String())
 
-		wg.Add(1)
+	wg.Add(1)
 
-		go func() {
-			defer wg.Done()
+	go func() {
+		defer wg.Done()
 
-			lc.quicSecretWorker(ctx)
-		}()
-	}
+		lc.secretWorker(ctx)
+	}()
 
 	wg.Add(1)
 
@@ -2507,7 +2498,7 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 
 	lc.ingQueue.ShutDown()
 	if lc.lbc.http3 {
-		lc.quicSecretQueue.ShutDown()
+		lc.secretQueue.ShutDown()
 	}
 
 	wg.Wait()
@@ -2628,7 +2619,7 @@ func (lc *LeaderController) addSecretNotification(ctx context.Context, obj any) 
 	s := obj.(*corev1.Secret)
 
 	log.V(4).Info("Secret added", "secret", klog.KObj(s))
-	lc.enqueueQUICSecret()
+	lc.enqueueSecret(s)
 }
 
 func (lc *LeaderController) updateSecretNotification(ctx context.Context, _, cur any) {
@@ -2637,7 +2628,7 @@ func (lc *LeaderController) updateSecretNotification(ctx context.Context, _, cur
 	curS := cur.(*corev1.Secret)
 
 	log.V(4).Info("Secret updated", "secret", klog.KObj(curS))
-	lc.enqueueQUICSecret()
+	lc.enqueueSecret(curS)
 }
 
 func (lc *LeaderController) deleteSecretNotification(ctx context.Context, obj any) {
@@ -2658,7 +2649,7 @@ func (lc *LeaderController) deleteSecretNotification(ctx context.Context, obj an
 	}
 
 	log.V(4).Info("Secret deleted", "secret", klog.KObj(s))
-	lc.enqueueQUICSecret()
+	lc.enqueueSecret(s)
 }
 
 func (lc *LeaderController) addIngressClassNotification(ctx context.Context, obj any) {
@@ -2756,31 +2747,31 @@ func (lc *LeaderController) validateIngressClass(ctx context.Context, ing *netwo
 	return validateIngressClass(ctx, ing, lc.lbc.ingressClassController, lc.ingClassLister, lc.lbc.requireIngressClass)
 }
 
-func (lc *LeaderController) enqueueQUICSecret() {
-	lc.quicSecretQueue.Add(quicSecretKey)
+func (lc *LeaderController) enqueueSecret(s *corev1.Secret) {
+	lc.secretQueue.Add(namespacedName(s).String())
 }
 
-func (lc *LeaderController) quicSecretWorker(ctx context.Context) {
+func (lc *LeaderController) secretWorker(ctx context.Context) {
 	log := klog.FromContext(ctx)
 
 	work := func() bool {
-		key, quit := lc.quicSecretQueue.Get()
+		key, quit := lc.secretQueue.Get()
 		if quit {
 			return true
 		}
 
-		defer lc.quicSecretQueue.Done(key)
+		defer lc.secretQueue.Done(key)
 
-		log := klog.LoggerWithValues(log, "secret", lc.lbc.quicKeyingMaterialsSecret, "reconcileID", uuid.NewUUID())
+		log := klog.LoggerWithValues(log, "secret", key, "reconcileID", uuid.NewUUID())
 
 		ctx, cancel := context.WithTimeout(klog.NewContext(ctx, log), lc.lbc.reconcileTimeout)
 		defer cancel()
 
-		if err := lc.syncQUICKeyingMaterials(ctx, time.Now()); err != nil {
+		if err := lc.syncSecret(ctx, key.(string), time.Now()); err != nil {
 			log.Error(err, "Unable to sync QUIC keying materials")
-			lc.quicSecretQueue.AddRateLimited(key)
+			lc.secretQueue.AddRateLimited(key)
 		} else {
-			lc.quicSecretQueue.Forget(key)
+			lc.secretQueue.Forget(key)
 		}
 
 		return false
@@ -2793,12 +2784,19 @@ func (lc *LeaderController) quicSecretWorker(ctx context.Context) {
 	}
 }
 
-func (lc *LeaderController) syncQUICKeyingMaterials(ctx context.Context, now time.Time) error {
+func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time.Time) error {
 	log := klog.FromContext(ctx)
 
 	log.V(2).Info("Syncing Secret")
 
-	secret, err := lc.secretLister.Secrets(lc.lbc.quicKeyingMaterialsSecret.Namespace).Get(lc.lbc.quicKeyingMaterialsSecret.Name)
+	ns, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		log.Error(err, "Unable to split namespace and name from key", "key", key)
+		// Since key is broken, we do not retry.
+		return nil
+	}
+
+	secret, err := lc.secretLister.Secrets(ns).Get(name)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "Unable to get Secret")
@@ -2807,8 +2805,8 @@ func (lc *LeaderController) syncQUICKeyingMaterials(ctx context.Context, now tim
 
 		secret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      lc.lbc.quicKeyingMaterialsSecret.Name,
-				Namespace: lc.lbc.quicKeyingMaterialsSecret.Namespace,
+				Name:      name,
+				Namespace: ns,
 				Annotations: map[string]string{
 					quicKeyingMaterialsUpdateTimestampKey: now.Format(time.RFC3339),
 				},
@@ -2823,10 +2821,10 @@ func (lc *LeaderController) syncQUICKeyingMaterials(ctx context.Context, now tim
 			return err
 		}
 
-		log.Info("QUIC keying materials Secret was created")
+		log.Info("Secret was created")
 
-		// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
-		lc.quicSecretQueue.AddAfter(quicSecretKey, quicSecretTimeout)
+		// If Secret has been added to the queue and is waiting, this effectively overrides it.
+		lc.secretQueue.AddAfter(key, quicSecretTimeout)
 
 		return nil
 	}
@@ -2844,8 +2842,8 @@ func (lc *LeaderController) syncQUICKeyingMaterials(ctx context.Context, now tim
 				d := t.Add(quicSecretTimeout).Sub(now)
 				if d > 0 {
 					log.Info("QUIC keying materials are not expired and in a good shape", "retryAfter", d)
-					// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
-					lc.quicSecretQueue.AddAfter(quicSecretKey, d)
+					// If Secret has been added to the queue and is waiting, this effectively overrides it.
+					lc.secretQueue.AddAfter(key, d)
 
 					return nil
 				}
@@ -2871,10 +2869,10 @@ func (lc *LeaderController) syncQUICKeyingMaterials(ctx context.Context, now tim
 		return err
 	}
 
-	log.Info("QUIC keying materials Secret was updated")
+	log.Info("Secret was updated")
 
-	// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
-	lc.quicSecretQueue.AddAfter(quicSecretKey, quicSecretTimeout)
+	// If Secret has been added to the queue and is waiting, this effectively overrides it.
+	lc.secretQueue.AddAfter(key, quicSecretTimeout)
 
 	return nil
 }

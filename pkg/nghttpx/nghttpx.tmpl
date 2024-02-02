@@ -12,8 +12,10 @@ frontend=*,{{ .HTTPSPort }}{{ if .ProxyProto }};proxyproto{{ end }}
 {{ if .HTTP3 -}}
 # HTTP/3
 frontend=*,{{ .HTTPSPort }};quic
+{{ if .QUICSecretFile -}}
 # checksum: {{ encodeHex .QUICSecretFile.Checksum }}
 frontend-quic-secret-file={{ .QUICSecretFile.Path }}
+{{ end -}}
 altsvc=h3,{{ .HTTPSPort }},,,ma=3600
 altsvc=h3-29,{{ .HTTPSPort }},,,ma=3600
 http2-altsvc=h3,{{ .HTTPSPort }},,,ma=3600

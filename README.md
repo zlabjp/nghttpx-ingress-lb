@@ -188,23 +188,17 @@ Pod.  The controller maintains the secret as a whole, and it should
 not be altered by an external tool or user. nghttpx listens on UDP
 port specified by `--nghttpx-https-port` flag.
 
-HTTP/3 requires writing Secret and extra capabilities to load eBPF
-program.  For writing Secret, you might need to add the following
-entry to ClusterRole:
+> [!WARNING]
+> As of v0.66.0, Secret is integrated to the one specified by
+> `--nghttpx-secret` flag, and `--quic-keying-materials-secret` flag
+> has been removed.  The default value is also changed.  Previously,
+> it is `nghttpx-quic-km` but now `nghttpx-km`.  To migrate from the
+> previous release, before upgrading nghttpx-ingress-controller to
+> v0.66.0, copy Secret `nghttpx-quic-km` to `nghttpx-km`, and upgrade
+> nghttpx-ingress-controller.
 
-```yaml
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-...
-rules:
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["create", "update", "patch"]
-...
-```
-
-Add the following capabilities to the nghttpx-ingress-controller
-container:
+HTTP/3 requires the extra capabilities to load eBPF program.  Add the
+following capabilities to the nghttpx-ingress-controller container:
 
 ```yaml
 apiVersion: apps/v1

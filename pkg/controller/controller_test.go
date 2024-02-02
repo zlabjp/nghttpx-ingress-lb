@@ -128,8 +128,8 @@ var (
 		"k8s-app": "ingress",
 	}
 
-	defaultQUICSecret = types.NamespacedName{
-		Name:      "nghttpx-quic-secret",
+	defaultNghttpxSecret = types.NamespacedName{
+		Name:      "nghttpx-km",
 		Namespace: "kube-system",
 	}
 )
@@ -142,10 +142,14 @@ func (f *fixture) prepare() {
 func (f *fixture) preparePod(pod *corev1.Pod) {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
 	config := Config{
-		DefaultBackendService:  &types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
-		WatchNamespace:         defaultIngNamespace,
-		NghttpxConfigMap:       &types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
-		NghttpxConfDir:         defaultConfDir,
+		DefaultBackendService: &types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
+		WatchNamespace:        defaultIngNamespace,
+		NghttpxConfigMap:      &types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
+		NghttpxConfDir:        defaultConfDir,
+		NghttpxSecret: types.NamespacedName{
+			Name:      defaultNghttpxSecret.Name,
+			Namespace: defaultNghttpxSecret.Namespace,
+		},
 		IngressClassController: defaultIngressClassController,
 		EnableEndpointSlice:    f.enableEndpointSlice,
 		ReloadRate:             1.0,
@@ -155,13 +159,6 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		RequireIngressClass:    f.requireIngressClass,
 		Pod:                    pod,
 		EventRecorder:          &events.FakeRecorder{},
-	}
-
-	if f.http3 {
-		config.QUICKeyingMaterialsSecret = &types.NamespacedName{
-			Name:      defaultQUICSecret.Name,
-			Namespace: defaultQUICSecret.Namespace,
-		}
 	}
 
 	lbc, err := NewLoadBalancerController(context.Background(), f.clientset, newFakeLoadBalancer(), config)
@@ -901,6 +898,15 @@ func newTLSSecret(namespace, name string, tlsCrt, tlsKey []byte) *corev1.Secret 
 	}
 }
 
+func newNghttpxSecret() *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      defaultNghttpxSecret.Name,
+			Namespace: defaultNghttpxSecret.Namespace,
+		},
+	}
+}
+
 func newChecksumFile(path string) *nghttpx.ChecksumFile {
 	return &nghttpx.ChecksumFile{
 		Path: path,
@@ -946,10 +952,12 @@ func TestSyncDefaultBackend(t *testing.T) {
 			} else {
 				svc, eps, ess = newDefaultBackend()
 			}
+			nghttpxSecret := newNghttpxSecret()
 
 			f.cmStore = append(f.cmStore, cm)
 			f.svcStore = append(f.svcStore, svc)
 			f.epStore = append(f.epStore, eps)
+			f.secretStore = append(f.secretStore, nghttpxSecret)
 			f.epSliceStore = append(f.epSliceStore, ess...)
 
 			f.objects = append(f.objects, cm, svc, eps)
@@ -1024,9 +1032,10 @@ func TestSyncDefaultSecret(t *testing.T) {
 	dCrt := []byte(tlsCrt)
 	dKey := []byte(tlsKey)
 	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
+	nghttpxSecret := newNghttpxSecret()
 	svc, eps, _ := newDefaultBackend()
 
-	f.secretStore = append(f.secretStore, tlsSecret)
+	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
 	f.svcStore = append(f.svcStore, svc)
 	f.epStore = append(f.epStore, eps)
 
@@ -1074,6 +1083,7 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	dCrt := []byte(tlsCrt)
 	dKey := []byte(tlsKey)
 	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
+	nghttpxSecret := newNghttpxSecret()
 	svc, eps, _ := newDefaultBackend()
 
 	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
@@ -1082,7 +1092,7 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 		WithTLS(tlsSecret.Name).
 		Complete()
 
-	f.secretStore = append(f.secretStore, tlsSecret)
+	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
 	f.ingStore = append(f.ingStore, ing1)
 	f.svcStore = append(f.svcStore, svc, bs1)
 	f.epStore = append(f.epStore, eps, be1)
@@ -1150,6 +1160,7 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	dCrt := []byte(badlyFormattedTLSCrt)
 	dKey := []byte(badlyFormattedTLSKey)
 	tlsSecret := newTLSSecret(metav1.NamespaceDefault, "tls", dCrt, dKey)
+	nghttpxSecret := newNghttpxSecret()
 	svc, eps, _ := newDefaultBackend()
 
 	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
@@ -1158,7 +1169,7 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 		WithTLS(tlsSecret.Name).
 		Complete()
 
-	f.secretStore = append(f.secretStore, tlsSecret)
+	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
 	f.ingStore = append(f.ingStore, ing1)
 	f.svcStore = append(f.svcStore, svc, bs1)
 	f.epStore = append(f.epStore, eps, be1)
@@ -1274,12 +1285,15 @@ func TestSyncStringNamedPort(t *testing.T) {
 				},
 			}
 
+			nghttpxSecret := newNghttpxSecret()
+
 			f.svcStore = append(f.svcStore, svc, bs1)
 			f.epStore = append(f.epStore, eps, be1)
 			f.epSliceStore = append(f.epSliceStore, ess...)
 			f.epSliceStore = append(f.epSliceStore, bes1)
 			f.ingStore = append(f.ingStore, ing1)
 			f.podStore = append(f.podStore, bp1, bp2)
+			f.secretStore = append(f.secretStore, nghttpxSecret)
 
 			f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bp1, bp2)
 
@@ -1326,10 +1340,12 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		Complete()
+	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1)
 	f.epStore = append(f.epStore, eps, be1)
 	f.ingStore = append(f.ingStore, ing1)
+	f.secretStore = append(f.secretStore, nghttpxSecret)
 
 	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
 
@@ -1379,12 +1395,14 @@ func TestSyncWithoutSelectors(t *testing.T) {
 			ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
 				WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 				Complete()
+			nghttpxSecret := newNghttpxSecret()
 
 			f.svcStore = append(f.svcStore, svc, bs1)
 			f.epStore = append(f.epStore, eps, be1)
 			f.epSliceStore = append(f.epSliceStore, ess...)
 			f.epSliceStore = append(f.epSliceStore, bes1)
 			f.ingStore = append(f.ingStore, ing1)
+			f.secretStore = append(f.secretStore, nghttpxSecret)
 
 			f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
 
@@ -1523,10 +1541,12 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithDefaultBackend("bravo", serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
 		Complete()
+	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1, bs2)
 	f.epStore = append(f.epStore, eps, be1, be2)
 	f.ingStore = append(f.ingStore, ing1)
+	f.secretStore = append(f.secretStore, nghttpxSecret)
 
 	f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bs2, be2)
 
@@ -1584,11 +1604,13 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 			f := newFixture(t)
 
 			svc, eps, ess := newDefaultBackend()
+			nghttpxSecret := newNghttpxSecret()
 
 			f.svcStore = append(f.svcStore, svc, bs1.DeepCopyObject().(*corev1.Service), bs2.DeepCopyObject().(*corev1.Service))
 			f.epStore = append(f.epStore, eps, be1.DeepCopyObject().(*corev1.Endpoints), be2.DeepCopyObject().(*corev1.Endpoints))
 			f.epSliceStore = append(f.epSliceStore, ess...)
 			f.ingStore = append(f.ingStore, tt.ing)
+			f.secretStore = append(f.secretStore, nghttpxSecret)
 
 			f.prepare()
 			f.lbc.noDefaultBackendOverride = true
@@ -1812,10 +1834,12 @@ func TestSyncNamedServicePort(t *testing.T) {
 	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
 		WithRule("/", bs1.Name, serviceBackendPortName(bs1.Spec.Ports[0].Name)).
 		Complete()
+	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1)
 	f.epStore = append(f.epStore, eps, be1)
 	f.ingStore = append(f.ingStore, ing1)
+	f.secretStore = append(f.secretStore, nghttpxSecret)
 
 	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
 
@@ -1852,6 +1876,10 @@ func TestSyncInternalDefaultBackend(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
+
+			nghttpxSecret := newNghttpxSecret()
+
+			f.secretStore = append(f.secretStore, nghttpxSecret)
 
 			f.prepare()
 
@@ -1903,9 +1931,12 @@ func TestSyncDoNotForward(t *testing.T) {
 `}).
 		Complete()
 
+	nghttpxSecret := newNghttpxSecret()
+
 	f.svcStore = append(f.svcStore, svc)
 	f.epStore = append(f.epStore, eps)
 	f.ingStore = append(f.ingStore, ing1)
+	f.secretStore = append(f.secretStore, nghttpxSecret)
 
 	f.objects = append(f.objects, svc, eps, ing1)
 
@@ -1974,10 +2005,12 @@ func TestSyncNormalizePath(t *testing.T) {
 			ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
 				WithRule(tt.path, bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 				Complete()
+			nghttpxSecret := newNghttpxSecret()
 
 			f.svcStore = append(f.svcStore, svc, bs1)
 			f.epStore = append(f.epStore, eps, be1)
 			f.ingStore = append(f.ingStore, ing1)
+			f.secretStore = append(f.secretStore, nghttpxSecret)
 
 			f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
 
@@ -2004,8 +2037,8 @@ func TestSyncNormalizePath(t *testing.T) {
 	}
 }
 
-// TestSyncQUICKeyingMaterials verifies syncQUICKeyingMaterials.
-func TestSyncQUICKeyingMaterials(t *testing.T) {
+// TestSyncSecret verifies syncSecret.
+func TestSyncSecret(t *testing.T) {
 	now := time.Now().Round(time.Second)
 	expiredTimestamp := now.Add(-quicSecretTimeout)
 	notExpiredTimestamp := now.Add(-quicSecretTimeout + time.Second)
@@ -2022,8 +2055,8 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 			desc: "QUIC secret is up to date",
 			secret: &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      defaultQUICSecret.Name,
-					Namespace: defaultQUICSecret.Namespace,
+					Name:      defaultNghttpxSecret.Name,
+					Namespace: defaultNghttpxSecret.Namespace,
 					Annotations: map[string]string{
 						quicKeyingMaterialsUpdateTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
 					},
@@ -2038,8 +2071,8 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 			desc: "QUIC secret has been expired",
 			secret: &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      defaultQUICSecret.Name,
-					Namespace: defaultQUICSecret.Namespace,
+					Name:      defaultNghttpxSecret.Name,
+					Namespace: defaultNghttpxSecret.Namespace,
 					Annotations: map[string]string{
 						quicKeyingMaterialsUpdateTimestampKey: expiredTimestamp.Format(time.RFC3339),
 					},
@@ -2053,8 +2086,8 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 			desc: "QUIC secret timestamp is not expired, but data is malformed",
 			secret: &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      defaultQUICSecret.Name,
-					Namespace: defaultQUICSecret.Namespace,
+					Name:      defaultNghttpxSecret.Name,
+					Namespace: defaultNghttpxSecret.Namespace,
 					Annotations: map[string]string{
 						quicKeyingMaterialsUpdateTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
 					},
@@ -2080,16 +2113,17 @@ func TestSyncQUICKeyingMaterials(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			f.lbc.quicKeyingMaterialsSecret = &defaultQUICSecret
+			f.lbc.nghttpxSecret = defaultNghttpxSecret
 
-			err := f.lc.syncQUICKeyingMaterials(context.Background(), now)
+			err := f.lc.syncSecret(context.Background(), defaultNghttpxSecret.String(), now)
 			if err != nil {
-				t.Fatalf("f.lc.syncQUICKeyingMaterials(...): %v", err)
+				t.Fatalf("f.lc.syncSecret(...): %v", err)
 			}
 
-			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultQUICSecret.Namespace).Get(context.Background(), defaultQUICSecret.Name, metav1.GetOptions{})
+			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultNghttpxSecret.Namespace).Get(context.Background(),
+				defaultNghttpxSecret.Name, metav1.GetOptions{})
 			if err != nil {
-				t.Fatalf("Unable to get Secret %v/%v: %v", defaultQUICSecret.Namespace, defaultQUICSecret.Name, err)
+				t.Fatalf("Unable to get Secret %v/%v: %v", defaultNghttpxSecret.Namespace, defaultNghttpxSecret.Name, err)
 			}
 
 			if tt.wantKeepTimestamp {
@@ -2628,10 +2662,12 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
   mruby: foo
 `}).
 		Complete()
+	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1, bs2, bs3)
 	f.epStore = append(f.epStore, eps, be1, be2, be3)
 	f.ingStore = append(f.ingStore, ing1, ing2, ing3)
+	f.secretStore = append(f.secretStore, nghttpxSecret)
 
 	f.objects = append(f.objects, svc, bs1, bs2, bs3, eps, be1, be2, be3, ing1, ing2, ing3)
 
@@ -2690,10 +2726,12 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
   affinityCookieName: "foo"
 `}).
 		Complete()
+	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1, bs2, bs3)
 	f.epStore = append(f.epStore, eps, be1, be2, be3)
 	f.ingStore = append(f.ingStore, ing1, ing2, ing3)
+	f.secretStore = append(f.secretStore, nghttpxSecret)
 
 	f.objects = append(f.objects, svc, bs1, bs2, bs3, eps, be1, be2, be3, ing1, ing2, ing3)
 
