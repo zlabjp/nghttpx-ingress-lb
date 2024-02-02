@@ -74,6 +74,7 @@ type fixture struct {
 
 	enableEndpointSlice bool
 	http3               bool
+	shareTLSTicketKey   bool
 	publishService      *types.NamespacedName
 	requireIngressClass bool
 }
@@ -155,6 +156,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		ReloadRate:             1.0,
 		ReloadBurst:            1,
 		HTTP3:                  f.http3,
+		ShareTLSTicketKey:      f.shareTLSTicketKey,
 		PublishService:         f.publishService,
 		RequireIngressClass:    f.requireIngressClass,
 		Pod:                    pod,
@@ -1001,6 +1003,10 @@ func TestSyncDefaultBackend(t *testing.T) {
 				Checksum: nghttpx.Checksum([]byte(mrubyContent)),
 			}); !reflect.DeepEqual(got, want) {
 				t.Errorf("flb.ingConfig.MrubyFile = %q, want %q", got, want)
+			}
+
+			if got, want := len(flb.ingConfig.TLSTicketKeyFiles), 0; got != want {
+				t.Errorf("len(flb.ingConfig.TLSTicketKeyFiles) = %v, want %v", got, want)
 			}
 		})
 	}
@@ -2037,8 +2043,8 @@ func TestSyncNormalizePath(t *testing.T) {
 	}
 }
 
-// TestSyncSecret verifies syncSecret.
-func TestSyncSecret(t *testing.T) {
+// TestSyncSecretQUIC verifies syncSecret for QUIC keying materials.
+func TestSyncSecretQUIC(t *testing.T) {
 	now := time.Now().Round(time.Second)
 	expiredTimestamp := now.Add(-quicSecretTimeout)
 	notExpiredTimestamp := now.Add(-quicSecretTimeout + time.Second)
@@ -2147,6 +2153,128 @@ func TestSyncSecret(t *testing.T) {
 
 				if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {
 					t.Fatalf("verifyQUICKeyingMaterials(...): %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestSyncSecretTLSTicketKey verifies syncSecret for TLS ticket key.
+func TestSyncSecretTLSTicketKey(t *testing.T) {
+	now := time.Now().Round(time.Second)
+	expiredTimestamp := now.Add(-tlsTicketKeyTimeout)
+	notExpiredTimestamp := now.Add(-tlsTicketKeyTimeout + time.Second)
+
+	tests := []struct {
+		desc              string
+		secret            *corev1.Secret
+		wantKeepTimestamp bool
+	}{
+		{
+			desc: "No existing TLS ticket key secret",
+		},
+		{
+			desc: "TLS ticket key secret is up to date",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      defaultNghttpxSecret.Name,
+					Namespace: defaultNghttpxSecret.Namespace,
+					Annotations: map[string]string{
+						tlsTicketKeyUpdateTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
+					},
+				},
+				Data: map[string][]byte{
+					nghttpxTLSTicketKeySecretKey: []byte("" +
+						"................................................" +
+						"................................................"),
+				},
+			},
+			wantKeepTimestamp: true,
+		},
+		{
+			desc: "TLS ticket key secret has been expired",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      defaultNghttpxSecret.Name,
+					Namespace: defaultNghttpxSecret.Namespace,
+					Annotations: map[string]string{
+						tlsTicketKeyUpdateTimestampKey: expiredTimestamp.Format(time.RFC3339),
+					},
+				},
+				Data: map[string][]byte{
+					nghttpxTLSTicketKeySecretKey: []byte("" +
+						"................................................" +
+						"................................................",
+					),
+				},
+			},
+		},
+		{
+			desc: "TLS ticket key secret timestamp is not expired, but data is malformed",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      defaultNghttpxSecret.Name,
+					Namespace: defaultNghttpxSecret.Namespace,
+					Annotations: map[string]string{
+						tlsTicketKeyUpdateTimestampKey: notExpiredTimestamp.Format(time.RFC3339),
+					},
+				},
+				Data: map[string][]byte{
+					nghttpxTLSTicketKeySecretKey: []byte("foo"),
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+			f.shareTLSTicketKey = true
+
+			if tt.secret != nil {
+				f.secretStore = append(f.secretStore, tt.secret)
+
+				f.objects = append(f.objects, tt.secret)
+			}
+
+			f.prepare()
+			f.setupStore()
+
+			f.lbc.nghttpxSecret = defaultNghttpxSecret
+
+			err := f.lc.syncSecret(context.Background(), defaultNghttpxSecret.String(), now)
+			if err != nil {
+				t.Fatalf("f.lc.syncSecret(...): %v", err)
+			}
+
+			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultNghttpxSecret.Namespace).Get(context.Background(),
+				defaultNghttpxSecret.Name, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("Unable to get Secret %v/%v: %v", defaultNghttpxSecret.Namespace, defaultNghttpxSecret.Name, err)
+			}
+
+			if tt.wantKeepTimestamp {
+				if got, want := updatedSecret.Annotations[tlsTicketKeyUpdateTimestampKey], tt.secret.Annotations[tlsTicketKeyUpdateTimestampKey]; got != want {
+					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", tlsTicketKeyUpdateTimestampKey, got, want)
+				}
+
+				if got, want := updatedSecret.Data[nghttpxTLSTicketKeySecretKey], tt.secret.Data[nghttpxTLSTicketKeySecretKey]; !bytes.Equal(got, want) {
+					t.Errorf("updatedSecret.Data[%q] = %q, want %q", nghttpxTLSTicketKeySecretKey, got, want)
+				}
+			} else {
+				if got, want := updatedSecret.Annotations[tlsTicketKeyUpdateTimestampKey], now.Format(time.RFC3339); got != want {
+					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", tlsTicketKeyUpdateTimestampKey, got, want)
+				}
+
+				if tt.secret != nil {
+					if bytes.Equal(updatedSecret.Data[nghttpxTLSTicketKeySecretKey], tt.secret.Data[nghttpxTLSTicketKeySecretKey]) {
+						t.Fatalf("updatedSecret.Data[%q] must be updated", nghttpxTLSTicketKeySecretKey)
+					}
+				}
+
+				key := updatedSecret.Data[nghttpxTLSTicketKeySecretKey]
+				if err := nghttpx.VerifyTLSTicketKey(key); err != nil {
+					t.Fatalf("VerifyTLSTicketKey(...): %v", err)
 				}
 			}
 		})
@@ -2794,5 +2922,43 @@ func TestCreateTLSCredFromSecret(t *testing.T) {
 
 	if got, want := f.lbc.certCache[cacheKey], ent; got != want {
 		t.Errorf("f.lbc.certCache[%q] = %v, want %v", cacheKey, got, want)
+	}
+}
+
+func TestSyncWithTLSTicketKey(t *testing.T) {
+	f := newFixture(t)
+	f.shareTLSTicketKey = true
+
+	dCrt := []byte(tlsCrt)
+	dKey := []byte(tlsKey)
+	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
+	nghttpxSecret := newNghttpxSecret()
+	ticketKey, err := nghttpx.NewInitialTLSTicketKey()
+	if err != nil {
+		t.Fatalf("nghttpx.NewInitialTLSTicketKey: %v", err)
+	}
+	nghttpxSecret.Data = map[string][]byte{
+		nghttpxTLSTicketKeySecretKey: ticketKey,
+	}
+	svc, eps, _ := newDefaultBackend()
+
+	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
+	f.svcStore = append(f.svcStore, svc)
+	f.epStore = append(f.epStore, eps)
+
+	f.objects = append(f.objects, tlsSecret, nghttpxSecret, svc, eps)
+
+	f.prepare()
+	f.lbc.defaultTLSSecret = &types.NamespacedName{
+		Namespace: tlsSecret.Namespace,
+		Name:      tlsSecret.Name,
+	}
+	f.run()
+
+	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+	ingConfig := flb.ingConfig
+
+	if got, want := len(ingConfig.TLSTicketKeyFiles), 2; got != want {
+		t.Errorf("len(ingConfig.TLSTicketKeyFiles) = %v, want %v", got, want)
 	}
 }

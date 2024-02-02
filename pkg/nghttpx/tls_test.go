@@ -25,12 +25,15 @@ limitations under the License.
 package nghttpx
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -385,5 +388,182 @@ r1K7N2unJBaH84CjJpejcuLfzCvLCthdsu3CqXbwMNesL82+niOAyJETd2m5IlgW
 				t.Errorf("p = %v, want %v", got, want)
 			}
 		})
+	}
+}
+
+func TestNewTLSTicketKey(t *testing.T) {
+	ticketKey, err := NewTLSTicketKey()
+	if err != nil {
+		t.Fatalf("NewTLSTicketKey: %v", err)
+	}
+
+	if got, want := len(ticketKey), TLSTicketKeySize; got != want {
+		t.Errorf("len(ticketKey) = %v, want %v", got, want)
+	}
+}
+
+func TestVerifyTLSTicketKey(t *testing.T) {
+	tests := []struct {
+		desc      string
+		ticketKey []byte
+		wantErr   bool
+	}{
+		{
+			desc:    "Empty key",
+			wantErr: true,
+		},
+		{
+			desc: "Good key",
+			ticketKey: []byte("" +
+				"012345678901234567890123456789012345678901234567" +
+				"012345678901234567890123456789012345678901234567",
+			),
+		},
+		{
+			desc: "Malformed key",
+			ticketKey: []byte("" +
+				"012345678901234567890123456789012345678901234567" +
+				"0123456789012345678901234567890123456789012345678",
+			),
+			wantErr: true,
+		},
+		{
+			desc:      "Single key",
+			ticketKey: []byte("012345678901234567890123456789012345678901234567"),
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			err := VerifyTLSTicketKey(tt.ticketKey)
+			if err != nil {
+				if tt.wantErr {
+					return
+				}
+
+				t.Fatalf("VerifyTLSTicketKey: %v", err)
+			}
+
+			if tt.wantErr {
+				t.Fatal("VerifyTLSTicketKey should fail")
+			}
+		})
+	}
+}
+
+type tlsKeyGenerator struct {
+	seq int
+}
+
+func (g *tlsKeyGenerator) generateKey() ([]byte, error) {
+	prefix := "new" + strconv.Itoa(g.seq)
+	g.seq++
+
+	return []byte(prefix + strings.Repeat(".", TLSTicketKeySize-len(prefix))), nil
+}
+
+func TestUpdateTLSTicketKeyFunc(t *testing.T) {
+	tests := []struct {
+		desc      string
+		ticketKey []byte
+		want      []byte
+	}{
+		{
+			desc: "Key is rotated and new key is appended",
+			ticketKey: []byte("" +
+				"old0............................................" +
+				"old1............................................",
+			),
+			want: []byte("" +
+				"old1............................................" +
+				"old0............................................" +
+				"new0............................................",
+			),
+		},
+		{
+			desc: "oldest key is discarded",
+			ticketKey: []byte("" +
+				"old10..........................................." +
+				"old9............................................" +
+				"old8............................................" +
+				"old7............................................" +
+				"old6............................................" +
+				"old5............................................" +
+				"old4............................................" +
+				"old3............................................" +
+				"old2............................................" +
+				"old1............................................" +
+				"old0............................................" +
+				"old11...........................................",
+			),
+			want: []byte("" +
+				"old11..........................................." +
+				"old10..........................................." +
+				"old9............................................" +
+				"old8............................................" +
+				"old7............................................" +
+				"old6............................................" +
+				"old5............................................" +
+				"old4............................................" +
+				"old3............................................" +
+				"old2............................................" +
+				"old1............................................" +
+				"new0............................................",
+			),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			var g tlsKeyGenerator
+
+			newTicketKey, err := UpdateTLSTicketKeyFunc(tt.ticketKey, g.generateKey)
+			if err != nil {
+				t.Fatalf("UpdateTLSTicketKeyFunc: %v", err)
+			}
+
+			if got, want := newTicketKey, tt.want; !bytes.Equal(got, want) {
+				t.Errorf("newTicketKey = %s, want %s", got, want)
+			}
+		})
+	}
+}
+
+func TestCreateTLSTicketKeyFiles(t *testing.T) {
+	ticketKey := []byte("" +
+		"old1............................................" +
+		"old0............................................" +
+		"new0............................................",
+	)
+
+	files := CreateTLSTicketKeyFiles("/foo/bar", ticketKey)
+
+	if got, want := len(files), len(ticketKey)/TLSTicketKeySize; got != want {
+		t.Fatalf("len(files) = %v, want %v", got, want)
+	}
+
+	wantFiles := []*PrivateChecksumFile{
+		{
+			Path:     "/foo/bar/tls-ticket-key/key-0",
+			Content:  []byte("old1............................................"),
+			Checksum: hexMustDecodeString("caba3c7923d7e867d0fd00665fbcfbe9b1d73925097aa0bc0f220590df5a7fc4"),
+		},
+		{
+			Path:     "/foo/bar/tls-ticket-key/key-1",
+			Content:  []byte("old0............................................"),
+			Checksum: hexMustDecodeString("a86b67f250b9a6bba17908f0c448d7dc63f0c66964229a2341b73d7008d35cf3"),
+		},
+		{
+			Path:     "/foo/bar/tls-ticket-key/key-2",
+			Content:  []byte("new0............................................"),
+			Checksum: hexMustDecodeString("c2816f6b0278c715029a1de1487c14fb6daad4655e8149becda7259b42cc1fc5"),
+		},
+	}
+
+	for i, f := range files {
+		if got, want := f, wantFiles[i]; !reflect.DeepEqual(got, want) {
+			t.Errorf("files[%v] = %q, want %q", i, got, want)
+		}
 	}
 }

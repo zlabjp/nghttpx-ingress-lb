@@ -85,6 +85,10 @@ type IngressConfig struct {
 	HTTP3 bool
 	// QUICSecretFile is the file which contains QUIC keying materials.
 	QUICSecretFile *PrivateChecksumFile
+	// ShareTLSTicketKey, if true, shares TLS ticket key among ingress controllers via Secret.
+	ShareTLSTicketKey bool
+	// TLSTicketKeyFiles is the list of files that contain TLS ticket key.
+	TLSTicketKeyFiles []*PrivateChecksumFile
 }
 
 // Upstream describes an nghttpx upstream

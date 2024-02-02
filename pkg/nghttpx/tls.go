@@ -27,21 +27,32 @@ package nghttpx
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"sort"
 	"time"
 
+	"golang.org/x/crypto/hkdf"
 	"k8s.io/klog/v2"
 )
 
 const (
 	// tlsDir is the directory where TLS certificates and private keys are stored.
 	tlsDir = "tls"
+	// tlsTicketKeyDir is the directory where TLS ticket key files are stored.
+	tlsTicketKeyDir = "tls-ticket-key"
+
+	// TLSTicketKeySize is the length of TLS ticket key.  The default value is for AES-128-CBC encryption.
+	TLSTicketKeySize = 48
+	// MaxTLSTicketKeyNum is the maximum number of TLS ticket keys retained in a Secret.
+	MaxTLSTicketKeyNum = 12
 )
 
 // CreateTLSKeyPath returns TLS private key file path.
@@ -234,4 +245,128 @@ func NormalizePEM(data []byte) ([]byte, error) {
 		}
 	}
 	return dst.Bytes(), nil
+}
+
+func NewTLSTicketKey() ([]byte, error) {
+	const ikmLen = 8
+
+	ikmSalt := make([]byte, ikmLen+sha256.Size)
+	if _, err := rand.Read(ikmSalt); err != nil {
+		return nil, err
+	}
+
+	ikm := ikmSalt[:ikmLen]
+	salt := ikmSalt[ikmLen:]
+
+	r := hkdf.New(sha256.New, ikm, salt, []byte("tls ticket key"))
+
+	key := make([]byte, TLSTicketKeySize)
+	if _, err := io.ReadFull(r, key); err != nil {
+		return nil, err
+	}
+
+	return key, nil
+}
+
+func NewInitialTLSTicketKey() ([]byte, error) {
+	keys := make([][]byte, 2)
+
+	for i := range keys {
+		var err error
+
+		keys[i], err = NewTLSTicketKey()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return bytes.Join(keys, nil), nil
+}
+
+func VerifyTLSTicketKey(ticketKey []byte) error {
+	// Requires at least 2 keys for stable key rotation.
+	if len(ticketKey) < TLSTicketKeySize*2 || len(ticketKey)%TLSTicketKeySize != 0 {
+		return errors.New("invalid TLS ticket key size")
+	}
+
+	return nil
+}
+
+func UpdateTLSTicketKey(ticketKey []byte) ([]byte, error) {
+	return UpdateTLSTicketKeyFunc(ticketKey, NewTLSTicketKey)
+}
+
+// UpdateTLSTicketKeyFunc generates new key via newTLSTicketKeyFunc, and rotates keys, then returns new TLS ticket key.  This function
+// assumes that VerifyTLSTicketKey was called against ticketKey and succeeded.
+//
+// ticketKey must include at least 2 keys.  New key is placed to the last.  Because the first key is used for encryption, new key is not
+// used for encryption immediately.  It starts encrypting TLS ticket after the next rotation in order to ensure that all controllers see
+// this key.  At most MaxTLSTicketKeyNum keys, including new key, are retained.  The oldest keys are removed if the number of keys exceeds
+// MaxTLSTicketKeyNum.
+//
+// The rotation works as follows:
+//
+// 1. Move the last key (which is the new key generated in the previous update) to the first.
+// 2. Remove oldest keys if the number of keys exceeds MaxTLSTicketKeyNum - 1.
+// 3. Generate new key and place it to the last.
+func UpdateTLSTicketKeyFunc(ticketKey []byte, newTLSTicketKeyFunc func() ([]byte, error)) ([]byte, error) {
+	newKey, err := newTLSTicketKeyFunc()
+	if err != nil {
+		return nil, err
+	}
+
+	var newTicketKeyLen int
+	if len(ticketKey) < TLSTicketKeySize*MaxTLSTicketKeyNum {
+		newTicketKeyLen = len(ticketKey) + TLSTicketKeySize
+	} else {
+		newTicketKeyLen = TLSTicketKeySize * MaxTLSTicketKeyNum
+	}
+
+	newTicketKey := make([]byte, newTicketKeyLen)
+
+	// The last key is the next encryption key.
+	copy(newTicketKey, ticketKey[len(ticketKey)-TLSTicketKeySize:])
+	copy(newTicketKey[TLSTicketKeySize:], ticketKey[:newTicketKeyLen-TLSTicketKeySize*2])
+	copy(newTicketKey[newTicketKeyLen-TLSTicketKeySize:], newKey)
+
+	return newTicketKey, nil
+}
+
+// CreateTLSTicketKeyFiles creates TLS ticket key files.  This function assume that VerifyTLSTicketKey was called against ticketKey and
+// succeeded.
+func CreateTLSTicketKeyFiles(dir string, ticketKey []byte) []*PrivateChecksumFile {
+	dir = filepath.Join(dir, tlsTicketKeyDir)
+
+	files := make([]*PrivateChecksumFile, len(ticketKey)/TLSTicketKeySize)
+
+	for i := range files {
+		offset := TLSTicketKeySize * i
+		key := ticketKey[offset : offset+TLSTicketKeySize]
+
+		files[i] = &PrivateChecksumFile{
+			Path:     filepath.Join(dir, fmt.Sprintf("key-%d", i)),
+			Content:  key,
+			Checksum: Checksum(key),
+		}
+	}
+
+	return files
+}
+
+func writeTLSTicketKeyFiles(ingConfig *IngressConfig) error {
+	if len(ingConfig.TLSTicketKeyFiles) == 0 {
+		return nil
+	}
+
+	if err := MkdirAll(filepath.Join(ingConfig.ConfDir, tlsTicketKeyDir)); err != nil {
+		return fmt.Errorf("unable to create TLS ticket key directory: %w", err)
+	}
+
+	for _, f := range ingConfig.TLSTicketKeyFiles {
+		if err := WriteFile(f.Path, f.Content); err != nil {
+			return fmt.Errorf("unable to write TLS ticket key file: %w", err)
+		}
+	}
+
+	return nil
 }
