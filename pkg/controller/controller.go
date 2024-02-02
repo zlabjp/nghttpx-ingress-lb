@@ -79,9 +79,6 @@ const (
 
 	// nghttpxQUICKeyingMaterialsSecretKey is a field name of QUIC keying materials in Secret.
 	nghttpxQUICKeyingMaterialsSecretKey = "nghttpx-quic-keying-materials"
-	// quicSecretTimestampKey is an annotation key which is associated to the value that contains the timestamp when QUIC secret is last
-	// updated.  Deprecated.  Use quicKeyingMaterialsUpdateTimestampKey instead.
-	quicSecretTimestampKey = "ingress.zlab.co.jp/update-timestamp"
 	// quicKeyingMaterialsUpdateTimestampKey is an annotation key which is associated to the value that contains the timestamp when QUIC
 	// secret is last updated.
 	quicKeyingMaterialsUpdateTimestampKey = "ingress.zlab.co.jp/quic-keying-materials-update-timestamp"
@@ -2838,19 +2835,10 @@ func (lc *LeaderController) syncQUICKeyingMaterials(ctx context.Context, now tim
 		return nil
 	}
 
-	var (
-		km                               []byte
-		quicKeyingMaterialsAnnotationKey string
-	)
+	var km []byte
 
-	if _, ok := secret.Annotations[quicKeyingMaterialsUpdateTimestampKey]; ok {
-		quicKeyingMaterialsAnnotationKey = quicKeyingMaterialsUpdateTimestampKey
-	} else if _, ok := secret.Annotations[quicSecretTimestampKey]; ok {
-		quicKeyingMaterialsAnnotationKey = quicSecretTimestampKey
-	}
-
-	if quicKeyingMaterialsAnnotationKey != "" {
-		if t, err := time.Parse(time.RFC3339, secret.Annotations[quicKeyingMaterialsAnnotationKey]); err == nil {
+	if ts, ok := secret.Annotations[quicKeyingMaterialsUpdateTimestampKey]; ok {
+		if t, err := time.Parse(time.RFC3339, ts); err == nil {
 			km = secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
 
 			if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {
@@ -2862,16 +2850,6 @@ func (lc *LeaderController) syncQUICKeyingMaterials(ctx context.Context, now tim
 					log.Info("QUIC keying materials are not expired and in a good shape", "retryAfter", d)
 					// If quicSecretKey has been added to the queue and is waiting, this effectively overrides it.
 					lc.quicSecretQueue.AddAfter(quicSecretKey, d)
-
-					if quicKeyingMaterialsAnnotationKey == quicSecretTimestampKey {
-						updatedSecret := secret.DeepCopy()
-						updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = secret.Annotations[quicSecretTimestampKey]
-
-						if _, err := lc.lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(ctx, updatedSecret, metav1.UpdateOptions{}); err != nil {
-							log.Error(err, "Unable to update Secret")
-							return err
-						}
-					}
 
 					return nil
 				}
@@ -2885,9 +2863,6 @@ func (lc *LeaderController) syncQUICKeyingMaterials(ctx context.Context, now tim
 	}
 
 	updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = now.Format(time.RFC3339)
-	if _, ok := updatedSecret.Annotations[quicSecretTimestampKey]; ok {
-		updatedSecret.Annotations[quicSecretTimestampKey] = updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey]
-	}
 
 	if updatedSecret.Data == nil {
 		updatedSecret.Data = make(map[string][]byte)
