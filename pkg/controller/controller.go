@@ -2699,9 +2699,7 @@ func (lc *LeaderController) deleteIngressClassNotification(ctx context.Context, 
 
 func (lc *LeaderController) enqueueIngress(ing *networkingv1.Ingress) {
 	key := types.NamespacedName{Name: ing.Name, Namespace: ing.Namespace}.String()
-	if lc.ingQueue.NumRequeues(key) == 0 {
-		lc.ingQueue.AddRateLimited(key)
-	}
+	lc.ingQueue.Add(key)
 }
 
 func (lc *LeaderController) enqueueIngressWithIngressClass(ctx context.Context, ingClass *networkingv1.IngressClass) {
@@ -2759,9 +2757,7 @@ func (lc *LeaderController) validateIngressClass(ctx context.Context, ing *netwo
 }
 
 func (lc *LeaderController) enqueueQUICSecret() {
-	if lc.quicSecretQueue.NumRequeues(quicSecretKey) == 0 {
-		lc.quicSecretQueue.AddRateLimited(quicSecretKey)
-	}
+	lc.quicSecretQueue.Add(quicSecretKey)
 }
 
 func (lc *LeaderController) quicSecretWorker(ctx context.Context) {
