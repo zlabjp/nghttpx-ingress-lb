@@ -178,6 +178,17 @@ The key for OCSP response in TLS Secret is `tls.ocsp-resp` by default.
 It can be changed by `--ocsp-resp-key` flag.  The value of OCSP
 response in TLS Secret must be DER encoded.
 
+## Sharing TLS ticket keys
+
+By default, each nghttpx encrypts TLS ticket by its own key.  This
+means that if there are several nghttpx ingress controller instances,
+TLS session resumption might not work if the new connection goes to
+the different instance.  With `--share-tls-ticket-key` flag, the
+controller generates TLS ticket key in a Secret specified by
+`--nghttpx-secret`, which is shared by all controllers.  This ensures
+that all nghttpx instances use the same encryption key, which enables
+stable TLS session resumption.
+
 ## HTTP/3 (Experimental)
 
 In order to enable the experimental HTTP/3 feature, run the controller

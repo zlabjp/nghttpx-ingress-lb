@@ -27,6 +27,9 @@ certificate-file={{ .DefaultTLSCred.Cert.Path }}
 {{ range $cred := .SubTLSCred -}}
 subcert={{ $cred.Key.Path }}:{{ $cred.Cert.Path }}
 {{ end -}}
+{{ range $ticketKey := .TLSTicketKeyFiles -}}
+tls-ticket-key-file={{ $ticketKey.Path }}
+{{ end -}}
 {{ else if .HTTPSPort -}}
 # just listen {{ .HTTPSPort }} to gain port {{ .HTTPSPort }}, so that we can always bind that address.
 frontend=*,{{ .HTTPSPort }};no-tls{{ if .ProxyProto }};proxyproto{{ end }}
@@ -51,4 +54,8 @@ mruby-file={{ .MrubyFile.Path }}
 fetch-ocsp-response-file=/cat-ocsp-resp
 {{ else -}}
 fetch-ocsp-response-file=/fetch-ocsp-response
+{{ end -}}
+{{ if and .ShareTLSTicketKey .HTTPSPort .TLS -}}
+# TLS ticket key
+tls-ticket-key-cipher=aes-128-cbc
 {{ end -}}

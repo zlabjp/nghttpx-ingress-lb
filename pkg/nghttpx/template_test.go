@@ -723,6 +723,90 @@ backend=192.168.0.1,8080;example.com/;proto=h2;tls;sni=foo.example.com;dns;group
 backend=192.168.0.2,80;example.com/;proto=h2;affinity=cookie;affinity-cookie-name=sticky;affinity-cookie-path=/;affinity-cookie-secure=auto;affinity-cookie-stickiness=strict;redirect-if-not-tls;mruby=/mruby.rb;read-timeout=180;write-timeout=300;dnf
 `,
 		},
+		{
+			desc: "Share TLS ticket key",
+			ingConfig: &IngressConfig{
+				HTTPPort:  80,
+				HTTPSPort: 443,
+				TLS:       true,
+				DefaultTLSCred: &TLSCred{
+					Key: PrivateChecksumFile{
+						Path:     "/tls/server.key",
+						Content:  []byte("key"),
+						Checksum: hexMustDecodeString("2c70e12b7a0646f92279f427c7b38e7334d8e5389cff167a1dc30e73f826b683"),
+					},
+					Cert: ChecksumFile{
+						Path:     "/tls/server.crt",
+						Content:  []byte("cert"),
+						Checksum: hexMustDecodeString("06298432e8066b29e2223bcc23aa9504b56ae508fabf3435508869b9c3190e22"),
+					},
+				},
+				Upstreams: []*Upstream{
+					{
+						Name:     "foo",
+						Host:     "example.com",
+						Path:     "/",
+						Affinity: AffinityNone,
+						Backends: []Backend{
+							{
+								Address:  "192.168.0.1",
+								Port:     "8080",
+								Protocol: ProtocolH2,
+							},
+							{
+								Address:  "192.168.0.2",
+								Port:     "80",
+								Protocol: ProtocolH2,
+							},
+						},
+					},
+				},
+				Workers:                          8,
+				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
+				MaxWorkerProcesses:               111,
+				ShareTLSTicketKey:                true,
+				TLSTicketKeyFiles: []*PrivateChecksumFile{
+					{
+						Path:     "/tls-ticket-key/key-0",
+						Content:  []byte("key-0"),
+						Checksum: hexMustDecodeString("d5ead6fdd3d16630aad4f07f5e49486337a42e58fb4eef0deaabb814c003b134"),
+					},
+					{
+						Path:     "/tls-ticket-key/key-1",
+						Content:  []byte("key-1"),
+						Checksum: hexMustDecodeString("be2974546978e3739e6d6da85c4be9f334ce32df2b9fd4b6ff1b55c0d57e9d44"),
+					},
+				},
+			},
+			wantMainConfig: `accesslog-file=/dev/stdout
+include=/nghttpx-backend.conf
+# HTTP port
+frontend=*,80;no-tls
+# API endpoint
+frontend=127.0.0.1,0;api;no-tls
+# HTTPS port
+frontend=*,443
+# Default TLS credential
+private-key-file=/tls/server.key
+certificate-file=/tls/server.crt
+tls-ticket-key-file=/tls-ticket-key/key-0
+tls-ticket-key-file=/tls-ticket-key/key-1
+# for health check
+frontend=127.0.0.1,0;healthmon;no-tls
+# default configuration by controller
+workers=8
+worker-process-grace-shutdown-period=30
+max-worker-processes=111
+# OCSP
+fetch-ocsp-response-file=/fetch-ocsp-response
+# TLS ticket key
+tls-ticket-key-cipher=aes-128-cbc
+`,
+			wantBackendConfig: `# foo
+backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
+backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
+`,
+		},
 	}
 
 	for _, tt := range tests {

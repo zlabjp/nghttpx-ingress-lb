@@ -91,6 +91,7 @@ var (
 	internalDefaultBackend   = false
 	http3                    = false
 	nghttpxSecret            = "nghttpx-km"
+	shareTLSTicketKey        = false
 	reconcileTimeout         = 10 * time.Minute
 	leaderElectionConfig     = componentbaseconfig.LeaderElectionConfiguration{
 		LeaseDuration: metav1.Duration{Duration: 15 * time.Second},
@@ -190,6 +191,8 @@ func main() {
 	rootCmd.Flags().BoolVar(&http3, "http3", http3, `Enable HTTP/3.  This makes nghttpx listen to UDP port specified by nghttpx-https-port for HTTP/3 traffic.`)
 
 	rootCmd.Flags().StringVar(&nghttpxSecret, "nghttpx-secret", nghttpxSecret, `The name of Secret resource which contains the keying materials for nghttpx.  The resource must belong to the same namespace as the controller Pod.  If it is not found, the controller will create new one.`)
+
+	rootCmd.Flags().BoolVar(&shareTLSTicketKey, "share-tls-ticket-key", shareTLSTicketKey, `Share TLS ticket key among all nghttpx-ingress-controllers.  TLS ticket keys are stored to the Secret specified by nghttpx-secret flag.  If this flag is set to true, TLS ticket keys are generated and rotated by the controller every 1 hour.  At most 12 latest keys are retained.  TLS tickets are encrypted with AES-128-CBC.`)
 
 	rootCmd.Flags().DurationVar(&reconcileTimeout, "reconcile-timeout", reconcileTimeout,
 		`A timeout for a single reconciliation.  It is a safe guard to prevent a reconciliation from getting stuck indefinitely.`)
@@ -385,6 +388,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		HealthzPort:                             healthzPort,
 		InternalDefaultBackend:                  internalDefaultBackend,
 		HTTP3:                                   http3,
+		ShareTLSTicketKey:                       shareTLSTicketKey,
 		ReconcileTimeout:                        reconcileTimeout,
 		LeaderElectionConfig:                    leaderElectionConfig,
 		RequireIngressClass:                     requireIngressClass,

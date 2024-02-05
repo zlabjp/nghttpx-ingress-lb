@@ -72,6 +72,8 @@ const (
 	syncKey = "ingress"
 	// quicSecretTimeout is the timeout for the last QUIC keying material.
 	quicSecretTimeout = time.Hour
+	// tlsTicketKeyTimeout is the timeout, when it is fired, TLS ticket keys are rotated.  New key is also generated.
+	tlsTicketKeyTimeout = time.Hour
 
 	noResyncPeriod = 0
 
@@ -80,6 +82,12 @@ const (
 	// quicKeyingMaterialsUpdateTimestampKey is an annotation key which is associated to the value that contains the timestamp when QUIC
 	// secret is last updated.
 	quicKeyingMaterialsUpdateTimestampKey = "ingress.zlab.co.jp/quic-keying-materials-update-timestamp"
+
+	// nghttpxTLSTicketKeySecretKey is a field name of TLS ticket keys in Secret.
+	nghttpxTLSTicketKeySecretKey = "nghttpx-tls-ticket-key"
+	// tlsTicketKeyUpdateTimestampKey is an annotation key which is associated to the value that contains the timestamp when TLS ticket
+	// keys are last updated.
+	tlsTicketKeyUpdateTimestampKey = "ingress.zlab.co.jp/tls-ticket-key-update-timestamp"
 
 	// certificateGarbageCollectionPeriod is the period between garbage collection against certificate cache is performed.
 	certificateGarbageCollectionPeriod = time.Hour
@@ -137,6 +145,7 @@ type LoadBalancerController struct {
 	healthzPort                             int32
 	internalDefaultBackend                  bool
 	http3                                   bool
+	shareTLSTicketKey                       bool
 	nghttpxSecret                           types.NamespacedName
 	reconcileTimeout                        time.Duration
 	leaderElectionConfig                    componentbaseconfig.LeaderElectionConfiguration
@@ -209,6 +218,8 @@ type Config struct {
 	InternalDefaultBackend bool
 	// HTTP3, if true, enables HTTP/3.
 	HTTP3 bool
+	// ShareTLSTicketKey, if true, shares TLS ticket key among ingress controllers via Secret.
+	ShareTLSTicketKey bool
 	// ReconcileTimeout is a timeout for a single reconciliation.  It is a safe guard to prevent a reconciliation from getting stuck
 	// indefinitely.
 	ReconcileTimeout time.Duration
@@ -259,6 +270,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		healthzPort:                             config.HealthzPort,
 		internalDefaultBackend:                  config.InternalDefaultBackend,
 		http3:                                   config.HTTP3,
+		shareTLSTicketKey:                       config.ShareTLSTicketKey,
 		reconcileTimeout:                        config.ReconcileTimeout,
 		leaderElectionConfig:                    config.LeaderElectionConfig,
 		requireIngressClass:                     config.RequireIngressClass,
@@ -997,14 +1009,25 @@ func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
 		log.Error(err, "nghttpx secret not found")
 
 		// Continue to processing so that missing Secret does not prevent the controller from reconciling new configuration.
-	}
+	} else {
+		if lbc.shareTLSTicketKey {
+			ticketKey, ok := secret.Data[nghttpxTLSTicketKeySecretKey]
+			if !ok {
+				log.Error(nil, "Secret does not contain TLS ticket key")
+			} else if err := nghttpx.VerifyTLSTicketKey(ticketKey); err != nil {
+				log.Error(err, "Secret contains malformed TLS ticket key")
+			} else {
+				ingConfig.TLSTicketKeyFiles = nghttpx.CreateTLSTicketKeyFiles(ingConfig.ConfDir, ticketKey)
+			}
+		}
 
-	if secret != nil && lbc.http3 {
-		quicKM, ok := secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
-		if !ok {
-			log.Error(nil, "Secret does not contain QUIC keying materials")
-		} else {
-			ingConfig.QUICSecretFile = nghttpx.CreateQUICSecretFile(ingConfig.ConfDir, quicKM)
+		if lbc.http3 {
+			quicKM, ok := secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
+			if !ok {
+				log.Error(nil, "Secret does not contain QUIC keying materials")
+			} else {
+				ingConfig.QUICSecretFile = nghttpx.CreateQUICSecretFile(ingConfig.ConfDir, quicKM)
+			}
 		}
 	}
 
@@ -1107,6 +1130,7 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 		FetchOCSPRespFromSecret:          lbc.fetchOCSPRespFromSecret,
 		ProxyProto:                       lbc.proxyProto,
 		HTTP3:                            lbc.http3,
+		ShareTLSTicketKey:                lbc.shareTLSTicketKey,
 	}
 
 	var (
@@ -2796,6 +2820,10 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 		return nil
 	}
 
+	tstamp := now.Format(time.RFC3339)
+
+	requeueAfter := 12 * time.Hour
+
 	secret, err := lc.secretLister.Secrets(ns).Get(name)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -2807,13 +2835,35 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: ns,
-				Annotations: map[string]string{
-					quicKeyingMaterialsUpdateTimestampKey: now.Format(time.RFC3339),
-				},
 			},
-			Data: map[string][]byte{
-				nghttpxQUICKeyingMaterialsSecretKey: []byte(hex.EncodeToString(nghttpx.NewQUICKeyingMaterial())),
-			},
+		}
+
+		if lc.lbc.shareTLSTicketKey || lc.lbc.http3 {
+			secret.Annotations = make(map[string]string)
+			secret.Data = make(map[string][]byte)
+		}
+
+		if lc.lbc.shareTLSTicketKey {
+			key, err := nghttpx.NewInitialTLSTicketKey()
+			if err != nil {
+				return err
+			}
+
+			secret.Annotations[tlsTicketKeyUpdateTimestampKey] = tstamp
+			secret.Data[nghttpxTLSTicketKeySecretKey] = key
+
+			if requeueAfter > tlsTicketKeyTimeout {
+				requeueAfter = tlsTicketKeyTimeout
+			}
+		}
+
+		if lc.lbc.http3 {
+			secret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = tstamp
+			secret.Data[nghttpxQUICKeyingMaterialsSecretKey] = []byte(hex.EncodeToString(nghttpx.NewQUICKeyingMaterial()))
+
+			if requeueAfter > quicSecretTimeout {
+				requeueAfter = quicSecretTimeout
+			}
 		}
 
 		if _, err := lc.lbc.clientset.CoreV1().Secrets(secret.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
@@ -2821,34 +2871,50 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 			return err
 		}
 
-		log.Info("Secret was created")
+		log.Info("Secret was created", "requeueAfter", requeueAfter)
 
 		// If Secret has been added to the queue and is waiting, this effectively overrides it.
-		lc.secretQueue.AddAfter(key, quicSecretTimeout)
+		lc.secretQueue.AddAfter(key, requeueAfter)
 
 		return nil
 	}
 
-	var km []byte
+	var (
+		ticketKey       []byte
+		ticketKeyUpdate bool
+	)
 
-	if ts, ok := secret.Annotations[quicKeyingMaterialsUpdateTimestampKey]; ok {
-		if t, err := time.Parse(time.RFC3339, ts); err == nil {
-			km = secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
+	if lc.lbc.shareTLSTicketKey {
+		var ticketKeyAddAfter time.Duration
 
-			if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {
-				log.Error(err, "QUIC keying materials are malformed")
-				km = nil
-			} else {
-				d := t.Add(quicSecretTimeout).Sub(now)
-				if d > 0 {
-					log.Info("QUIC keying materials are not expired and in a good shape", "retryAfter", d)
-					// If Secret has been added to the queue and is waiting, this effectively overrides it.
-					lc.secretQueue.AddAfter(key, d)
+		ticketKey, ticketKeyUpdate, ticketKeyAddAfter = lc.getTLSTicketKeyFromSecret(ctx, secret, now)
 
-					return nil
-				}
-			}
+		if ticketKeyAddAfter != 0 && requeueAfter > ticketKeyAddAfter {
+			requeueAfter = ticketKeyAddAfter
 		}
+	}
+
+	var (
+		quicKM       []byte
+		quicKMUpdate bool
+	)
+
+	if lc.lbc.http3 {
+		var quicKMAddAfter time.Duration
+
+		quicKM, quicKMUpdate, quicKMAddAfter = lc.getQUICKeyingMaterialsFromSecret(ctx, secret, now)
+
+		if quicKMAddAfter != 0 && requeueAfter > quicKMAddAfter {
+			requeueAfter = quicKMAddAfter
+		}
+	}
+
+	if !ticketKeyUpdate && !quicKMUpdate {
+		log.Info("No update is required", "requeueAfter", requeueAfter)
+
+		lc.secretQueue.AddAfter(key, requeueAfter)
+
+		return nil
 	}
 
 	updatedSecret := secret.DeepCopy()
@@ -2856,25 +2922,129 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 		updatedSecret.Annotations = make(map[string]string)
 	}
 
-	updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = now.Format(time.RFC3339)
-
 	if updatedSecret.Data == nil {
 		updatedSecret.Data = make(map[string][]byte)
 	}
 
-	updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey] = nghttpx.UpdateQUICKeyingMaterials(km)
+	if ticketKeyUpdate {
+		updatedSecret.Annotations[tlsTicketKeyUpdateTimestampKey] = tstamp
+
+		var (
+			key []byte
+			err error
+		)
+
+		if len(ticketKey) == 0 {
+			key, err = nghttpx.NewInitialTLSTicketKey()
+		} else {
+			key, err = nghttpx.UpdateTLSTicketKey(ticketKey)
+		}
+		if err != nil {
+			return err
+		}
+
+		updatedSecret.Data[nghttpxTLSTicketKeySecretKey] = key
+
+		log.Info("TLS ticket keys were updated")
+
+		if requeueAfter > tlsTicketKeyTimeout {
+			requeueAfter = tlsTicketKeyTimeout
+		}
+	}
+
+	if quicKMUpdate {
+		updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = tstamp
+
+		updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey] = nghttpx.UpdateQUICKeyingMaterials(quicKM)
+
+		log.Info("QUIC keying materials were updated")
+
+		if requeueAfter > quicSecretTimeout {
+			requeueAfter = quicSecretTimeout
+		}
+	}
 
 	if _, err := lc.lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(ctx, updatedSecret, metav1.UpdateOptions{}); err != nil {
 		log.Error(err, "Unable to update Secret")
 		return err
 	}
 
-	log.Info("Secret was updated")
+	log.Info("Secret was updated", "requeueAfter", requeueAfter)
 
 	// If Secret has been added to the queue and is waiting, this effectively overrides it.
-	lc.secretQueue.AddAfter(key, quicSecretTimeout)
+	lc.secretQueue.AddAfter(key, requeueAfter)
 
 	return nil
+}
+
+func (lc *LeaderController) getTLSTicketKeyFromSecret(ctx context.Context, s *corev1.Secret, t time.Time) (ticketKey []byte, needsUpdate bool, requeueAfter time.Duration) {
+	log := klog.FromContext(ctx)
+
+	ts, ok := s.Annotations[tlsTicketKeyUpdateTimestampKey]
+	if !ok {
+		log.Error(nil, "Secret does not contain the annotation", "annotation", tlsTicketKeyUpdateTimestampKey)
+
+		return nil, true, 0
+	}
+
+	lastUpdate, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		log.Error(err, "Unable to parse timestamp", "annotation", tlsTicketKeyUpdateTimestampKey)
+
+		return nil, true, 0
+	}
+
+	ticketKey = s.Data[nghttpxTLSTicketKeySecretKey]
+
+	if err := nghttpx.VerifyTLSTicketKey(ticketKey); err != nil {
+		log.Error(err, "TLS ticket keys are malformed")
+
+		return nil, true, 0
+	}
+
+	requeueAfter = lastUpdate.Add(tlsTicketKeyTimeout).Sub(t)
+	if requeueAfter > 0 {
+		log.Info("TLS ticket keys are not expired and in a good shape", "requeueAfter", requeueAfter)
+
+		return ticketKey, false, requeueAfter
+	}
+
+	return ticketKey, true, 0
+}
+
+func (lc *LeaderController) getQUICKeyingMaterialsFromSecret(ctx context.Context, s *corev1.Secret, t time.Time) (quicKM []byte, needsUpdate bool, requeueAfter time.Duration) {
+	log := klog.FromContext(ctx)
+
+	ts, ok := s.Annotations[quicKeyingMaterialsUpdateTimestampKey]
+	if !ok {
+		log.Error(nil, "Secret does not contain the annotation", "annotation", quicKeyingMaterialsUpdateTimestampKey)
+
+		return nil, true, 0
+	}
+
+	lastUpdate, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		log.Error(err, "Unable to parse timestamp", "annotation", quicKeyingMaterialsUpdateTimestampKey)
+
+		return nil, true, 0
+	}
+
+	quicKM = s.Data[nghttpxQUICKeyingMaterialsSecretKey]
+
+	if err := nghttpx.VerifyQUICKeyingMaterials(quicKM); err != nil {
+		log.Error(err, "QUIC keying materials are malformed")
+
+		return nil, true, 0
+	}
+
+	requeueAfter = lastUpdate.Add(quicSecretTimeout).Sub(t)
+	if requeueAfter > 0 {
+		log.Info("QUIC keying materials are not expired and in a good shape", "requeueAfter", requeueAfter)
+
+		return quicKM, false, requeueAfter
+	}
+
+	return quicKM, true, 0
 }
 
 func (lc *LeaderController) ingressWorker(ctx context.Context) {

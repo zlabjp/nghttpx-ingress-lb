@@ -120,6 +120,9 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 		if err := writePerPatternMrubyFile(ingressCfg); err != nil {
 			return false, err
 		}
+		if err := writeTLSTicketKeyFiles(ingressCfg); err != nil {
+			return false, err
+		}
 		if err := writeQUICSecretFile(ingressCfg); err != nil {
 			return false, err
 		}
@@ -172,7 +175,11 @@ func (lb *LoadBalancer) deleteStaleAssets(ctx context.Context, ingConfig *Ingres
 
 // deleteStaleTLSAssets deletes TLS asset files which are no longer used.
 func (lb *LoadBalancer) deleteStaleTLSAssets(ctx context.Context, ingConfig *IngressConfig, t time.Time) error {
-	return deleteAssetFiles(ctx, filepath.Join(ingConfig.ConfDir, tlsDir), t, lb.staleAssetsThreshold)
+	if err := deleteAssetFiles(ctx, filepath.Join(ingConfig.ConfDir, tlsDir), t, lb.staleAssetsThreshold); err != nil {
+		return err
+	}
+
+	return deleteAssetFiles(ctx, filepath.Join(ingConfig.ConfDir, tlsTicketKeyDir), t, lb.staleAssetsThreshold)
 }
 
 // deleteStaleMrubyAssets deletes mruby asset files which are no longer used.
