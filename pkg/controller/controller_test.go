@@ -2266,10 +2266,8 @@ func TestSyncSecretTLSTicketKey(t *testing.T) {
 					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", tlsTicketKeyUpdateTimestampKey, got, want)
 				}
 
-				if tt.secret != nil {
-					if bytes.Equal(updatedSecret.Data[nghttpxTLSTicketKeySecretKey], tt.secret.Data[nghttpxTLSTicketKeySecretKey]) {
-						t.Fatalf("updatedSecret.Data[%q] must be updated", nghttpxTLSTicketKeySecretKey)
-					}
+				if tt.secret != nil && bytes.Equal(updatedSecret.Data[nghttpxTLSTicketKeySecretKey], tt.secret.Data[nghttpxTLSTicketKeySecretKey]) {
+					t.Fatalf("updatedSecret.Data[%q] must be updated", nghttpxTLSTicketKeySecretKey)
 				}
 
 				key := updatedSecret.Data[nghttpxTLSTicketKeySecretKey]

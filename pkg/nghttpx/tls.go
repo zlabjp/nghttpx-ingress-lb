@@ -301,13 +301,13 @@ func UpdateTLSTicketKey(ticketKey []byte) ([]byte, error) {
 //
 // ticketKey must include at least 2 keys.  New key is placed to the last.  Because the first key is used for encryption, new key is not
 // used for encryption immediately.  It starts encrypting TLS ticket after the next rotation in order to ensure that all controllers see
-// this key.  At most MaxTLSTicketKeyNum keys, including new key, are retained.  The oldest keys are removed if the number of keys exceeds
+// this key.  At most MaxTLSTicketKeyNum keys, including new key, are retained.  The oldest keys are discarded if the number of keys exceeds
 // MaxTLSTicketKeyNum.
 //
 // The rotation works as follows:
 //
 // 1. Move the last key (which is the new key generated in the previous update) to the first.
-// 2. Remove oldest keys if the number of keys exceeds MaxTLSTicketKeyNum - 1.
+// 2. Discard oldest keys if the number of keys exceeds MaxTLSTicketKeyNum - 1.
 // 3. Generate new key and place it to the last.
 func UpdateTLSTicketKeyFunc(ticketKey []byte, newTLSTicketKeyFunc func() ([]byte, error)) ([]byte, error) {
 	newKey, err := newTLSTicketKeyFunc()

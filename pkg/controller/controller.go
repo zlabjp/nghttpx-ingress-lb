@@ -2927,8 +2927,6 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 	}
 
 	if ticketKeyUpdate {
-		updatedSecret.Annotations[tlsTicketKeyUpdateTimestampKey] = tstamp
-
 		var (
 			key []byte
 			err error
@@ -2943,6 +2941,7 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 			return err
 		}
 
+		updatedSecret.Annotations[tlsTicketKeyUpdateTimestampKey] = tstamp
 		updatedSecret.Data[nghttpxTLSTicketKeySecretKey] = key
 
 		log.Info("TLS ticket keys were updated")
