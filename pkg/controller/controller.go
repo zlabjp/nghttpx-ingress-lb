@@ -29,7 +29,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -1025,6 +1024,8 @@ func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
 			quicKM, ok := secret.Data[nghttpxQUICKeyingMaterialsSecretKey]
 			if !ok {
 				log.Error(nil, "Secret does not contain QUIC keying materials")
+			} else if err := nghttpx.VerifyQUICKeyingMaterials(quicKM); err != nil {
+				log.Error(err, "Secret contains malformed QUIC keying materials")
 			} else {
 				ingConfig.QUICSecretFile = nghttpx.CreateQUICSecretFile(ingConfig.ConfDir, quicKM)
 			}
@@ -2858,8 +2859,13 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 		}
 
 		if lc.lbc.http3 {
+			key, err := nghttpx.NewInitialQUICKeyingMaterials()
+			if err != nil {
+				return err
+			}
+
 			secret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = tstamp
-			secret.Data[nghttpxQUICKeyingMaterialsSecretKey] = []byte(hex.EncodeToString(nghttpx.NewQUICKeyingMaterial()))
+			secret.Data[nghttpxQUICKeyingMaterialsSecretKey] = key
 
 			if requeueAfter > quicSecretTimeout {
 				requeueAfter = quicSecretTimeout
@@ -2952,9 +2958,22 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 	}
 
 	if quicKMUpdate {
-		updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = tstamp
+		var (
+			key []byte
+			err error
+		)
 
-		updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey] = nghttpx.UpdateQUICKeyingMaterials(quicKM)
+		if len(ticketKey) == 0 {
+			key, err = nghttpx.NewInitialQUICKeyingMaterials()
+		} else {
+			key, err = nghttpx.UpdateQUICKeyingMaterials(quicKM)
+		}
+		if err != nil {
+			return err
+		}
+
+		updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = tstamp
+		updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey] = key
 
 		log.Info("QUIC keying materials were updated")
 

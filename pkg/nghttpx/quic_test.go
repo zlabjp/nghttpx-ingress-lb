@@ -35,26 +35,47 @@ func TestVerifyQUICKeyingMaterials(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			desc: "Empty input",
-		},
-		{
-			desc:    "Line is too short",
-			km:      []byte("deadbeef"),
+			desc:    "Empty input",
 			wantErr: true,
 		},
 		{
-			desc:    "Not a hex string",
-			km:      []byte("foo"),
+			desc:    "Single key",
+			km:      []byte("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233"),
+			wantErr: true,
+		},
+		{
+			desc: "Line is too short",
+			km: []byte("" +
+				"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff0011223",
+			),
+			wantErr: true,
+		},
+		{
+			desc: "Not a hex string",
+			km: []byte("" +
+				"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112foo",
+			),
 			wantErr: true,
 		},
 		{
 			desc: "Valid keying materials",
-			km: []byte(`
-# comment
-00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-30112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-`),
+			km: []byte("" +
+				"# comment\n" +
+				"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+			),
+		},
+		{
+			desc: "Duplicated ID",
+			km: []byte("" +
+				"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+			),
+			wantErr: true,
 		},
 	}
 
@@ -75,66 +96,89 @@ c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff0011223344556677
 	}
 }
 
-// TestUpdateQUICKeyingMaterialsFunc verifies updateQUICKeyingMaterialsFunc.
+// TestUpdateQUICKeyingMaterialsFunc verifies UpdateQUICKeyingMaterialsFunc.
 func TestUpdateQUICKeyingMaterialsFunc(t *testing.T) {
 	const newKM = "0a112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233"
 
-	newKMFunc := func() []byte {
+	newKMFunc := func() ([]byte, error) {
 		b, err := hex.DecodeString(newKM)
 		if err != nil {
 			panic(err)
 		}
 
-		return b
+		return b, nil
 	}
 
 	tests := []struct {
-		desc string
-		km   []byte
-		want []byte
+		desc      string
+		km        []byte
+		want      []byte
+		wantError bool
 	}{
 		{
-			desc: "Empty input",
-			want: []byte(newKM),
+			desc:      "Empty input",
+			wantError: true,
 		},
 		{
 			desc: "Make sure that ID is incremented",
-			km: []byte(`# comment
-40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-
-00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233`),
-			want: []byte(`8a112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233`),
+			km: []byte("" +
+				"# comment\n" +
+				"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+			),
+			want: []byte("" +
+				"40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"8a112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+			),
 		},
 		{
 			desc: "Make sure that ID is wrapped",
-			km: []byte(`# comment
-c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233`),
-			want: []byte(`0a112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233`),
+			km: []byte("" +
+				"# comment\n" +
+				"80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+			),
+			want: []byte("" +
+				"c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"0a112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+			),
 		},
 		{
 			desc: "Make sure that keying materials are limited to the latest 4 keys",
-			km: []byte(`
-80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-`),
-			want: []byte(`ca112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233
-00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233`),
+			km: []byte("" +
+				"80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+			),
+			want: []byte("" +
+				"c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"40112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+				"0a112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+			),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := updateQUICKeyingMaterialsFunc(tt.km, newKMFunc), tt.want; !bytes.Equal(got, want) {
-				t.Errorf("updateQUICKeyingMaterialsFunc(...) = %s, want %s", got, want)
+			km, err := UpdateQUICKeyingMaterialsFunc(tt.km, newKMFunc)
+			if err != nil {
+				if tt.wantError {
+					return
+				}
+
+				t.Fatalf("UpdateQUICKeyingMaterialsFunc: %v", err)
+			}
+
+			if tt.wantError {
+				t.Fatal("UpdateQUICKeyingMaterialsFunc should fail")
+			}
+
+			if got, want := km, tt.want; !bytes.Equal(got, want) {
+				t.Errorf("UpdateQUICKeyingMaterialsFunc(...) = %s, want %s", got, want)
 			}
 		})
 	}

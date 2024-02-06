@@ -2068,7 +2068,10 @@ func TestSyncSecretQUIC(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					nghttpxQUICKeyingMaterialsSecretKey: []byte(`c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233`),
+					nghttpxQUICKeyingMaterialsSecretKey: []byte("" +
+						"80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+						"c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+					),
 				},
 			},
 			wantKeepTimestamp: true,
@@ -2084,7 +2087,10 @@ func TestSyncSecretQUIC(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					nghttpxQUICKeyingMaterialsSecretKey: []byte(`c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233`),
+					nghttpxQUICKeyingMaterialsSecretKey: []byte("" +
+						"80112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233\n" +
+						"c0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233",
+					),
 				},
 			},
 		},
@@ -2146,13 +2152,18 @@ func TestSyncSecretQUIC(t *testing.T) {
 				}
 
 				km := updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey]
+
 				if len(km) < nghttpx.QUICKeyingMaterialsEncodedSize ||
 					len(km) != len(km)/nghttpx.QUICKeyingMaterialsEncodedSize*nghttpx.QUICKeyingMaterialsEncodedSize+(len(km)/nghttpx.QUICKeyingMaterialsEncodedSize-1) {
-					t.Fatal("updatedSecret does not contain QUIC keying materials", len(km))
+					t.Fatalf("updatedSecret does not contain QUIC keying materials: length=%v", len(km))
+				}
+
+				if tt.secret != nil && bytes.Equal(km, tt.secret.Data[nghttpxQUICKeyingMaterialsSecretKey]) {
+					t.Fatalf("updatedSecret.Data[%q] must be updated", nghttpxQUICKeyingMaterialsSecretKey)
 				}
 
 				if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {
-					t.Fatalf("verifyQUICKeyingMaterials(...): %v", err)
+					t.Fatalf("VerifyQUICKeyingMaterials(...): %v", err)
 				}
 			}
 		})
