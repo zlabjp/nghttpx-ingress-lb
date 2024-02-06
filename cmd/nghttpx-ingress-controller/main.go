@@ -108,6 +108,7 @@ var (
 	clientQPS                               = float32(200)
 	clientBurst                             = 300
 	staleAssetsThreshold                    = time.Hour
+	tlsTicketKeyPeriod                      = time.Hour
 )
 
 func main() {
@@ -192,7 +193,7 @@ func main() {
 
 	rootCmd.Flags().StringVar(&nghttpxSecret, "nghttpx-secret", nghttpxSecret, `The name of Secret resource which contains the keying materials for nghttpx.  The resource must belong to the same namespace as the controller Pod.  If it is not found, the controller will create new one.`)
 
-	rootCmd.Flags().BoolVar(&shareTLSTicketKey, "share-tls-ticket-key", shareTLSTicketKey, `Share TLS ticket key among all nghttpx-ingress-controllers.  TLS ticket keys are stored to the Secret specified by nghttpx-secret flag.  If this flag is set to true, TLS ticket keys are generated and rotated by the controller every 1 hour.  At most 12 latest keys are retained.  TLS tickets are encrypted with AES-128-CBC.`)
+	rootCmd.Flags().BoolVar(&shareTLSTicketKey, "share-tls-ticket-key", shareTLSTicketKey, `Share TLS ticket key among all nghttpx-ingress-controllers.  TLS ticket keys are stored to the Secret specified by nghttpx-secret flag.  If this flag is set to true, TLS ticket keys are generated and rotated by the controller in the interval specified by tls-ticket-key-period flag.  At most 12 latest keys are retained.  TLS tickets are encrypted with AES-128-CBC.`)
 
 	rootCmd.Flags().DurationVar(&reconcileTimeout, "reconcile-timeout", reconcileTimeout,
 		`A timeout for a single reconciliation.  It is a safe guard to prevent a reconciliation from getting stuck indefinitely.`)
@@ -235,6 +236,9 @@ func main() {
 
 	rootCmd.Flags().DurationVar(&staleAssetsThreshold, "stale-assets-threshold", staleAssetsThreshold,
 		`Duration that asset files (e.g., TLS keys and certificates, and mruby files) are considered stale`)
+
+	rootCmd.Flags().DurationVar(&tlsTicketKeyPeriod, "tls-ticket-key-period", tlsTicketKeyPeriod,
+		`Duration before TLS ticket keys are rotated and new key is generated.  See share-tls-ticket-key flag.`)
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
@@ -392,6 +396,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		ReconcileTimeout:                        reconcileTimeout,
 		LeaderElectionConfig:                    leaderElectionConfig,
 		RequireIngressClass:                     requireIngressClass,
+		TLSTicketKeyPeriod:                      tlsTicketKeyPeriod,
 		Pod:                                     thisPod,
 		EventRecorder:                           eventRecorder,
 	}

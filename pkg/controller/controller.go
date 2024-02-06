@@ -71,8 +71,6 @@ const (
 	syncKey = "ingress"
 	// quicSecretTimeout is the timeout for the last QUIC keying material.
 	quicSecretTimeout = time.Hour
-	// tlsTicketKeyTimeout is the timeout, when it is fired, TLS ticket keys are rotated.  New key is also generated.
-	tlsTicketKeyTimeout = time.Hour
 
 	noResyncPeriod = 0
 
@@ -149,6 +147,7 @@ type LoadBalancerController struct {
 	reconcileTimeout                        time.Duration
 	leaderElectionConfig                    componentbaseconfig.LeaderElectionConfiguration
 	requireIngressClass                     bool
+	tlsTicketKeyPeriod                      time.Duration
 	reloadRateLimiter                       flowcontrol.RateLimiter
 	eventRecorder                           events.EventRecorder
 	syncQueue                               workqueue.Interface
@@ -226,6 +225,8 @@ type Config struct {
 	LeaderElectionConfig componentbaseconfig.LeaderElectionConfiguration
 	// RequireIngressClass, if set to true, ignores Ingress resource which does not specify .spec.ingressClassName.
 	RequireIngressClass bool
+	// TLSTicketKeyPeriod is the duration before TLS ticket keys are rotated and new key is generated.
+	TLSTicketKeyPeriod time.Duration
 	// Pod is the Pod where this controller runs.
 	Pod *corev1.Pod
 	// EventRecorder is the event recorder.
@@ -273,6 +274,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		reconcileTimeout:                        config.ReconcileTimeout,
 		leaderElectionConfig:                    config.LeaderElectionConfig,
 		requireIngressClass:                     config.RequireIngressClass,
+		tlsTicketKeyPeriod:                      config.TLSTicketKeyPeriod,
 		eventRecorder:                           config.EventRecorder,
 		syncQueue:                               workqueue.New(),
 		reloadRateLimiter:                       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
@@ -2853,8 +2855,8 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 			secret.Annotations[tlsTicketKeyUpdateTimestampKey] = tstamp
 			secret.Data[nghttpxTLSTicketKeySecretKey] = key
 
-			if requeueAfter > tlsTicketKeyTimeout {
-				requeueAfter = tlsTicketKeyTimeout
+			if requeueAfter > lc.lbc.tlsTicketKeyPeriod {
+				requeueAfter = lc.lbc.tlsTicketKeyPeriod
 			}
 		}
 
@@ -2952,8 +2954,8 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 
 		log.Info("TLS ticket keys were updated")
 
-		if requeueAfter > tlsTicketKeyTimeout {
-			requeueAfter = tlsTicketKeyTimeout
+		if requeueAfter > lc.lbc.tlsTicketKeyPeriod {
+			requeueAfter = lc.lbc.tlsTicketKeyPeriod
 		}
 	}
 
@@ -3020,7 +3022,7 @@ func (lc *LeaderController) getTLSTicketKeyFromSecret(ctx context.Context, s *co
 		return nil, true, 0
 	}
 
-	requeueAfter = lastUpdate.Add(tlsTicketKeyTimeout).Sub(t)
+	requeueAfter = lastUpdate.Add(lc.lbc.tlsTicketKeyPeriod).Sub(t)
 	if requeueAfter > 0 {
 		log.Info("TLS ticket keys are not expired and in a good shape", "requeueAfter", requeueAfter)
 

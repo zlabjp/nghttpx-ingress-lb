@@ -94,6 +94,7 @@ const (
 	defaultConfigMapNamespace     = "kube-system"
 	defaultIngressClassController = "zlab.co.jp/nghttpx"
 	defaultConfDir                = "conf"
+	defaultTLSTicketKeyPeriod     = time.Hour
 
 	// openssl ecparam -name prime256v1 -genkey -noout -out tls.key
 	tlsKey = `-----BEGIN EC PRIVATE KEY-----
@@ -159,6 +160,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		ShareTLSTicketKey:      f.shareTLSTicketKey,
 		PublishService:         f.publishService,
 		RequireIngressClass:    f.requireIngressClass,
+		TLSTicketKeyPeriod:     defaultTLSTicketKeyPeriod,
 		Pod:                    pod,
 		EventRecorder:          &events.FakeRecorder{},
 	}
@@ -2173,8 +2175,8 @@ func TestSyncSecretQUIC(t *testing.T) {
 // TestSyncSecretTLSTicketKey verifies syncSecret for TLS ticket key.
 func TestSyncSecretTLSTicketKey(t *testing.T) {
 	now := time.Now().Round(time.Second)
-	expiredTimestamp := now.Add(-tlsTicketKeyTimeout)
-	notExpiredTimestamp := now.Add(-tlsTicketKeyTimeout + time.Second)
+	expiredTimestamp := now.Add(-defaultTLSTicketKeyPeriod)
+	notExpiredTimestamp := now.Add(-defaultTLSTicketKeyPeriod + time.Second)
 
 	tests := []struct {
 		desc              string
