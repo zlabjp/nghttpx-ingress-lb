@@ -95,6 +95,7 @@ const (
 	defaultIngressClassController = "zlab.co.jp/nghttpx"
 	defaultConfDir                = "conf"
 	defaultTLSTicketKeyPeriod     = time.Hour
+	defaultQUICSecretPeriod       = time.Hour
 
 	// openssl ecparam -name prime256v1 -genkey -noout -out tls.key
 	tlsKey = `-----BEGIN EC PRIVATE KEY-----
@@ -161,6 +162,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		PublishService:         f.publishService,
 		RequireIngressClass:    f.requireIngressClass,
 		TLSTicketKeyPeriod:     defaultTLSTicketKeyPeriod,
+		QUICSecretPeriod:       defaultQUICSecretPeriod,
 		Pod:                    pod,
 		EventRecorder:          &events.FakeRecorder{},
 	}
@@ -2048,8 +2050,8 @@ func TestSyncNormalizePath(t *testing.T) {
 // TestSyncSecretQUIC verifies syncSecret for QUIC keying materials.
 func TestSyncSecretQUIC(t *testing.T) {
 	now := time.Now().Round(time.Second)
-	expiredTimestamp := now.Add(-quicSecretTimeout)
-	notExpiredTimestamp := now.Add(-quicSecretTimeout + time.Second)
+	expiredTimestamp := now.Add(-defaultQUICSecretPeriod)
+	notExpiredTimestamp := now.Add(-defaultQUICSecretPeriod + time.Second)
 
 	tests := []struct {
 		desc              string

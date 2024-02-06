@@ -109,6 +109,7 @@ var (
 	clientBurst                             = 300
 	staleAssetsThreshold                    = time.Hour
 	tlsTicketKeyPeriod                      = time.Hour
+	quicSecretPeriod                        = 4 * time.Hour
 )
 
 func main() {
@@ -239,6 +240,9 @@ func main() {
 
 	rootCmd.Flags().DurationVar(&tlsTicketKeyPeriod, "tls-ticket-key-period", tlsTicketKeyPeriod,
 		`Duration before TLS ticket keys are rotated and new key is generated.  See share-tls-ticket-key flag.`)
+
+	rootCmd.Flags().DurationVar(&quicSecretPeriod, "quic-secret-period", quicSecretPeriod,
+		`Duration before QUIC keying materials are rotated and new key is generated.`)
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
@@ -397,6 +401,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		LeaderElectionConfig:                    leaderElectionConfig,
 		RequireIngressClass:                     requireIngressClass,
 		TLSTicketKeyPeriod:                      tlsTicketKeyPeriod,
+		QUICSecretPeriod:                        quicSecretPeriod,
 		Pod:                                     thisPod,
 		EventRecorder:                           eventRecorder,
 	}
