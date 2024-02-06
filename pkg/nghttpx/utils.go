@@ -27,6 +27,7 @@ package nghttpx
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -36,6 +37,7 @@ import (
 	"time"
 
 	"github.com/pmezard/go-difflib/difflib"
+	"golang.org/x/crypto/hkdf"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -282,4 +284,29 @@ func nghttpxDuration(d time.Duration) string {
 		return strconv.FormatInt(msec/1000, 10)
 	}
 	return fmt.Sprintf("%vms", msec)
+}
+
+// GenerateCryptoKey generates cryptographic key of length len(out) in out.  info is an optional context information.
+func GenerateCryptoKey(out, info []byte) error {
+	if len(out) == 0 {
+		return nil
+	}
+
+	const ikmLen = 8
+
+	ikmSalt := make([]byte, ikmLen+sha256.Size)
+	if _, err := rand.Read(ikmSalt); err != nil {
+		return err
+	}
+
+	ikm := ikmSalt[:ikmLen]
+	salt := ikmSalt[ikmLen:]
+
+	r := hkdf.New(sha256.New, ikm, salt, info)
+
+	if _, err := io.ReadFull(r, out); err != nil {
+		return err
+	}
+
+	return nil
 }

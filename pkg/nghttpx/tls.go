@@ -27,19 +27,15 @@ package nghttpx
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"path/filepath"
 	"sort"
 	"time"
 
-	"golang.org/x/crypto/hkdf"
 	"k8s.io/klog/v2"
 )
 
@@ -248,20 +244,9 @@ func NormalizePEM(data []byte) ([]byte, error) {
 }
 
 func NewTLSTicketKey() ([]byte, error) {
-	const ikmLen = 8
-
-	ikmSalt := make([]byte, ikmLen+sha256.Size)
-	if _, err := rand.Read(ikmSalt); err != nil {
-		return nil, err
-	}
-
-	ikm := ikmSalt[:ikmLen]
-	salt := ikmSalt[ikmLen:]
-
-	r := hkdf.New(sha256.New, ikm, salt, []byte("tls ticket key"))
-
 	key := make([]byte, TLSTicketKeySize)
-	if _, err := io.ReadFull(r, key); err != nil {
+
+	if err := GenerateCryptoKey(key, []byte("tls ticket key")); err != nil {
 		return nil, err
 	}
 
