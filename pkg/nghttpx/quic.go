@@ -3,16 +3,11 @@ package nghttpx
 import (
 	"bufio"
 	"bytes"
-	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"math/bits"
 	"path/filepath"
 	"strings"
-
-	"golang.org/x/crypto/hkdf"
 )
 
 const (
@@ -89,20 +84,9 @@ func VerifyQUICKeyingMaterials(km []byte) error {
 
 // NewQUICKeyingMaterial returns new QUIC keying material.
 func NewQUICKeyingMaterial() ([]byte, error) {
-	const ikmLen = 8
-
-	ikmSalt := make([]byte, ikmLen+sha256.Size)
-	if _, err := rand.Read(ikmSalt); err != nil {
-		return nil, err
-	}
-
-	ikm := ikmSalt[:ikmLen]
-	salt := ikmSalt[ikmLen:]
-
-	r := hkdf.New(sha256.New, ikm, salt, []byte("quic key"))
-
 	b := make([]byte, QUICKeyingMaterialsSize)
-	if _, err := io.ReadFull(r, b); err != nil {
+
+	if err := GenerateCryptoKey(b, []byte("quic key")); err != nil {
 		return nil, err
 	}
 
