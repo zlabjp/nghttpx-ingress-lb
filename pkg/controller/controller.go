@@ -69,8 +69,6 @@ const (
 	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
 	// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
 	syncKey = "ingress"
-	// quicSecretTimeout is the timeout for the last QUIC keying material.
-	quicSecretTimeout = time.Hour
 
 	noResyncPeriod = 0
 
@@ -148,6 +146,7 @@ type LoadBalancerController struct {
 	leaderElectionConfig                    componentbaseconfig.LeaderElectionConfiguration
 	requireIngressClass                     bool
 	tlsTicketKeyPeriod                      time.Duration
+	quicSecretPeriod                        time.Duration
 	reloadRateLimiter                       flowcontrol.RateLimiter
 	eventRecorder                           events.EventRecorder
 	syncQueue                               workqueue.Interface
@@ -227,6 +226,8 @@ type Config struct {
 	RequireIngressClass bool
 	// TLSTicketKeyPeriod is the duration before TLS ticket keys are rotated and new key is generated.
 	TLSTicketKeyPeriod time.Duration
+	// QUICSecretPeriod is the duration before QUIC keying materials are rotated and new key is generated.
+	QUICSecretPeriod time.Duration
 	// Pod is the Pod where this controller runs.
 	Pod *corev1.Pod
 	// EventRecorder is the event recorder.
@@ -275,6 +276,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		leaderElectionConfig:                    config.LeaderElectionConfig,
 		requireIngressClass:                     config.RequireIngressClass,
 		tlsTicketKeyPeriod:                      config.TLSTicketKeyPeriod,
+		quicSecretPeriod:                        config.QUICSecretPeriod,
 		eventRecorder:                           config.EventRecorder,
 		syncQueue:                               workqueue.New(),
 		reloadRateLimiter:                       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
@@ -2869,8 +2871,8 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 			secret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = tstamp
 			secret.Data[nghttpxQUICKeyingMaterialsSecretKey] = key
 
-			if requeueAfter > quicSecretTimeout {
-				requeueAfter = quicSecretTimeout
+			if requeueAfter > lc.lbc.quicSecretPeriod {
+				requeueAfter = lc.lbc.quicSecretPeriod
 			}
 		}
 
@@ -2979,8 +2981,8 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 
 		log.Info("QUIC keying materials were updated")
 
-		if requeueAfter > quicSecretTimeout {
-			requeueAfter = quicSecretTimeout
+		if requeueAfter > lc.lbc.quicSecretPeriod {
+			requeueAfter = lc.lbc.quicSecretPeriod
 		}
 	}
 
@@ -3057,7 +3059,7 @@ func (lc *LeaderController) getQUICKeyingMaterialsFromSecret(ctx context.Context
 		return nil, true, 0
 	}
 
-	requeueAfter = lastUpdate.Add(quicSecretTimeout).Sub(t)
+	requeueAfter = lastUpdate.Add(lc.lbc.quicSecretPeriod).Sub(t)
 	if requeueAfter > 0 {
 		log.Info("QUIC keying materials are not expired and in a good shape", "requeueAfter", requeueAfter)
 

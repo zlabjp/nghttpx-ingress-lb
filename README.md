@@ -193,20 +193,26 @@ stable TLS session resumption.
 
 In order to enable the experimental HTTP/3 feature, run the controller
 with `--http3` flag.  The controller will create and maintain a
-Secret, specified by `--quic-keying-materials-secret` flag, which
-contains QUIC keying materials in the same namespace as the controller
-Pod.  The controller maintains the secret as a whole, and it should
-not be altered by an external tool or user. nghttpx listens on UDP
-port specified by `--nghttpx-https-port` flag.
+Secret, specified by `--nghttpx-secret` flag, which contains QUIC
+keying materials in the same namespace as the controller Pod.  The
+controller maintains the secret as a whole, and it should not be
+altered by an external tool or user.  The keying materials are rotated
+and new key is generated in the interval specified by
+`--quic-secret-period` flag.  nghttpx listens on UDP port specified by
+`--nghttpx-https-port` flag.
 
 > [!WARNING]
+>
 > As of v0.66.0, Secret is integrated to the one specified by
 > `--nghttpx-secret` flag, and `--quic-keying-materials-secret` flag
 > has been removed.  The default value is also changed.  Previously,
 > it is `nghttpx-quic-km` but now `nghttpx-km`.  To migrate from the
 > previous release, before upgrading nghttpx-ingress-controller to
 > v0.66.0, copy Secret `nghttpx-quic-km` to `nghttpx-km`, and upgrade
-> nghttpx-ingress-controller.
+> nghttpx-ingress-controller.  The keying materials are now rotated
+> and new key is generated in every 4 hours by default.  The new key
+> is first placed at the end of the list.  In the next rotation, it is
+> moved to the first, and is used for encryption.
 
 HTTP/3 requires the extra capabilities to load eBPF program.  Add the
 following capabilities to the nghttpx-ingress-controller container:
