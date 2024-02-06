@@ -229,20 +229,6 @@ spec:
         ...
 ```
 
-If you use PodSecurityPolicy, grant these capabilities:
-
-```yaml
-apiVersion: policy/v1beta1
-kind: PodSecurityPolicy
-...
-spec:
-  ...
-  allowedCapabilities:
-  - SYS_ADMIN
-  - SYS_RESOURCE
-  ...
-```
-
 ## PROXY protocol support - preserving ClientIP addresses
 
 In case you are running nghttpx-ingress-lb behind a LoadBalancer you might
