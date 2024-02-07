@@ -818,8 +818,6 @@ func TestSyncDefaultBackend(t *testing.T) {
 			f.secretStore = append(f.secretStore, nghttpxSecret)
 			f.epSliceStore = append(f.epSliceStore, ess...)
 
-			f.objects = append(f.objects, cm, svc)
-
 			f.prepare()
 			f.run()
 
@@ -877,8 +875,6 @@ func TestSyncDefaultTLSSecretNotFound(t *testing.T) {
 	f.svcStore = append(f.svcStore, svc)
 	f.epSliceStore = append(f.epSliceStore, ess...)
 
-	f.objects = append(f.objects, svc)
-
 	f.prepare()
 	f.lbc.defaultTLSSecret = &types.NamespacedName{
 		Namespace: "kube-system",
@@ -900,8 +896,6 @@ func TestSyncDefaultSecret(t *testing.T) {
 	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
 	f.svcStore = append(f.svcStore, svc)
 	f.epSliceStore = append(f.epSliceStore, ess...)
-
-	f.objects = append(f.objects, tlsSecret, svc)
 
 	f.prepare()
 	f.lbc.defaultTLSSecret = &types.NamespacedName{
@@ -959,8 +953,6 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	f.svcStore = append(f.svcStore, svc, bs1)
 	f.epSliceStore = append(f.epSliceStore, ess...)
 	f.epSliceStore = append(f.epSliceStore, bes1)
-
-	f.objects = append(f.objects, tlsSecret, svc, bs1, ing1)
 
 	f.prepare()
 	f.lbc.defaultTLSSecret = &types.NamespacedName{
@@ -1037,8 +1029,6 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	f.svcStore = append(f.svcStore, svc, bs1)
 	f.epSliceStore = append(f.epSliceStore, ess...)
 	f.epSliceStore = append(f.epSliceStore, bes1)
-
-	f.objects = append(f.objects, tlsSecret, svc, bs1, ing1)
 
 	f.prepare()
 	f.run()
@@ -1152,8 +1142,6 @@ func TestSyncStringNamedPort(t *testing.T) {
 			f.podStore = append(f.podStore, bp1, bp2)
 			f.secretStore = append(f.secretStore, nghttpxSecret)
 
-			f.objects = append(f.objects, svc, bs1, ing1, bp1, bp2)
-
 			f.prepare()
 			f.run()
 
@@ -1205,8 +1193,6 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 	f.ingStore = append(f.ingStore, ing1)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
 
-	f.objects = append(f.objects, svc, bs1, ing1)
-
 	f.prepare()
 	f.run()
 
@@ -1254,8 +1240,6 @@ func TestSyncWithoutSelectors(t *testing.T) {
 			f.epSliceStore = append(f.epSliceStore, bes1)
 			f.ingStore = append(f.ingStore, ing1)
 			f.secretStore = append(f.secretStore, nghttpxSecret)
-
-			f.objects = append(f.objects, svc, bs1, ing1)
 
 			f.prepare()
 			f.run()
@@ -1399,8 +1383,6 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	f.epSliceStore = append(f.epSliceStore, bes1, bes2)
 	f.ingStore = append(f.ingStore, ing1)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
-
-	f.objects = append(f.objects, svc, bs1, ing1, bs2)
 
 	f.prepare()
 	f.run()
@@ -1562,11 +1544,8 @@ func TestGetLoadBalancerIngressSelector(t *testing.T) {
 			f.podStore = append(f.podStore, po1, po2)
 			f.nodeStore = append(f.nodeStore, node2)
 
-			f.objects = append(f.objects, po1, po2, node2)
-
 			if tt.hostNetwork {
 				f.nodeStore = append(f.nodeStore, node1)
-				f.objects = append(f.objects, node1)
 			}
 
 			f.preparePod(po1)
@@ -1641,7 +1620,7 @@ func TestSyncIngress(t *testing.T) {
 
 			f.ingStore = append(f.ingStore, tt.ingress)
 			f.podStore = append(f.podStore, ingPo1, ingPo2)
-			f.objects = append(f.objects, tt.ingress, ingPo1, ingPo2)
+			f.objects = append(f.objects, tt.ingress)
 
 			if !reflect.DeepEqual(tt.wantLoadBalancerIngresses, tt.ingress.Status.LoadBalancer.Ingress) {
 				f.expectUpdateIngAction(tt.ingress)
@@ -1693,8 +1672,6 @@ func TestSyncNamedServicePort(t *testing.T) {
 	f.epSliceStore = append(f.epSliceStore, bes1)
 	f.ingStore = append(f.ingStore, ing1)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
-
-	f.objects = append(f.objects, svc, bs1, ing1)
 
 	f.prepare()
 	f.run()
@@ -1791,8 +1768,6 @@ func TestSyncDoNotForward(t *testing.T) {
 	f.ingStore = append(f.ingStore, ing1)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
 
-	f.objects = append(f.objects, svc, ing1)
-
 	f.prepare()
 	f.run()
 
@@ -1865,8 +1840,6 @@ func TestSyncNormalizePath(t *testing.T) {
 			f.epSliceStore = append(f.epSliceStore, bes1)
 			f.ingStore = append(f.ingStore, ing1)
 			f.secretStore = append(f.secretStore, nghttpxSecret)
-
-			f.objects = append(f.objects, svc, bs1, ing1)
 
 			f.prepare()
 			f.run()
@@ -2655,8 +2628,6 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 	f.ingStore = append(f.ingStore, ing1, ing2, ing3)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
 
-	f.objects = append(f.objects, svc, bs1, bs2, bs3, ing1, ing2, ing3)
-
 	f.prepare()
 	f.run()
 
@@ -2719,8 +2690,6 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 	f.epSliceStore = append(f.epSliceStore, bes1, bes2, bes3)
 	f.ingStore = append(f.ingStore, ing1, ing2, ing3)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
-
-	f.objects = append(f.objects, svc, bs1, bs2, bs3, ing1, ing2, ing3)
 
 	f.prepare()
 	f.run()
@@ -2804,8 +2773,6 @@ func TestSyncWithTLSTicketKey(t *testing.T) {
 	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
 	f.svcStore = append(f.svcStore, svc)
 	f.epSliceStore = append(f.epSliceStore, ess...)
-
-	f.objects = append(f.objects, tlsSecret, nghttpxSecret, svc)
 
 	f.prepare()
 	f.lbc.defaultTLSSecret = &types.NamespacedName{
