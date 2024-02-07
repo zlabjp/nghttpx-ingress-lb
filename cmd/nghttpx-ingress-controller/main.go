@@ -171,6 +171,9 @@ func main() {
 		`Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
 
 	rootCmd.Flags().BoolVar(&endpointSlices, "endpoint-slices", endpointSlices, `(Deprecated) Get endpoints from EndpointSlice resource instead of Endpoints resource.  EndpointSlice resource is always used regardless of this flag.  Usage of Endpoints resource has been removed.`)
+	if err := rootCmd.Flags().MarkDeprecated("endpoint-slices", "stop using it"); err != nil {
+		panic(err)
+	}
 
 	rootCmd.Flags().Float64Var(&reloadRate, "reload-rate", reloadRate,
 		`Rate (QPS) of reloading nghttpx configuration to deal with frequent backend updates in a single batch.`)
