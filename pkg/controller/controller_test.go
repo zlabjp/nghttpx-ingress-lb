@@ -60,7 +60,6 @@ type fixture struct {
 
 	ingStore      []*networkingv1.Ingress
 	ingClassStore []*networkingv1.IngressClass
-	epStore       []*corev1.Endpoints
 	svcStore      []*corev1.Service
 	secretStore   []*corev1.Secret
 	cmStore       []*corev1.ConfigMap
@@ -72,7 +71,6 @@ type fixture struct {
 
 	actions []core.Action
 
-	enableEndpointSlice bool
 	http3               bool
 	shareTLSTicketKey   bool
 	publishService      *types.NamespacedName
@@ -154,7 +152,6 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 			Namespace: defaultNghttpxSecret.Namespace,
 		},
 		IngressClassController: defaultIngressClassController,
-		EnableEndpointSlice:    f.enableEndpointSlice,
 		ReloadRate:             1.0,
 		ReloadBurst:            1,
 		HTTP3:                  f.http3,
@@ -218,17 +215,9 @@ func (f *fixture) setupStore() {
 			panic(err)
 		}
 	}
-	if f.enableEndpointSlice {
-		for _, es := range f.epSliceStore {
-			if err := f.lbc.epSliceIndexer.Add(es); err != nil {
-				panic(err)
-			}
-		}
-	} else {
-		for _, ep := range f.epStore {
-			if err := f.lbc.epIndexer.Add(ep); err != nil {
-				panic(err)
-			}
+	for _, es := range f.epSliceStore {
+		if err := f.lbc.epSliceIndexer.Add(es); err != nil {
+			panic(err)
 		}
 	}
 	for _, svc := range f.svcStore {
@@ -337,8 +326,8 @@ func newEmptyConfigMap() *corev1.ConfigMap {
 	}
 }
 
-// newDefaultBackend returns Service and Endpoints for default backend.
-func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.EndpointSlice) {
+// newDefaultBackend returns Service and EndpointSlices for default backend.
+func newDefaultBackend() (*corev1.Service, []*discoveryv1.EndpointSlice) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      defaultBackendName,
@@ -353,44 +342,6 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 					Port:       8181,
 					TargetPort: intstr.FromInt(8080),
 					Protocol:   corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      defaultBackendName,
-			Namespace: defaultBackendNamespace,
-		},
-		Subsets: []corev1.EndpointSubset{
-			{
-				Addresses: []corev1.EndpointAddress{
-					{
-						IP: "192.168.100.1",
-						TargetRef: &corev1.ObjectReference{
-							Kind:      "Pod",
-							Name:      defaultBackendName + "-pod-1",
-							Namespace: defaultBackendNamespace,
-						},
-					},
-					{
-						IP: "192.168.100.2",
-						TargetRef: &corev1.ObjectReference{
-							Kind:      "Pod",
-							Name:      defaultBackendName + "-pod-2",
-							Namespace: defaultBackendNamespace,
-						},
-					},
-				},
-				Ports: []corev1.EndpointPort{
-					{
-						Protocol: corev1.ProtocolTCP,
-						Port:     8081,
-					},
-					{
-						Protocol: corev1.ProtocolTCP,
-						Port:     8080,
-					},
 				},
 			},
 		},
@@ -492,11 +443,11 @@ func newDefaultBackend() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.End
 		},
 	}
 
-	return svc, eps, ess
+	return svc, ess
 }
 
-// newDefaultBackendWithoutSelectors returns Service and Endpoints for default backend without Service selectors.
-func newDefaultBackendWithoutSelectors() (*corev1.Service, *corev1.Endpoints, []*discoveryv1.EndpointSlice) {
+// newDefaultBackendWithoutSelectors returns Service and EndpointSlices for default backend without Service selectors.
+func newDefaultBackendWithoutSelectors() (*corev1.Service, []*discoveryv1.EndpointSlice) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      defaultBackendName,
@@ -508,34 +459,6 @@ func newDefaultBackendWithoutSelectors() (*corev1.Service, *corev1.Endpoints, []
 					Port:       8181,
 					TargetPort: intstr.FromInt(8080),
 					Protocol:   corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      defaultBackendName,
-			Namespace: defaultBackendNamespace,
-		},
-		Subsets: []corev1.EndpointSubset{
-			{
-				Addresses: []corev1.EndpointAddress{
-					{
-						IP: "192.168.100.1",
-					},
-					{
-						IP: "192.168.100.2",
-					},
-				},
-				Ports: []corev1.EndpointPort{
-					{
-						Protocol: corev1.ProtocolTCP,
-						Port:     8081,
-					},
-					{
-						Protocol: corev1.ProtocolTCP,
-						Port:     8080,
-					},
 				},
 			},
 		},
@@ -594,10 +517,10 @@ func newDefaultBackendWithoutSelectors() (*corev1.Service, *corev1.Endpoints, []
 		},
 	}
 
-	return svc, eps, ess
+	return svc, ess
 }
 
-func newBackend(name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
+func newBackend(name string, addrs []string) (*corev1.Service, *discoveryv1.EndpointSlice) {
 	const namespace = metav1.NamespaceDefault
 
 	svc := &corev1.Service{
@@ -618,40 +541,6 @@ func newBackend(name string, addrs []string) (*corev1.Service, *corev1.Endpoints
 			},
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Subsets: []corev1.EndpointSubset{
-			{
-				Ports: []corev1.EndpointPort{
-					{
-						Protocol: corev1.ProtocolTCP,
-						Port:     81,
-					},
-					{
-						Protocol: corev1.ProtocolTCP,
-						Port:     80,
-					},
-				},
-			},
-		},
-	}
-
-	endpointAddrs := make([]corev1.EndpointAddress, len(addrs))
-	for i, addr := range addrs {
-		endpointAddrs[i] = corev1.EndpointAddress{
-			IP: addr,
-			TargetRef: &corev1.ObjectReference{
-				Kind:      "Pod",
-				Name:      fmt.Sprintf("%v-pod-%v", name, i+1),
-				Namespace: namespace,
-			},
-		}
-	}
-
-	eps.Subsets[0].Addresses = endpointAddrs
 
 	proto := corev1.ProtocolTCP
 
@@ -687,10 +576,10 @@ func newBackend(name string, addrs []string) (*corev1.Service, *corev1.Endpoints
 		})
 	}
 
-	return svc, eps, es
+	return svc, es
 }
 
-func newBackendWithoutSelectors(name string, addrs []string) (*corev1.Service, *corev1.Endpoints, *discoveryv1.EndpointSlice) {
+func newBackendWithoutSelectors(name string, addrs []string) (*corev1.Service, *discoveryv1.EndpointSlice) {
 	const namespace = metav1.NamespaceDefault
 
 	svc := &corev1.Service{
@@ -708,35 +597,6 @@ func newBackendWithoutSelectors(name string, addrs []string) (*corev1.Service, *
 			},
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Subsets: []corev1.EndpointSubset{
-			{
-				Ports: []corev1.EndpointPort{
-					{
-						Protocol: corev1.ProtocolTCP,
-						Port:     81,
-					},
-					{
-						Protocol: corev1.ProtocolTCP,
-						Port:     80,
-					},
-				},
-			},
-		},
-	}
-
-	endpointAddrs := make([]corev1.EndpointAddress, len(addrs))
-	for i, addr := range addrs {
-		endpointAddrs[i] = corev1.EndpointAddress{
-			IP: addr,
-		}
-	}
-
-	eps.Subsets[0].Addresses = endpointAddrs
 
 	proto := corev1.ProtocolTCP
 
@@ -767,7 +627,7 @@ func newBackendWithoutSelectors(name string, addrs []string) (*corev1.Service, *
 		})
 	}
 
-	return svc, eps, es
+	return svc, es
 }
 
 type ingressBuilder struct {
@@ -922,16 +782,11 @@ func newChecksumFile(path string) *nghttpx.ChecksumFile {
 // TestSyncDefaultBackend verifies that controller creates configuration for default service backend.
 func TestSyncDefaultBackend(t *testing.T) {
 	tests := []struct {
-		desc                string
-		enableEndpointSlice bool
-		withoutSelectors    bool
+		desc             string
+		withoutSelectors bool
 	}{
 		{
-			desc: "With Endpoints",
-		},
-		{
-			desc:                "With EndpointSlice",
-			enableEndpointSlice: true,
+			desc: "With selectors",
 		},
 		{
 			desc:             "Without selectors",
@@ -942,7 +797,6 @@ func TestSyncDefaultBackend(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
-			f.enableEndpointSlice = tt.enableEndpointSlice
 
 			cm := newEmptyConfigMap()
 			cm.Data[nghttpx.NghttpxExtraConfigKey] = "Test"
@@ -950,23 +804,21 @@ func TestSyncDefaultBackend(t *testing.T) {
 			cm.Data[nghttpx.NghttpxMrubyFileContentKey] = mrubyContent
 			var (
 				svc *corev1.Service
-				eps *corev1.Endpoints
 				ess []*discoveryv1.EndpointSlice
 			)
 			if tt.withoutSelectors {
-				svc, eps, ess = newDefaultBackendWithoutSelectors()
+				svc, ess = newDefaultBackendWithoutSelectors()
 			} else {
-				svc, eps, ess = newDefaultBackend()
+				svc, ess = newDefaultBackend()
 			}
 			nghttpxSecret := newNghttpxSecret()
 
 			f.cmStore = append(f.cmStore, cm)
 			f.svcStore = append(f.svcStore, svc)
-			f.epStore = append(f.epStore, eps)
 			f.secretStore = append(f.secretStore, nghttpxSecret)
 			f.epSliceStore = append(f.epSliceStore, ess...)
 
-			f.objects = append(f.objects, cm, svc, eps)
+			f.objects = append(f.objects, cm, svc)
 
 			f.prepare()
 			f.run()
@@ -1020,12 +872,12 @@ func TestSyncDefaultBackend(t *testing.T) {
 func TestSyncDefaultTLSSecretNotFound(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
 	f.svcStore = append(f.svcStore, svc)
-	f.epStore = append(f.epStore, eps)
+	f.epSliceStore = append(f.epSliceStore, ess...)
 
-	f.objects = append(f.objects, svc, eps)
+	f.objects = append(f.objects, svc)
 
 	f.prepare()
 	f.lbc.defaultTLSSecret = &types.NamespacedName{
@@ -1043,13 +895,13 @@ func TestSyncDefaultSecret(t *testing.T) {
 	dKey := []byte(tlsKey)
 	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
 	nghttpxSecret := newNghttpxSecret()
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
 	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
 	f.svcStore = append(f.svcStore, svc)
-	f.epStore = append(f.epStore, eps)
+	f.epSliceStore = append(f.epSliceStore, ess...)
 
-	f.objects = append(f.objects, tlsSecret, svc, eps)
+	f.objects = append(f.objects, tlsSecret, svc)
 
 	f.prepare()
 	f.lbc.defaultTLSSecret = &types.NamespacedName{
@@ -1094,9 +946,9 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	dKey := []byte(tlsKey)
 	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
 	nghttpxSecret := newNghttpxSecret()
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
-	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
+	bs1, bes1 := newBackend("alpha", []string{"192.168.10.1"})
 	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithTLS(tlsSecret.Name).
@@ -1105,9 +957,10 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
 	f.ingStore = append(f.ingStore, ing1)
 	f.svcStore = append(f.svcStore, svc, bs1)
-	f.epStore = append(f.epStore, eps, be1)
+	f.epSliceStore = append(f.epSliceStore, ess...)
+	f.epSliceStore = append(f.epSliceStore, bes1)
 
-	f.objects = append(f.objects, tlsSecret, svc, eps, bs1, be1, ing1)
+	f.objects = append(f.objects, tlsSecret, svc, bs1, ing1)
 
 	f.prepare()
 	f.lbc.defaultTLSSecret = &types.NamespacedName{
@@ -1171,9 +1024,9 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	dKey := []byte(badlyFormattedTLSKey)
 	tlsSecret := newTLSSecret(metav1.NamespaceDefault, "tls", dCrt, dKey)
 	nghttpxSecret := newNghttpxSecret()
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
-	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
+	bs1, bes1 := newBackend("alpha", []string{"192.168.10.1"})
 	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithTLS(tlsSecret.Name).
@@ -1182,9 +1035,10 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
 	f.ingStore = append(f.ingStore, ing1)
 	f.svcStore = append(f.svcStore, svc, bs1)
-	f.epStore = append(f.epStore, eps, be1)
+	f.epSliceStore = append(f.epSliceStore, ess...)
+	f.epSliceStore = append(f.epSliceStore, bes1)
 
-	f.objects = append(f.objects, tlsSecret, svc, eps, bs1, be1, ing1)
+	f.objects = append(f.objects, tlsSecret, svc, bs1, ing1)
 
 	f.prepare()
 	f.run()
@@ -1224,26 +1078,20 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 // TestSyncStringNamedPort verifies that if service target port is a named port, it is looked up from Pod spec.
 func TestSyncStringNamedPort(t *testing.T) {
 	tests := []struct {
-		desc                string
-		enableEndpointSlice bool
+		desc string
 	}{
 		{
-			desc: "With Endpoints",
-		},
-		{
-			desc:                "With EndpointSlice",
-			enableEndpointSlice: true,
+			desc: "With EndpointSlice",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
-			f.enableEndpointSlice = tt.enableEndpointSlice
 
-			svc, eps, ess := newDefaultBackend()
+			svc, ess := newDefaultBackend()
 
-			bs1, be1, bes1 := newBackend("alpha", []string{"192.168.10.1", "192.168.10.2"})
+			bs1, bes1 := newBackend("alpha", []string{"192.168.10.1", "192.168.10.2"})
 			bs1.Spec.Ports[0] = corev1.ServicePort{
 				Port:       1234,
 				TargetPort: intstr.FromString("my-port"),
@@ -1298,14 +1146,13 @@ func TestSyncStringNamedPort(t *testing.T) {
 			nghttpxSecret := newNghttpxSecret()
 
 			f.svcStore = append(f.svcStore, svc, bs1)
-			f.epStore = append(f.epStore, eps, be1)
 			f.epSliceStore = append(f.epSliceStore, ess...)
 			f.epSliceStore = append(f.epSliceStore, bes1)
 			f.ingStore = append(f.ingStore, ing1)
 			f.podStore = append(f.podStore, bp1, bp2)
 			f.secretStore = append(f.secretStore, nghttpxSecret)
 
-			f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bp1, bp2)
+			f.objects = append(f.objects, svc, bs1, ing1, bp1, bp2)
 
 			f.prepare()
 			f.run()
@@ -1339,9 +1186,9 @@ func TestSyncStringNamedPort(t *testing.T) {
 func TestSyncEmptyTargetPort(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
-	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
+	bs1, bes1 := newBackend("alpha", []string{"192.168.10.1"})
 	bs1.Spec.Ports[0] = corev1.ServicePort{
 		Port:       80,
 		TargetPort: intstr.FromString(""),
@@ -1353,11 +1200,12 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1)
-	f.epStore = append(f.epStore, eps, be1)
+	f.epSliceStore = append(f.epSliceStore, ess...)
+	f.epSliceStore = append(f.epSliceStore, bes1)
 	f.ingStore = append(f.ingStore, ing1)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
 
-	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+	f.objects = append(f.objects, svc, bs1, ing1)
 
 	f.prepare()
 	f.run()
@@ -1382,39 +1230,32 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 // TestSyncWithoutSelectors verifies that the controller deals with Service without selectors.
 func TestSyncWithoutSelectors(t *testing.T) {
 	tests := []struct {
-		desc                string
-		enableEndpointSlice bool
+		desc string
 	}{
 		{
-			desc: "With Endpoints",
-		},
-		{
-			desc:                "With EndpointSlice",
-			enableEndpointSlice: true,
+			desc: "With EndpointSlice",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
-			f.enableEndpointSlice = tt.enableEndpointSlice
 
-			svc, eps, ess := newDefaultBackend()
+			svc, ess := newDefaultBackend()
 
-			bs1, be1, bes1 := newBackendWithoutSelectors("alpha", []string{"192.168.10.1"})
+			bs1, bes1 := newBackendWithoutSelectors("alpha", []string{"192.168.10.1"})
 			ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
 				WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 				Complete()
 			nghttpxSecret := newNghttpxSecret()
 
 			f.svcStore = append(f.svcStore, svc, bs1)
-			f.epStore = append(f.epStore, eps, be1)
 			f.epSliceStore = append(f.epSliceStore, ess...)
 			f.epSliceStore = append(f.epSliceStore, bes1)
 			f.ingStore = append(f.ingStore, ing1)
 			f.secretStore = append(f.secretStore, nghttpxSecret)
 
-			f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+			f.objects = append(f.objects, svc, bs1, ing1)
 
 			f.prepare()
 			f.run()
@@ -1543,10 +1384,10 @@ func TestValidateIngressClass(t *testing.T) {
 func TestSyncIngressDefaultBackend(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
-	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
-	bs2, be2, _ := newBackend("bravo", []string{"192.168.10.2"})
+	bs1, bes1 := newBackend("alpha", []string{"192.168.10.1"})
+	bs2, bes2 := newBackend("bravo", []string{"192.168.10.2"})
 	ing1 := newIngressBuilder(bs1.Namespace, "alpha-ing").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithDefaultBackend("bravo", serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
@@ -1554,11 +1395,12 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1, bs2)
-	f.epStore = append(f.epStore, eps, be1, be2)
+	f.epSliceStore = append(f.epSliceStore, ess...)
+	f.epSliceStore = append(f.epSliceStore, bes1, bes2)
 	f.ingStore = append(f.ingStore, ing1)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
 
-	f.objects = append(f.objects, svc, eps, bs1, be1, ing1, bs2, be2)
+	f.objects = append(f.objects, svc, bs1, ing1, bs2)
 
 	f.prepare()
 	f.run()
@@ -1585,8 +1427,8 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 
 // TestSyncIngressNoDefaultBackendOverride verifies that any settings or rules which override default backend are ignored.
 func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
-	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
-	bs2, be2, _ := newBackend("bravo", []string{"192.168.10.2"})
+	bs1, bes1 := newBackend("alpha", []string{"192.168.10.1"})
+	bs2, bes2 := newBackend("bravo", []string{"192.168.10.2"})
 
 	tests := []struct {
 		desc     string
@@ -1613,12 +1455,12 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
 
-			svc, eps, ess := newDefaultBackend()
+			svc, ess := newDefaultBackend()
 			nghttpxSecret := newNghttpxSecret()
 
 			f.svcStore = append(f.svcStore, svc, bs1.DeepCopyObject().(*corev1.Service), bs2.DeepCopyObject().(*corev1.Service))
-			f.epStore = append(f.epStore, eps, be1.DeepCopyObject().(*corev1.Endpoints), be2.DeepCopyObject().(*corev1.Endpoints))
 			f.epSliceStore = append(f.epSliceStore, ess...)
+			f.epSliceStore = append(f.epSliceStore, bes1.DeepCopyObject().(*discoveryv1.EndpointSlice), bes2.DeepCopyObject().(*discoveryv1.EndpointSlice))
 			f.ingStore = append(f.ingStore, tt.ing)
 			f.secretStore = append(f.secretStore, nghttpxSecret)
 
@@ -1833,9 +1675,9 @@ func TestSyncIngress(t *testing.T) {
 func TestSyncNamedServicePort(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
-	bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
+	bs1, bes1 := newBackend("alpha", []string{"192.168.10.1"})
 	bs1.Spec.Ports[0] = corev1.ServicePort{
 		Name:     "namedport",
 		Port:     80,
@@ -1847,11 +1689,12 @@ func TestSyncNamedServicePort(t *testing.T) {
 	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1)
-	f.epStore = append(f.epStore, eps, be1)
+	f.epSliceStore = append(f.epSliceStore, ess...)
+	f.epSliceStore = append(f.epSliceStore, bes1)
 	f.ingStore = append(f.ingStore, ing1)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
 
-	f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+	f.objects = append(f.objects, svc, bs1, ing1)
 
 	f.prepare()
 	f.run()
@@ -1930,7 +1773,7 @@ func TestSyncInternalDefaultBackend(t *testing.T) {
 func TestSyncDoNotForward(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
 	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
 		WithRule("/", "alpha-svc", serviceBackendPortNumber(80)).
@@ -1944,11 +1787,11 @@ func TestSyncDoNotForward(t *testing.T) {
 	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc)
-	f.epStore = append(f.epStore, eps)
+	f.epSliceStore = append(f.epSliceStore, ess...)
 	f.ingStore = append(f.ingStore, ing1)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
 
-	f.objects = append(f.objects, svc, eps, ing1)
+	f.objects = append(f.objects, svc, ing1)
 
 	f.prepare()
 	f.run()
@@ -2009,20 +1852,21 @@ func TestSyncNormalizePath(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			f := newFixture(t)
 
-			svc, eps, _ := newDefaultBackend()
+			svc, ess := newDefaultBackend()
 
-			bs1, be1, _ := newBackend("alpha", []string{"192.168.10.1"})
+			bs1, bes1 := newBackend("alpha", []string{"192.168.10.1"})
 			ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha-ing").
 				WithRule(tt.path, bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 				Complete()
 			nghttpxSecret := newNghttpxSecret()
 
 			f.svcStore = append(f.svcStore, svc, bs1)
-			f.epStore = append(f.epStore, eps, be1)
+			f.epSliceStore = append(f.epSliceStore, ess...)
+			f.epSliceStore = append(f.epSliceStore, bes1)
 			f.ingStore = append(f.ingStore, ing1)
 			f.secretStore = append(f.secretStore, nghttpxSecret)
 
-			f.objects = append(f.objects, svc, eps, bs1, be1, ing1)
+			f.objects = append(f.objects, svc, bs1, ing1)
 
 			f.prepare()
 			f.run()
@@ -2775,9 +2619,9 @@ func TestRemoveUpstreamsWithInconsistentBackendParams(t *testing.T) {
 func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
-	bs1, be1, _ := newBackend("alpha1", []string{"192.168.10.1"})
+	bs1, bes1 := newBackend("alpha1", []string{"192.168.10.1"})
 	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha1").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2786,7 +2630,7 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 `}).
 		Complete()
 
-	bs2, be2, _ := newBackend("alpha2", []string{"192.168.10.2"})
+	bs2, bes2 := newBackend("alpha2", []string{"192.168.10.2"})
 	ing2 := newIngressBuilder(metav1.NamespaceDefault, "alpha2").
 		WithRuleHost("alpha1.default.test", "/", bs2.Name, serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2795,7 +2639,7 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 `}).
 		Complete()
 
-	bs3, be3, _ := newBackend("alpha3", []string{"192.168.10.3"})
+	bs3, bes3 := newBackend("alpha3", []string{"192.168.10.3"})
 	ing3 := newIngressBuilder(metav1.NamespaceDefault, "alpha3").
 		WithRule("/examples", bs3.Name, serviceBackendPortNumber(bs3.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2806,11 +2650,12 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1, bs2, bs3)
-	f.epStore = append(f.epStore, eps, be1, be2, be3)
+	f.epSliceStore = append(f.epSliceStore, ess...)
+	f.epSliceStore = append(f.epSliceStore, bes1, bes2, bes3)
 	f.ingStore = append(f.ingStore, ing1, ing2, ing3)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
 
-	f.objects = append(f.objects, svc, bs1, bs2, bs3, eps, be1, be2, be3, ing1, ing2, ing3)
+	f.objects = append(f.objects, svc, bs1, bs2, bs3, ing1, ing2, ing3)
 
 	f.prepare()
 	f.run()
@@ -2837,9 +2682,9 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 func TestSyncEmptyAffinityCookieName(t *testing.T) {
 	f := newFixture(t)
 
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
-	bs1, be1, _ := newBackend("alpha1", []string{"192.168.10.1"})
+	bs1, bes1 := newBackend("alpha1", []string{"192.168.10.1"})
 	ing1 := newIngressBuilder(metav1.NamespaceDefault, "alpha1").
 		WithRule("/", bs1.Name, serviceBackendPortNumber(bs1.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2848,7 +2693,7 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 `}).
 		Complete()
 
-	bs2, be2, _ := newBackend("alpha2", []string{"192.168.10.2"})
+	bs2, bes2 := newBackend("alpha2", []string{"192.168.10.2"})
 	ing2 := newIngressBuilder(metav1.NamespaceDefault, "alpha2").
 		WithRule("/", bs2.Name, serviceBackendPortNumber(bs2.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2858,7 +2703,7 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 `}).
 		Complete()
 
-	bs3, be3, _ := newBackend("alpha3", []string{"192.168.10.3"})
+	bs3, bes3 := newBackend("alpha3", []string{"192.168.10.3"})
 	ing3 := newIngressBuilder(metav1.NamespaceDefault, "alpha3").
 		WithRule("/", bs3.Name, serviceBackendPortNumber(bs3.Spec.Ports[0].Port)).
 		WithAnnotations(map[string]string{
@@ -2870,11 +2715,12 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 	nghttpxSecret := newNghttpxSecret()
 
 	f.svcStore = append(f.svcStore, svc, bs1, bs2, bs3)
-	f.epStore = append(f.epStore, eps, be1, be2, be3)
+	f.epSliceStore = append(f.epSliceStore, ess...)
+	f.epSliceStore = append(f.epSliceStore, bes1, bes2, bes3)
 	f.ingStore = append(f.ingStore, ing1, ing2, ing3)
 	f.secretStore = append(f.secretStore, nghttpxSecret)
 
-	f.objects = append(f.objects, svc, bs1, bs2, bs3, eps, be1, be2, be3, ing1, ing2, ing3)
+	f.objects = append(f.objects, svc, bs1, bs2, bs3, ing1, ing2, ing3)
 
 	f.prepare()
 	f.run()
@@ -2953,13 +2799,13 @@ func TestSyncWithTLSTicketKey(t *testing.T) {
 	nghttpxSecret.Data = map[string][]byte{
 		nghttpxTLSTicketKeySecretKey: ticketKey,
 	}
-	svc, eps, _ := newDefaultBackend()
+	svc, ess := newDefaultBackend()
 
 	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
 	f.svcStore = append(f.svcStore, svc)
-	f.epStore = append(f.epStore, eps)
+	f.epSliceStore = append(f.epSliceStore, ess...)
 
-	f.objects = append(f.objects, tlsSecret, nghttpxSecret, svc, eps)
+	f.objects = append(f.objects, tlsSecret, nghttpxSecret, svc)
 
 	f.prepare()
 	f.lbc.defaultTLSSecret = &types.NamespacedName{

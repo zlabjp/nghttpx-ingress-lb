@@ -99,7 +99,6 @@ type LoadBalancerController struct {
 	// For tests
 	ingIndexer      cache.Indexer
 	ingClassIndexer cache.Indexer
-	epIndexer       cache.Indexer
 	epSliceIndexer  cache.Indexer
 	svcIndexer      cache.Indexer
 	secretIndexer   cache.Indexer
@@ -109,7 +108,6 @@ type LoadBalancerController struct {
 	ingLister                               listersnetworkingv1.IngressLister
 	ingClassLister                          listersnetworkingv1.IngressClassLister
 	svcLister                               listerscorev1.ServiceLister
-	epLister                                listerscorev1.EndpointsLister
 	epSliceLister                           listersdiscoveryv1.EndpointSliceLister
 	secretLister                            listerscorev1.SecretLister
 	cmLister                                listerscorev1.ConfigMapLister
@@ -199,8 +197,6 @@ type Config struct {
 	// PublishService is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
 	// controller Pod.
 	PublishService *types.NamespacedName
-	// EnableEndpointSlice tells controller to use EndpointSlices instead of Endpoints.
-	EnableEndpointSlice bool
 	// ReloadRate is a rate (QPS) of reloading nghttpx configuration.
 	ReloadRate float64
 	// ReloadBurst is the number of reload burst that can exceed ReloadRate.
@@ -298,7 +294,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		lbc.ingIndexer = inf.GetIndexer()
 	}
 
-	if config.EnableEndpointSlice {
+	{
 		f := lbc.allNSInformers.Discovery().V1().EndpointSlices()
 		lbc.epSliceLister = f.Lister()
 		inf := f.Informer()
@@ -311,19 +307,6 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			return nil, err
 		}
 		lbc.epSliceIndexer = inf.GetIndexer()
-	} else {
-		f := lbc.allNSInformers.Core().V1().Endpoints()
-		lbc.epLister = f.Lister()
-		inf := f.Informer()
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lbc.addEndpointsNotification),
-			UpdateFunc: updateFuncContext(ctx, lbc.updateEndpointsNotification),
-			DeleteFunc: deleteFuncContext(ctx, lbc.deleteEndpointsNotification),
-		}); err != nil {
-			log.Error(err, "Unable to add Endpoints event handler")
-			return nil, err
-		}
-		lbc.epIndexer = inf.GetIndexer()
 	}
 
 	{
@@ -508,57 +491,6 @@ func (lbc *LoadBalancerController) deleteIngressClassNotification(ctx context.Co
 	}
 	log.V(4).Info("IngressClass deleted", "ingressClass", klog.KObj(ingClass))
 	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) addEndpointsNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	ep := obj.(*corev1.Endpoints)
-	if !lbc.endpointsReferenced(ctx, ep) {
-		return
-	}
-	log.V(4).Info("Endpoints added", "endpoints", klog.KObj(ep))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) updateEndpointsNotification(ctx context.Context, old, cur any) {
-	log := klog.FromContext(ctx)
-
-	oldEp := old.(*corev1.Endpoints)
-	curEp := cur.(*corev1.Endpoints)
-	if !lbc.endpointsReferenced(ctx, oldEp) && !lbc.endpointsReferenced(ctx, curEp) {
-		return
-	}
-	log.V(4).Info("Endpoints updated", "endpoints", klog.KObj(curEp))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) deleteEndpointsNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	ep, ok := obj.(*corev1.Endpoints)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-		ep, ok = tombstone.Obj.(*corev1.Endpoints)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not Endpoints", "object", obj)
-			return
-		}
-	}
-	if !lbc.endpointsReferenced(ctx, ep) {
-		return
-	}
-	log.V(4).Info("Endpoints deleted", "endpoints", klog.KObj(ep))
-	lbc.enqueue()
-}
-
-// endpointsReferenced returns true if we are interested in ep.
-func (lbc *LoadBalancerController) endpointsReferenced(ctx context.Context, ep *corev1.Endpoints) bool {
-	return lbc.serviceReferenced(ctx, namespacedName(ep))
 }
 
 func (lbc *LoadBalancerController) addEndpointSliceNotification(ctx context.Context, obj any) {
@@ -1813,74 +1745,11 @@ func (lbc *LoadBalancerController) getEndpoints(ctx context.Context, svc *corev1
 	log.V(3).Info("Getting endpoints",
 		"service", klog.KObj(svc), "port", svcPort.Port, "targetPort", svcPort.TargetPort)
 
-	switch {
-	case len(svc.Spec.Selector) == 0:
-		if lbc.epSliceLister != nil {
-			return lbc.getEndpointsFromEndpointSliceWithoutServiceSelectors(ctx, svc, svcPort, backendConfig)
-		}
-
-		return lbc.getEndpointsWithoutServiceSelectors(ctx, svc, svcPort, backendConfig)
-	case lbc.epSliceLister != nil:
-		return lbc.getEndpointsFromEndpointSlice(ctx, svc, svcPort, backendConfig)
-	default:
-		return lbc.getEndpointsFromEndpoints(ctx, svc, svcPort, backendConfig)
-	}
-}
-
-func (lbc *LoadBalancerController) getEndpointsWithoutServiceSelectors(ctx context.Context, svc *corev1.Service, svcPort *corev1.ServicePort,
-	backendConfig *nghttpx.BackendConfig) ([]nghttpx.Backend, error) {
-	log := klog.FromContext(ctx)
-
-	var targetPort int32
-
-	switch {
-	case svcPort.TargetPort.IntVal != 0:
-		targetPort = svcPort.TargetPort.IntVal
-	case svcPort.TargetPort.StrVal == "":
-		targetPort = svcPort.Port
-	default:
-		return nil, fmt.Errorf("Service %v/%v must have integer target port if specified: %v", svc.Namespace, svc.Name, svcPort.TargetPort)
+	if len(svc.Spec.Selector) == 0 {
+		return lbc.getEndpointsFromEndpointSliceWithoutServiceSelectors(ctx, svc, svcPort, backendConfig)
 	}
 
-	ep, err := lbc.epLister.Endpoints(svc.Namespace).Get(svc.Name)
-	if err != nil {
-		log.Error(err, "Unexpected error obtaining service endpoints")
-		return nil, err
-	}
-
-	var backends []nghttpx.Backend
-
-	for i := range ep.Subsets {
-		ss := &ep.Subsets[i]
-		for i := range ss.Ports {
-			port := &ss.Ports[i]
-
-			if port.Protocol != "" && port.Protocol != corev1.ProtocolTCP {
-				continue
-			}
-
-			for i := range ss.Addresses {
-				epAddr := &ss.Addresses[i]
-
-				if targetPort != port.Port {
-					continue
-				}
-
-				ip := net.ParseIP(epAddr.IP)
-				if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-					continue
-				}
-
-				backends = append(backends, lbc.createBackend(svc, epAddr.IP, targetPort, backendConfig))
-			}
-		}
-	}
-
-	if log := log.V(3); log.Enabled() {
-		log.Info("Endpoints found", "backends", klog.Format(backends))
-	}
-
-	return backends, nil
+	return lbc.getEndpointsFromEndpointSlice(ctx, svc, svcPort, backendConfig)
 }
 
 func (lbc *LoadBalancerController) getEndpointsFromEndpointSliceWithoutServiceSelectors(
@@ -1941,57 +1810,6 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSliceWithoutServiceSe
 				for _, addr := range ep.Addresses {
 					backends = append(backends, lbc.createBackend(svc, addr, targetPort, backendConfig))
 				}
-			}
-		}
-	}
-
-	if log := log.V(3); log.Enabled() {
-		log.Info("Endpoints found", "backends", klog.Format(backends))
-	}
-
-	return backends, nil
-}
-
-func (lbc *LoadBalancerController) getEndpointsFromEndpoints(ctx context.Context, svc *corev1.Service, svcPort *corev1.ServicePort,
-	backendConfig *nghttpx.BackendConfig) ([]nghttpx.Backend, error) {
-	log := klog.FromContext(ctx)
-
-	ep, err := lbc.epLister.Endpoints(svc.Namespace).Get(svc.Name)
-	if err != nil {
-		log.Error(err, "Unexpected error obtaining service endpoints")
-		return nil, err
-	}
-
-	var backends []nghttpx.Backend
-
-	for i := range ep.Subsets {
-		ss := &ep.Subsets[i]
-		for i := range ss.Ports {
-			port := &ss.Ports[i]
-
-			if port.Protocol != "" && port.Protocol != corev1.ProtocolTCP {
-				continue
-			}
-
-			epPort := &discoveryv1.EndpointPort{
-				Port: &port.Port,
-			}
-
-			for i := range ss.Addresses {
-				epAddr := &ss.Addresses[i]
-				ref := epAddr.TargetRef
-				if ref == nil || ref.Kind != "Pod" {
-					continue
-				}
-
-				targetPort, err := lbc.resolveTargetPort(svcPort, epPort, ref)
-				if err != nil {
-					log.Error(err, "Unable to get target port", "pod", klog.KRef(ref.Namespace, ref.Name),
-						"servicePort", klog.Format(svcPort), "endpointPort", klog.Format(epPort))
-					continue
-				}
-
-				backends = append(backends, lbc.createBackend(svc, epAddr.IP, targetPort, backendConfig))
 			}
 		}
 	}

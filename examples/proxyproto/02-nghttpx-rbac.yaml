@@ -13,7 +13,6 @@ rules:
       - ""
     resources:
       - configmaps
-      - endpoints
       - nodes
       - pods
       - secrets
@@ -92,14 +91,6 @@ rules:
       - configmaps
     verbs:
       - create
-  - apiGroups:
-      - ""
-    resources:
-      - endpoints
-    verbs:
-      - get
-      - create
-      - update
   - apiGroups:
       - ""
     resources:
