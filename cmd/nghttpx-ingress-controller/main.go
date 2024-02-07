@@ -72,7 +72,6 @@ var (
 	profiling                = true
 	allowInternalIP          = false
 	defaultTLSSecret         string
-	ingressClass             = "nghttpx"
 	ingressClassController   = "zlab.co.jp/nghttpx"
 	nghttpxConfDir           = "/etc/nghttpx"
 	nghttpxExecPath          = "/usr/local/bin/nghttpx"
@@ -149,9 +148,6 @@ func main() {
 
 	rootCmd.Flags().StringVar(&defaultTLSSecret, "default-tls-secret", defaultTLSSecret,
 		`Name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.  The redirection can be turned off per Ingress basis with redirectIfNotTLS=false in ingress.zlab.co.jp/path-config annotation.`)
-
-	rootCmd.Flags().StringVar(&ingressClass, "ingress-class", ingressClass,
-		`(Deprecated) Ingress class which this controller is responsible for.  This is the value of the deprecated "kubernetes.io/ingress.class" annotation.  For Kubernetes v1.18 or later, use ingress-class-controller flag and IngressClass resource.`)
 
 	rootCmd.Flags().StringVar(&ingressClassController, "ingress-class-controller", ingressClassController,
 		`The name of IngressClass controller for this controller.  This is the value specified in IngressClass.spec.controller.`)
