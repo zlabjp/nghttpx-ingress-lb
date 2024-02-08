@@ -24,16 +24,16 @@ COPY patches/extra-mrbgem.patch /
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        git clang gcc make binutils autoconf automake autotools-dev libtool pkg-config \
-        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison libelf-dev patch
+        git clang gcc make binutils autoconf automake autotools-dev libtool pkg-config cmake cmake-data \
+        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison libelf-dev patch libbrotli-dev
 
-RUN git clone --depth 1 -b OpenSSL_1_1_1w+quic https://github.com/quictls/openssl && \
-    cd openssl && \
-    ./config --openssldir=/etc/ssl && \
-    make -j$(nproc) && \
-    make install_sw && \
+RUN git clone --depth 1 -b v1.21.0 https://github.com/aws/aws-lc && \
+    cd aws-lc && \
+    cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DDISABLE_GO=ON && \
+    make -j$(nproc) -C build && \
+    cmake --install build && \
     cd .. && \
-    rm -rf openssl
+    rm -rf aws-lc
 
 RUN git clone --recursive --shallow-submodules --depth 1 -b v1.2.0 https://github.com/ngtcp2/nghttp3 && \
     cd nghttp3 && \
@@ -47,9 +47,9 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.2.0 https://githu
 RUN git clone --recursive --shallow-submodules --depth 1 -b v1.3.0 https://github.com/ngtcp2/ngtcp2 && \
     cd ngtcp2 && \
     autoreconf -i && \
-    ./configure --enable-lib-only \
+    ./configure --enable-lib-only --with-boringssl \
         LIBTOOL_LDFLAGS="-static-libtool-libs" \
-        OPENSSL_LIBS="-l:libssl.a -l:libcrypto.a -ldl -lpthread" \
+        BORINGSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
         PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" && \
     make -j$(nproc) && \
     make install-strip && \
@@ -66,16 +66,18 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.60.0 https://gith
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     autoreconf -i && \
-    ./configure --disable-examples --disable-hpack-tools --with-mruby --with-neverbleed \
+    ./configure --disable-examples --disable-hpack-tools --with-mruby \
         --enable-http3 --with-libbpf \
         CC=clang CXX=clang++ \
         LIBTOOL_LDFLAGS="-static-libtool-libs" \
         JEMALLOC_LIBS="-l:libjemalloc.a" \
         LIBEV_LIBS="-l:libev.a" \
-        OPENSSL_LIBS="-l:libssl.a -l:libcrypto.a -ldl -pthread" \
+        OPENSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
         LIBCARES_LIBS="-l:libcares.a" \
         ZLIB_LIBS="-l:libz.a" \
         LIBBPF_LIBS="-L/usr/local/lib64 -l:libbpf.a -l:libelf.a" \
+        LIBBROTLIENC_LIBS="-l:libbrotlienc.a -l:libbrotlicommon.a" \
+        LIBBROTLIDEC_LIBS="-l:libbrotlidec.a -l:libbrotlicommon.a" \
         PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" && \
     make -j$(nproc) install-strip && \
     cd .. && \
