@@ -492,12 +492,12 @@ func registerHandlers(ctx context.Context, cancel context.CancelFunc) {
 	mux := http.NewServeMux()
 	healthz.InstallHandler(mux, newHealthzChecker(nghttpxHealthPort))
 
-	http.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/build", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "build: %v - %v", gitRepo, version)
 	})
 
-	http.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/stop", func(http.ResponseWriter, *http.Request) {
 		cancel()
 	})
 

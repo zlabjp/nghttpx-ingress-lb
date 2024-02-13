@@ -2059,7 +2059,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 			OnStoppedLeading: func() {
 				log.V(4).Info("Stopped leading")
 			},
-			OnNewLeader: func(identity string) {},
+			OnNewLeader: func(string) {},
 		},
 	}
 
