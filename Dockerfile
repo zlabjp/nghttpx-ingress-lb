@@ -69,6 +69,7 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.60.0 https://gith
     ./configure --disable-examples --disable-hpack-tools --with-mruby \
         --enable-http3 --with-libbpf \
         CC=clang CXX=clang++ \
+        LDFLAGS="-static-libgcc -static-libstdc++" \
         LIBTOOL_LDFLAGS="-static-libtool-libs" \
         JEMALLOC_LIBS="-l:libjemalloc.a" \
         LIBEV_LIBS="-l:libev.a" \
@@ -83,7 +84,7 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.60.0 https://gith
     cd .. && \
     rm -rf nghttp2
 
-FROM gcr.io/distroless/cc-debian12:latest
+FROM gcr.io/distroless/base-nossl-debian12:latest
 
 COPY --from=build /usr/local/bin/nghttpx /usr/local/bin/
 COPY --from=build /usr/local/lib/nghttp2/reuseport_kern.o \
