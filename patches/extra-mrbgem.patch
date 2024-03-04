@@ -1,10 +1,12 @@
 diff --git a/third-party/build_config.rb b/third-party/build_config.rb
-index 7ddd2e9..712ebdf 100644
+index 5d003f21..1f0737ab 100644
 --- a/third-party/build_config.rb
 +++ b/third-party/build_config.rb
-@@ -11,4 +11,5 @@ MRuby::Build.new do |conf|
-   # include the default GEMs
-   conf.gembox 'default'
+@@ -43,6 +43,7 @@ def config(conf)
+ 
+   # Added by nghttp2 project
    conf.gem :core => 'mruby-eval'
 +  conf.gem :github => 'mattn/mruby-onig-regexp'
  end
+ 
+ if ENV['BUILD'] == ENV['HOST'] then
