@@ -9,7 +9,10 @@ nghttpx ingress controller was initially created based on
 
 ## Docker images
 
-The official Docker images are available at [Docker Hub](https://hub.docker.com/r/zlabjp/nghttpx-ingress-controller/).
+The official Docker images since v0.67.0 are available at
+[GitHub Container Registry](https://github.com/zlabjp/nghttpx-ingress-lb/pkgs/container/nghttpx-ingress-controller).
+The images for older releases can be found at [Docker
+Hub](https://hub.docker.com/r/zlabjp/nghttpx-ingress-controller/).
 
 ## Requirements
 
