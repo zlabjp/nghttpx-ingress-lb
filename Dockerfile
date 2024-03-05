@@ -68,6 +68,7 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.60.0 https://gith
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --with-mruby \
         --enable-http3 --with-libbpf \
+        --with-libbrotlienc --with-libbrotlidec \
         CC=clang CXX=clang++ \
         LDFLAGS="-static-libgcc -static-libstdc++" \
         LIBTOOL_LDFLAGS="-static-libtool-libs" \
