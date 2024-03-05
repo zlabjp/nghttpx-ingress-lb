@@ -2785,7 +2785,7 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 			err error
 		)
 
-		if len(ticketKey) == 0 {
+		if len(quicKM) == 0 {
 			key, err = nghttpx.NewInitialQUICKeyingMaterials()
 		} else {
 			key, err = nghttpx.UpdateQUICKeyingMaterials(quicKM)
