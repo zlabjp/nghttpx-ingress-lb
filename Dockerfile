@@ -87,11 +87,11 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.60.0 https://gith
 
 FROM gcr.io/distroless/base-nossl-debian12:latest
 
-COPY --from=build /usr/local/bin/nghttpx /usr/local/bin/
-COPY --from=build /usr/local/lib/nghttp2/reuseport_kern.o \
+COPY --from=build --link /usr/local/bin/nghttpx /usr/local/bin/
+COPY --from=build --link /usr/local/lib/nghttp2/reuseport_kern.o \
     /usr/local/lib/nghttp2/
-COPY image/var/log/nghttpx /var/log/nghttpx
-COPY nghttpx-ingress-controller fetch-ocsp-response cat-ocsp-resp /
+COPY --link image/var/log/nghttpx /var/log/nghttpx
+COPY --link nghttpx-ingress-controller fetch-ocsp-response cat-ocsp-resp /
 
 WORKDIR /
 
