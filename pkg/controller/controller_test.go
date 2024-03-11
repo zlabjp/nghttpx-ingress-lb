@@ -1551,7 +1551,7 @@ func TestGetLoadBalancerIngressSelector(t *testing.T) {
 			f.preparePod(po1)
 			f.setupStore()
 
-			lbIngs, err := f.lc.getLoadBalancerIngressSelector(context.Background(), labels.Set(defaultIngPodLables).AsSelector())
+			lbIngs, err := f.lc.getLoadBalancerIngressSelector(context.Background(), labels.ValidatedSetSelector(defaultIngPodLables))
 
 			f.verifyActions()
 

@@ -796,7 +796,7 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 
 	if !lbc.internalDefaultBackend {
 		if svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name); err == nil {
-			if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
+			if labels.ValidatedSetSelector(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
 				log.V(4).Info("Referenced by default Service", "pod", klog.KObj(pod), "service", lbc.defaultSvc)
 				return true
 			}
@@ -816,7 +816,7 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 		if !lbc.noDefaultBackendOverride {
 			if isb := getDefaultBackendService(ing); isb != nil {
 				if svc, err := lbc.svcLister.Services(pod.Namespace).Get(isb.Name); err == nil {
-					if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
+					if labels.ValidatedSetSelector(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
 						log.V(4).Info("Referenced by Ingress", "pod", klog.KObj(pod),
 							"ingress", klog.KObj(ing), "service", klog.KObj(svc))
 						return true
@@ -839,7 +839,7 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 				if err != nil {
 					continue
 				}
-				if labels.Set(svc.Spec.Selector).AsSelector().Matches(labels.Set(pod.Labels)) {
+				if labels.ValidatedSetSelector(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
 					log.V(4).Info("Referenced by Ingress", "pod", klog.KObj(pod),
 						"ingress", klog.KObj(ing), "service", klog.KObj(svc))
 					return true
