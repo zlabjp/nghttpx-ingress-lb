@@ -126,7 +126,7 @@ func podLabelSelector(labelSet map[string]string) labels.Selector {
 		}
 		l[k] = v
 	}
-	return labels.Set(l).AsSelector()
+	return labels.ValidatedSetSelector(l)
 }
 
 // validateIngressClass checks whether this controller should process ing or not.
