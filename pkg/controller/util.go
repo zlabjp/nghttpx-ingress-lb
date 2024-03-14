@@ -67,11 +67,13 @@ func uniqLoadBalancerIngress(a []networkingv1.IngressLoadBalancerIngress) []netw
 	if len(a) == 0 {
 		return a
 	}
+
 	p := 0
 	for i := 1; i < len(a); i++ {
 		if a[p].IP == a[i].IP && a[p].Hostname == a[i].Hostname {
 			continue
 		}
+
 		p++
 		if p != i {
 			a[p] = a[i]
@@ -124,8 +126,10 @@ func podLabelSelector(labelSet map[string]string) labels.Selector {
 		case appsv1.DefaultDeploymentUniqueLabelKey:
 			continue
 		}
+
 		l[k] = v
 	}
+
 	return labels.ValidatedSetSelector(l)
 }
 
@@ -140,11 +144,13 @@ func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingres
 			log.Error(err, "Unable to get IngressClass", "ingressClass", ing.Spec.IngressClassName)
 			return false
 		}
+
 		if ingClass.Spec.Controller != ingressClassController {
 			log.V(4).Info("Skip Ingress", "ingress", klog.KObj(ing), "ingressClass", klog.KObj(ingClass),
 				"controller", ingClass.Spec.Controller)
 			return false
 		}
+
 		return true
 	}
 
@@ -171,6 +177,7 @@ func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingres
 				"ingressClass", klog.KObj(ingClass), "controller", ingClass.Spec.Controller)
 			return false
 		}
+
 		return true
 	}
 
@@ -196,6 +203,7 @@ func ingressLoadBalancerIngressFromService(svc *corev1.Service) []networkingv1.I
 	}
 
 	i := len(svc.Status.LoadBalancer.Ingress)
+
 	for _, ip := range svc.Spec.ExternalIPs {
 		lbIngs[i].IP = ip
 		i++
@@ -231,5 +239,6 @@ func calculateCertificateHash(cert, key []byte) []byte {
 	h := sha256.New()
 	h.Write(cert)
 	h.Write(key)
+
 	return h.Sum(nil)
 }

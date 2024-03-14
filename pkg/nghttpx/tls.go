@@ -149,6 +149,7 @@ func PemsShareSamePaths(a, b *TLSCred) bool {
 func SortPems(pems []*TLSCred) {
 	sort.Slice(pems, func(i, j int) bool {
 		lhs, rhs := pems[i], pems[j]
+
 		return lhs.Key.Path < rhs.Key.Path || (lhs.Key.Path == rhs.Key.Path && lhs.Cert.Path < rhs.Cert.Path) ||
 			(lhs.Key.Path == rhs.Key.Path && lhs.Cert.Path == rhs.Cert.Path &&
 				((lhs.OCSPResp == nil && rhs.OCSPResp != nil) ||
@@ -162,8 +163,10 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 	if len(pems) == 0 {
 		return pems
 	}
+
 	left := pems[1:]
 	j := 0
+
 	for i := range left {
 		a := pems[j]
 		b := left[i]
@@ -171,11 +174,14 @@ func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
 		if PemsShareSamePaths(a, b) {
 			continue
 		}
+
 		j++
+
 		if j <= i {
 			pems[j] = left[i]
 		}
 	}
+
 	return pems[:j+1]
 }
 
@@ -217,10 +223,12 @@ func readLeafCertificate(certPEM []byte) ([]byte, error) {
 		if block == nil {
 			return nil, errCertNotFound
 		}
+
 		if block.Type != "CERTIFICATE" {
 			certPEM = rest
 			continue
 		}
+
 		return block.Bytes, nil
 	}
 }
@@ -228,6 +236,7 @@ func readLeafCertificate(certPEM []byte) ([]byte, error) {
 // NormalizePEM reads series of PEM encoded data and re-encode them in PEM format to remove anomalies.
 func NormalizePEM(data []byte) ([]byte, error) {
 	var dst bytes.Buffer
+
 	for {
 		p, rest := pem.Decode(data)
 		if p == nil {
@@ -240,6 +249,7 @@ func NormalizePEM(data []byte) ([]byte, error) {
 			return nil, err
 		}
 	}
+
 	return dst.Bytes(), nil
 }
 

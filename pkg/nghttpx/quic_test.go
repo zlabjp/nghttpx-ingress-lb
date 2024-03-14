@@ -19,9 +19,11 @@ func TestCreateQUICSecretFile(t *testing.T) {
 	if got, want := f.Path, "/foo/bar/quic-secret.txt"; got != want {
 		t.Errorf("f.Path = %v, want %v", got, want)
 	}
+
 	if got, want := f.Content, content; !bytes.Equal(got, want) {
 		t.Errorf("f.Content = %q, want %q", got, want)
 	}
+
 	if got, want := hex.EncodeToString(f.Checksum), checksum; got != want {
 		t.Errorf("f.Checksum = %v, want %v", got, want)
 	}
@@ -86,6 +88,7 @@ func TestVerifyQUICKeyingMaterials(t *testing.T) {
 				if !tt.wantErr {
 					t.Fatalf("verifyQUICKeyingMaterials: %v", err)
 				}
+
 				return
 			}
 

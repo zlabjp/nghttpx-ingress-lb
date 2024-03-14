@@ -283,6 +283,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		f := lbc.watchNSInformers.Networking().V1().Ingresses()
 		lbc.ingLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lbc.addIngressNotification),
 			UpdateFunc: updateFuncContext(ctx, lbc.updateIngressNotification),
@@ -291,6 +292,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			log.Error(err, "Unable to add Ingress event handler")
 			return nil, err
 		}
+
 		lbc.ingIndexer = inf.GetIndexer()
 	}
 
@@ -298,6 +300,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		f := lbc.allNSInformers.Discovery().V1().EndpointSlices()
 		lbc.epSliceLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lbc.addEndpointSliceNotification),
 			UpdateFunc: updateFuncContext(ctx, lbc.updateEndpointSliceNotification),
@@ -306,6 +309,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			log.Error(err, "Unable to add EndpointSlice event handler")
 			return nil, err
 		}
+
 		lbc.epSliceIndexer = inf.GetIndexer()
 	}
 
@@ -313,6 +317,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		f := lbc.allNSInformers.Core().V1().Services()
 		lbc.svcLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lbc.addServiceNotification),
 			UpdateFunc: updateFuncContext(ctx, lbc.updateServiceNotification),
@@ -321,6 +326,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			log.Error(err, "Unable to add Service event handler")
 			return nil, err
 		}
+
 		lbc.svcIndexer = inf.GetIndexer()
 	}
 
@@ -328,6 +334,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		f := lbc.allNSInformers.Core().V1().Secrets()
 		lbc.secretLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lbc.addSecretNotification),
 			UpdateFunc: updateFuncContext(ctx, lbc.updateSecretNotification),
@@ -336,6 +343,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			log.Error(err, "Unable to add Secret event handler")
 			return nil, err
 		}
+
 		lbc.secretIndexer = inf.GetIndexer()
 	}
 
@@ -343,6 +351,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		f := lbc.allNSInformers.Core().V1().Pods()
 		lbc.podLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lbc.addPodNotification),
 			UpdateFunc: updateFuncContext(ctx, lbc.updatePodNotification),
@@ -351,6 +360,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			log.Error(err, "Unable to add Pod event handler")
 			return nil, err
 		}
+
 		lbc.podIndexer = inf.GetIndexer()
 	}
 
@@ -358,6 +368,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		f := lbc.allNSInformers.Networking().V1().IngressClasses()
 		lbc.ingClassLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lbc.addIngressClassNotification),
 			UpdateFunc: updateFuncContext(ctx, lbc.updateIngressClassNotification),
@@ -366,6 +377,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			log.Error(err, "Unable to add IngressClass event handler")
 			return nil, err
 		}
+
 		lbc.ingClassIndexer = inf.GetIndexer()
 	}
 
@@ -379,6 +391,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		f := lbc.cmNSInformers.Core().V1().ConfigMaps()
 		lbc.cmLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lbc.addConfigMapNotification),
 			UpdateFunc: updateFuncContext(ctx, lbc.updateConfigMapNotification),
@@ -387,6 +400,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			log.Error(err, "Unable to add ConfigMap event handler")
 			return nil, err
 		}
+
 		lbc.cmIndexer = inf.GetIndexer()
 	}
 
@@ -415,9 +429,11 @@ func (lbc *LoadBalancerController) addIngressNotification(ctx context.Context, o
 	log := klog.FromContext(ctx)
 
 	ing := obj.(*networkingv1.Ingress)
+
 	if !lbc.validateIngressClass(ctx, ing) {
 		return
 	}
+
 	log.V(4).Info("Ingress added", "ingress", klog.KObj(ing))
 	lbc.enqueue()
 }
@@ -427,9 +443,11 @@ func (lbc *LoadBalancerController) updateIngressNotification(ctx context.Context
 
 	oldIng := old.(*networkingv1.Ingress)
 	curIng := cur.(*networkingv1.Ingress)
+
 	if !lbc.validateIngressClass(ctx, oldIng) && !lbc.validateIngressClass(ctx, curIng) {
 		return
 	}
+
 	log.V(4).Info("Ingress updated", "ingress", klog.KObj(curIng))
 	lbc.enqueue()
 }
@@ -444,15 +462,18 @@ func (lbc *LoadBalancerController) deleteIngressNotification(ctx context.Context
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		ing, ok = tombstone.Obj.(*networkingv1.Ingress)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not an Ingress", "object", obj)
 			return
 		}
 	}
+
 	if !lbc.validateIngressClass(ctx, ing) {
 		return
 	}
+
 	log.V(4).Info("Ingress deleted", "ingress", klog.KObj(ing))
 	lbc.enqueue()
 }
@@ -483,12 +504,14 @@ func (lbc *LoadBalancerController) deleteIngressClassNotification(ctx context.Co
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		ingClass, ok = tombstone.Obj.(*networkingv1.IngressClass)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not IngressClass", "object", obj)
 			return
 		}
 	}
+
 	log.V(4).Info("IngressClass deleted", "ingressClass", klog.KObj(ingClass))
 	lbc.enqueue()
 }
@@ -497,9 +520,11 @@ func (lbc *LoadBalancerController) addEndpointSliceNotification(ctx context.Cont
 	log := klog.FromContext(ctx)
 
 	es := obj.(*discoveryv1.EndpointSlice)
+
 	if !lbc.endpointSliceReferenced(ctx, es) {
 		return
 	}
+
 	log.V(4).Info("EndpointSlice added", "endpointSlice", klog.KObj(es))
 	lbc.enqueue()
 }
@@ -509,9 +534,11 @@ func (lbc *LoadBalancerController) updateEndpointSliceNotification(ctx context.C
 
 	oldES := old.(*discoveryv1.EndpointSlice)
 	curES := cur.(*discoveryv1.EndpointSlice)
+
 	if !lbc.endpointSliceReferenced(ctx, oldES) && !lbc.endpointSliceReferenced(ctx, curES) {
 		return
 	}
+
 	log.V(4).Info("EndpointSlice updated", "endpointSlice", klog.KObj(curES))
 	lbc.enqueue()
 }
@@ -526,15 +553,18 @@ func (lbc *LoadBalancerController) deleteEndpointSliceNotification(ctx context.C
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		es, ok = tombstone.Obj.(*discoveryv1.EndpointSlice)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not EndpointSlice", "object", obj)
 			return
 		}
 	}
+
 	if !lbc.endpointSliceReferenced(ctx, es) {
 		return
 	}
+
 	log.V(4).Info("EndpointSlice deleted", "endpointSlice", klog.KObj(es))
 	lbc.enqueue()
 }
@@ -588,15 +618,18 @@ func (lbc *LoadBalancerController) deleteServiceNotification(ctx context.Context
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		svc, ok = tombstone.Obj.(*corev1.Service)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not Service", "object", obj)
 			return
 		}
 	}
+
 	if !lbc.serviceReferenced(ctx, namespacedName(svc)) {
 		return
 	}
+
 	log.V(4).Info("Service deleted", "service", klog.KObj(svc))
 	lbc.enqueue()
 }
@@ -623,17 +656,20 @@ func (lbc *LoadBalancerController) serviceReferenced(ctx context.Context, svc ty
 		if !lbc.validateIngressClass(ctx, ing) {
 			continue
 		}
+
 		if !lbc.noDefaultBackendOverride {
 			if isb := getDefaultBackendService(ing); isb != nil && svc.Name == isb.Name {
 				log.V(4).Info("Referenced by Ingress", "service", svc, "ingress", klog.KObj(ing))
 				return true
 			}
 		}
+
 		for i := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
 			if rule.HTTP == nil {
 				continue
 			}
+
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
 				if isb := path.Backend.Service; isb != nil && svc.Name == isb.Name {
@@ -643,6 +679,7 @@ func (lbc *LoadBalancerController) serviceReferenced(ctx context.Context, svc ty
 			}
 		}
 	}
+
 	return false
 }
 
@@ -650,6 +687,7 @@ func getDefaultBackendService(ing *networkingv1.Ingress) *networkingv1.IngressSe
 	if ing.Spec.DefaultBackend == nil {
 		return nil
 	}
+
 	return ing.Spec.DefaultBackend.Service
 }
 
@@ -670,6 +708,7 @@ func (lbc *LoadBalancerController) updateSecretNotification(ctx context.Context,
 
 	oldS := old.(*corev1.Secret)
 	curS := cur.(*corev1.Secret)
+
 	if !lbc.secretReferenced(ctx, oldS) && !lbc.secretReferenced(ctx, curS) {
 		return
 	}
@@ -688,15 +727,18 @@ func (lbc *LoadBalancerController) deleteSecretNotification(ctx context.Context,
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		s, ok = tombstone.Obj.(*corev1.Secret)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not a Secret", "object", obj)
 			return
 		}
 	}
+
 	if !lbc.secretReferenced(ctx, s) {
 		return
 	}
+
 	log.V(4).Info("Secret deleted", "secret", klog.KObj(s))
 	lbc.enqueue()
 }
@@ -728,12 +770,14 @@ func (lbc *LoadBalancerController) deleteConfigMapNotification(ctx context.Conte
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		c, ok = tombstone.Obj.(*corev1.ConfigMap)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not a ConfigMap", "object", obj)
 			return
 		}
 	}
+
 	log.V(4).Info("ConfigMap deleted", "configMap", klog.KObj(c))
 	lbc.enqueue()
 }
@@ -777,15 +821,18 @@ func (lbc *LoadBalancerController) deletePodNotification(ctx context.Context, ob
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		pod, ok = tombstone.Obj.(*corev1.Pod)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not Pod", "object", obj)
 			return
 		}
 	}
+
 	if !lbc.podReferenced(ctx, pod) {
 		return
 	}
+
 	log.V(4).Info("Pod deleted", "pod", klog.KObj(pod))
 	lbc.enqueue()
 }
@@ -813,6 +860,7 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 		if !lbc.validateIngressClass(ctx, ing) {
 			continue
 		}
+
 		if !lbc.noDefaultBackendOverride {
 			if isb := getDefaultBackendService(ing); isb != nil {
 				if svc, err := lbc.svcLister.Services(pod.Namespace).Get(isb.Name); err == nil {
@@ -824,21 +872,26 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 				}
 			}
 		}
+
 		for i := range ing.Spec.Rules {
 			rule := &ing.Spec.Rules[i]
 			if rule.HTTP == nil {
 				continue
 			}
+
 			for i := range rule.HTTP.Paths {
 				path := &rule.HTTP.Paths[i]
+
 				isb := path.Backend.Service
 				if isb == nil {
 					continue
 				}
+
 				svc, err := lbc.svcLister.Services(pod.Namespace).Get(isb.Name)
 				if err != nil {
 					continue
 				}
+
 				if labels.ValidatedSetSelector(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
 					log.V(4).Info("Referenced by Ingress", "pod", klog.KObj(pod),
 						"ingress", klog.KObj(ing), "service", klog.KObj(svc))
@@ -905,6 +958,7 @@ func (lbc *LoadBalancerController) getConfigMap(ctx context.Context, cmKey *type
 
 		return nil, err
 	}
+
 	return cm, nil
 }
 
@@ -927,6 +981,7 @@ func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
+
 	ingConfig, err := lbc.createIngressConfig(ctx, ings)
 	if err != nil {
 		return err
@@ -941,9 +996,8 @@ func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
 
 	secret, err := lbc.secretLister.Secrets(lbc.nghttpxSecret.Namespace).Get(lbc.nghttpxSecret.Name)
 	if err != nil {
-		log.Error(err, "nghttpx secret not found")
-
 		// Continue to processing so that missing Secret does not prevent the controller from reconciling new configuration.
+		log.Error(err, "nghttpx secret not found")
 	} else {
 		if lbc.shareTLSTicketKey {
 			ticketKey, ok := secret.Data[nghttpxTLSTicketKeySecretKey]
@@ -1002,6 +1056,7 @@ end
 
 App.new
 `)
+
 		return &nghttpx.Upstream{
 			Name:             "internal-default-backend",
 			RedirectIfNotTLS: lbc.defaultTLSSecret != nil,
@@ -1024,25 +1079,32 @@ App.new
 		RedirectIfNotTLS: lbc.defaultTLSSecret != nil,
 		Affinity:         nghttpx.AffinityNone,
 	}
+
 	svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name)
 	if err != nil {
 		log.Error(err, "Unable to get Service", "service", svcKey)
+
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
+
 		return upstream
 	}
 
 	if len(svc.Spec.Ports) == 0 {
 		log.Error(nil, "Service has no ports", "service", svcKey)
+
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
+
 		return upstream
 	}
 
 	eps, err := lbc.getEndpoints(ctx, svc, &svc.Spec.Ports[0], &nghttpx.BackendConfig{})
 	if err != nil {
 		log.Error(err, "Unable to get endpoints for Service", "service", svcKey)
+
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
 	} else if len(eps) == 0 {
 		log.Error(nil, "Service does not have any active endpoints", "service", svcKey)
+
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
 	} else {
 		upstream.Backends = append(upstream.Backends, eps...)
@@ -1098,6 +1160,7 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 		log.V(4).Info("Processing Ingress")
 
 		var requireTLS bool
+
 		ingPems, err := lbc.getTLSCredFromIngress(ctx, ing)
 		if err != nil {
 			log.Error(err, "Ingress is disabled because its TLS Secret cannot be processed")
@@ -1138,6 +1201,7 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 					log.Error(nil, "Path includes fragment", "path", reqPath)
 					reqPath = reqPath[:idx]
 				}
+
 				if idx := strings.Index(reqPath, "?"); idx != -1 {
 					log.Error(nil, "Path includes query", "path", reqPath)
 					reqPath = reqPath[:idx]
@@ -1176,6 +1240,7 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 				break
 			}
 		}
+
 		ingConfig.SubTLSCred = pems
 	} else if len(pems) > 0 {
 		ingConfig.TLS = true
@@ -1197,6 +1262,7 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 		if defaultUpstream == nil {
 			defaultUpstream = lbc.getDefaultUpstream(ctx)
 		}
+
 		upstreams = append(upstreams, defaultUpstream)
 	}
 
@@ -1452,6 +1518,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *netw
 	log := klog.FromContext(ctx)
 
 	var normalizedPath string
+
 	switch {
 	case path == "":
 		normalizedPath = "/"
@@ -1461,12 +1528,15 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *netw
 		// nghttpx requires ':' to be percent-encoded.  Otherwise, ':' is recognized as pattern separator.
 		normalizedPath = strings.ReplaceAll(path, ":", "%3A")
 	}
+
 	var portStr string
+
 	if isb.Port.Name != "" {
 		portStr = isb.Port.Name
 	} else {
 		portStr = strconv.FormatInt(int64(isb.Port.Number), 10)
 	}
+
 	pc := pcm.ConfigFor(host, normalizedPath)
 
 	if pc.GetAffinity() == nghttpx.AffinityCookie && pc.GetAffinityCookieName() == "" {
@@ -1505,6 +1575,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *netw
 	}
 
 	svcKey := strings.Join([]string{ing.Namespace, isb.Name}, "/")
+
 	svc, err := lbc.svcLister.Services(ing.Namespace).Get(isb.Name)
 	if err != nil {
 		return nil, fmt.Errorf("error getting Service %v from the cache: %w", svcKey, err)
@@ -1518,11 +1589,13 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *netw
 		// servicePort.TargetPort could be a string.  This is really messy.
 
 		var key string
+
 		switch {
 		case isb.Port.Name != "":
 			if isb.Port.Name != servicePort.Name {
 				continue
 			}
+
 			key = isb.Port.Name
 		case isb.Port.Number == servicePort.Port:
 			key = strconv.FormatInt(int64(isb.Port.Number), 10)
@@ -1537,12 +1610,14 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *netw
 			log.Error(err, "Unable to get endpoints", "service", svcKey)
 			break
 		}
+
 		if len(eps) == 0 {
 			log.Error(nil, "No active endpoints found", "service", svcKey)
 			break
 		}
 
 		ups.Backends = append(ups.Backends, eps...)
+
 		break
 	}
 
@@ -1559,10 +1634,12 @@ func (lbc *LoadBalancerController) getTLSCredFromSecret(ctx context.Context, key
 	if err != nil {
 		return nil, fmt.Errorf("unable to get TLS secret %v: %w", key, err)
 	}
+
 	tlsCred, err := lbc.createTLSCredFromSecret(ctx, secret)
 	if err != nil {
 		return nil, err
 	}
+
 	return tlsCred, nil
 }
 
@@ -1576,10 +1653,12 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ctx context.Context, in
 
 	for i := range ing.Spec.TLS {
 		tls := &ing.Spec.TLS[i]
+
 		secret, err := lbc.secretLister.Secrets(ing.Namespace).Get(tls.SecretName)
 		if err != nil {
 			return nil, fmt.Errorf("unable to retrieve Secret %v/%v for Ingress %v/%v: %w", ing.Namespace, tls.SecretName, ing.Namespace, ing.Name, err)
 		}
+
 		tlsCred, err := lbc.createTLSCredFromSecret(ctx, secret)
 		if err != nil {
 			return nil, err
@@ -1597,6 +1676,7 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(ctx context.Context, 
 	if !ok {
 		return nil, fmt.Errorf("Secret %v/%v has no certificate", secret.Namespace, secret.Name)
 	}
+
 	key, ok := secret.Data[corev1.TLSPrivateKeyKey]
 	if !ok {
 		return nil, fmt.Errorf("Secret %v/%v has no private key", secret.Namespace, secret.Name)
@@ -1722,6 +1802,7 @@ func (lbc *LoadBalancerController) secretReferenced(ctx context.Context, s *core
 		if !lbc.validateIngressClass(ctx, ing) {
 			continue
 		}
+
 		for i := range ing.Spec.TLS {
 			tls := &ing.Spec.TLS[i]
 			if tls.SecretName == s.Name {
@@ -1729,6 +1810,7 @@ func (lbc *LoadBalancerController) secretReferenced(ctx context.Context, s *core
 			}
 		}
 	}
+
 	return false
 }
 
@@ -1858,6 +1940,7 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(ctx context.Con
 				if ep.Conditions.Ready != nil && !*ep.Conditions.Ready {
 					continue
 				}
+
 				ref := ep.TargetRef
 				if ref == nil || ref.Kind != "Pod" {
 					continue
@@ -1928,6 +2011,7 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *corev1.ServicePort
 		if err != nil {
 			return 0, fmt.Errorf("unable to find named port %v in Pod spec: %w", svcPort.TargetPort.String(), err)
 		}
+
 		if *epPort.Port == port {
 			return *epPort.Port, nil
 		}
@@ -1952,6 +2036,7 @@ func (lbc *LoadBalancerController) getNamedPortFromPod(ref *corev1.ObjectReferen
 	if err != nil {
 		return 0, fmt.Errorf("unable to find port %v from Pod %v/%v: %w", servicePort.TargetPort.String(), pod.Namespace, pod.Name, err)
 	}
+
 	return port, nil
 }
 
@@ -1999,8 +2084,10 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
+
 		if err := lbc.nghttpx.Start(ctrlCtx, lbc.nghttpxExecPath, nghttpx.ConfigPath(lbc.nghttpxConfDir)); err != nil {
 			log.Error(err, "Unable to start nghttpx")
 		}
@@ -2073,6 +2160,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 			if err != nil {
 				log.Error(err, "Unable to create LeaderElector")
 				cancel()
+
 				return
 			}
 
@@ -2204,6 +2292,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		f := lc.watchNSInformers.Networking().V1().Ingresses()
 		lc.ingLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lc.addIngressNotification),
 			UpdateFunc: updateFuncContext(ctx, lc.updateIngressNotification),
@@ -2211,6 +2300,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			log.Error(err, "Unable to add Ingress event handler")
 			return nil, err
 		}
+
 		lc.ingIndexer = inf.GetIndexer()
 	}
 
@@ -2218,6 +2308,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		f := lc.podNSInformers.Core().V1().Pods()
 		lc.podLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lc.addPodNotification),
 			UpdateFunc: updateFuncContext(ctx, lc.updatePodNotification),
@@ -2226,6 +2317,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			log.Error(err, "Unable to add Pod event handler")
 			return nil, err
 		}
+
 		lc.podIndexer = inf.GetIndexer()
 	}
 
@@ -2233,6 +2325,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		f := lc.secretInformers.Core().V1().Secrets()
 		lc.secretLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lc.addSecretNotification),
 			UpdateFunc: updateFuncContext(ctx, lc.updateSecretNotification),
@@ -2241,6 +2334,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			log.Error(err, "Unable to add Secret event handler")
 			return nil, err
 		}
+
 		lc.secretIndexer = inf.GetIndexer()
 	}
 
@@ -2251,9 +2345,11 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 				opts.FieldSelector = "metadata.name=" + lbc.publishService.Name
 			}),
 		)
+
 		f := lc.svcInformers.Core().V1().Services()
 		lc.svcLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lc.addServiceNotification),
 			UpdateFunc: updateFuncContext(ctx, lc.updateServiceNotification),
@@ -2262,6 +2358,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			log.Error(err, "Unable to add Service event handler")
 			return nil, err
 		}
+
 		lc.svcIndexer = inf.GetIndexer()
 	}
 
@@ -2269,6 +2366,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		f := lc.allNSInformers.Networking().V1().IngressClasses()
 		lc.ingClassLister = f.Lister()
 		inf := f.Informer()
+
 		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    addFuncContext(ctx, lc.addIngressClassNotification),
 			UpdateFunc: updateFuncContext(ctx, lc.updateIngressClassNotification),
@@ -2276,6 +2374,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		}); err != nil {
 			log.Error(err, "Unable to add IngressClass event handler")
 		}
+
 		lc.ingClassIndexer = inf.GetIndexer()
 	}
 
@@ -2344,6 +2443,7 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 	log.Info("Shutting down leader controller")
 
 	lc.ingQueue.ShutDown()
+
 	if lc.lbc.http3 {
 		lc.secretQueue.ShutDown()
 	}
@@ -2357,9 +2457,11 @@ func (lc *LeaderController) addIngressNotification(ctx context.Context, obj any)
 	log := klog.FromContext(ctx)
 
 	ing := obj.(*networkingv1.Ingress)
+
 	if !lc.validateIngressClass(ctx, ing) {
 		return
 	}
+
 	log.V(4).Info("Ingress added", "ingress", klog.KObj(ing))
 	lc.enqueueIngress(ing)
 }
@@ -2369,9 +2471,11 @@ func (lc *LeaderController) updateIngressNotification(ctx context.Context, old, 
 
 	oldIng := old.(*networkingv1.Ingress)
 	curIng := cur.(*networkingv1.Ingress)
+
 	if !lc.validateIngressClass(ctx, oldIng) && !lc.validateIngressClass(ctx, curIng) {
 		return
 	}
+
 	log.V(4).Info("Ingress updated", "ingress", klog.KObj(curIng))
 	lc.enqueueIngress(curIng)
 }
@@ -2406,6 +2510,7 @@ func (lc *LeaderController) deletePodNotification(ctx context.Context, obj any) 
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		pod, ok = tombstone.Obj.(*corev1.Pod)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not Pod", "object", obj)
@@ -2448,6 +2553,7 @@ func (lc *LeaderController) deleteServiceNotification(ctx context.Context, obj a
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		svc, ok = tombstone.Obj.(*corev1.Service)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not Service", "object", obj)
@@ -2488,6 +2594,7 @@ func (lc *LeaderController) deleteSecretNotification(ctx context.Context, obj an
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		s, ok = tombstone.Obj.(*corev1.Secret)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not a Secret", "object", obj)
@@ -2525,12 +2632,14 @@ func (lc *LeaderController) deleteIngressClassNotification(ctx context.Context, 
 			log.Error(nil, "Unable to get object from tombstone", "object", obj)
 			return
 		}
+
 		ingClass, ok = tombstone.Obj.(*networkingv1.IngressClass)
 		if !ok {
 			log.Error(nil, "Tombstone contained object that is not IngressClass", "object", obj)
 			return
 		}
 	}
+
 	log.V(4).Info("IngressClass deleted", "ingressClass", klog.KObj(ingClass))
 	lc.enqueueIngressWithIngressClass(ctx, ingClass)
 }
@@ -2561,6 +2670,7 @@ func (lc *LeaderController) enqueueIngressWithIngressClass(ctx context.Context, 
 			if lc.lbc.requireIngressClass {
 				continue
 			}
+
 			if !defaultIngClass {
 				continue
 			}
@@ -2765,6 +2875,7 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 		} else {
 			key, err = nghttpx.UpdateTLSTicketKey(ticketKey)
 		}
+
 		if err != nil {
 			return err
 		}
@@ -2790,6 +2901,7 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 		} else {
 			key, err = nghttpx.UpdateQUICKeyingMaterials(quicKM)
 		}
+
 		if err != nil {
 			return err
 		}
@@ -2977,6 +3089,7 @@ func (lc *LeaderController) getLoadBalancerIngress(ctx context.Context) ([]netwo
 
 	if lc.lbc.publishService == nil {
 		var err error
+
 		lbIngs, err = lc.getLoadBalancerIngressSelector(ctx, podLabelSelector(lc.lbc.pod.Labels))
 		if err != nil {
 			return nil, fmt.Errorf("unable to get Pod or Node IP of Ingress controller: %w", err)
@@ -3035,6 +3148,7 @@ func (lc *LeaderController) getLoadBalancerIngressSelector(ctx context.Context, 
 		} else {
 			lbIng.Hostname = externalIP
 		}
+
 		lbIngs = append(lbIngs, lbIng)
 	}
 
@@ -3048,20 +3162,24 @@ func (lc *LeaderController) getPodNodeAddress(pod *corev1.Pod) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to get Node %v for Pod %v/%v from lister: %w", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
 	}
+
 	var externalIP string
+
 	for i := range node.Status.Addresses {
 		address := &node.Status.Addresses[i]
 		if address.Type == corev1.NodeExternalIP {
 			if address.Address == "" {
 				continue
 			}
+
 			externalIP = address.Address
+
 			break
 		}
 
 		if externalIP == "" && (lc.lbc.allowInternalIP && address.Type == corev1.NodeInternalIP) {
-			externalIP = address.Address
 			// Continue to the next iteration because we may encounter v1.NodeExternalIP later.
+			externalIP = address.Address
 		}
 	}
 

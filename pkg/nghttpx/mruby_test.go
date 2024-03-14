@@ -20,9 +20,11 @@ func TestCreatePerPatternMrubyChecksumFile(t *testing.T) {
 	if got, want := f.Path, fmt.Sprintf("/foo/bar/mruby/%v.rb", checksum); got != want {
 		t.Errorf("f.path = %v, want %v", got, want)
 	}
+
 	if got, want := f.Content, content; !bytes.Equal(got, want) {
 		t.Errorf("f.Content = %q, want %q", got, want)
 	}
+
 	if got, want := hex.EncodeToString(f.Checksum), checksum; got != want {
 		t.Errorf("f.Checksum = %v, want %v", got, want)
 	}

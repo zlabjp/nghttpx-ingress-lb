@@ -52,6 +52,7 @@ const (
 // ReadConfig obtains the configuration defined by the user merged with the defaults.
 func ReadConfig(ingConfig *IngressConfig, config *corev1.ConfigMap) {
 	ingConfig.ExtraConfig = config.Data[NghttpxExtraConfigKey]
+
 	if mrubyFileContent, ok := config.Data[NghttpxMrubyFileContentKey]; ok {
 		b := []byte(mrubyFileContent)
 		ingConfig.MrubyFile = &ChecksumFile{
@@ -73,11 +74,13 @@ func needsReload(ctx context.Context, filename string, newCfg []byte) (bool, err
 		if os.IsNotExist(err) {
 			return true, nil
 		}
+
 		return false, err
 	}
 
 	oldCfg, err := io.ReadAll(in)
 	in.Close()
+
 	if err != nil {
 		return false, err
 	}
@@ -92,6 +95,7 @@ func needsReload(ctx context.Context, filename string, newCfg []byte) (bool, err
 			log.Error(err, "Error while computing diff")
 			return true, nil
 		}
+
 		log.Info("nghttpx configuration diff", "path", filename, "diff", dData)
 	}
 
@@ -106,6 +110,7 @@ func diff(b1, b2 []byte) (string, error) {
 		ToFile:   "new",
 		Context:  3,
 	}
+
 	return difflib.GetUnifiedDiffString(d)
 }
 
@@ -120,8 +125,10 @@ func FixupBackendConfig(ctx context.Context, config *BackendConfig) {
 		log.Error(nil, "Unrecognized backend protocol", "protocol", config.GetProto())
 		config.SetProto(ProtocolH1)
 	}
+
 	if config.Weight != nil {
 		weight := config.GetWeight()
+
 		switch {
 		case weight < 1:
 			log.Error(nil, "Invalid weight.  It must be [1, 256], inclusive", "weight", weight)
@@ -138,18 +145,23 @@ func ApplyDefaultBackendConfig(ctx context.Context, config *BackendConfig, defau
 	log := klog.FromContext(ctx)
 
 	log.V(4).Info("Applying default-backend-config annotation")
+
 	if defaultConfig.Proto != nil && config.Proto == nil {
 		config.SetProto(*defaultConfig.Proto)
 	}
+
 	if defaultConfig.TLS != nil && config.TLS == nil {
 		config.SetTLS(*defaultConfig.TLS)
 	}
+
 	if defaultConfig.SNI != nil && config.SNI == nil {
 		config.SetSNI(*defaultConfig.SNI)
 	}
+
 	if defaultConfig.DNS != nil && config.DNS == nil {
 		config.SetDNS(*defaultConfig.DNS)
 	}
+
 	if defaultConfig.Weight != nil && config.Weight == nil {
 		config.SetWeight(*defaultConfig.Weight)
 	}
@@ -166,6 +178,7 @@ func FixupPathConfig(ctx context.Context, config *PathConfig) {
 		log.Error(nil, "Unsupported affinity method", "affinity", config.GetAffinity())
 		config.SetAffinity(AffinityNone)
 	}
+
 	switch config.GetAffinityCookieSecure() {
 	case AffinityCookieSecureAuto, AffinityCookieSecureYes, AffinityCookieSecureNo:
 		// OK
@@ -173,6 +186,7 @@ func FixupPathConfig(ctx context.Context, config *PathConfig) {
 		log.Error(nil, "Unsupported affinity cookie secure", "cookieSecure", config.GetAffinityCookieSecure())
 		config.SetAffinityCookieSecure(AffinityCookieSecureAuto)
 	}
+
 	switch config.GetAffinityCookieStickiness() {
 	case AffinityCookieStickinessLoose, AffinityCookieStickinessStrict:
 		// OK
@@ -186,33 +200,43 @@ func ApplyDefaultPathConfig(ctx context.Context, config *PathConfig, defaultConf
 	log := klog.FromContext(ctx)
 
 	log.V(4).Info("Applying default-path-config annotation")
+
 	if defaultConfig.Mruby != nil && config.Mruby == nil {
 		config.SetMruby(*defaultConfig.Mruby)
 	}
+
 	if defaultConfig.Affinity != nil && config.Affinity == nil {
 		config.SetAffinity(*defaultConfig.Affinity)
 	}
+
 	if defaultConfig.AffinityCookieName != nil && config.AffinityCookieName == nil {
 		config.SetAffinityCookieName(*defaultConfig.AffinityCookieName)
 	}
+
 	if defaultConfig.AffinityCookiePath != nil && config.AffinityCookiePath == nil {
 		config.SetAffinityCookiePath(*defaultConfig.AffinityCookiePath)
 	}
+
 	if defaultConfig.AffinityCookieSecure != nil && config.AffinityCookieSecure == nil {
 		config.SetAffinityCookieSecure(*defaultConfig.AffinityCookieSecure)
 	}
+
 	if defaultConfig.AffinityCookieStickiness != nil && config.AffinityCookieStickiness == nil {
 		config.SetAffinityCookieStickiness(*defaultConfig.AffinityCookieStickiness)
 	}
+
 	if defaultConfig.ReadTimeout != nil && config.ReadTimeout == nil {
 		config.SetReadTimeout(*defaultConfig.ReadTimeout)
 	}
+
 	if defaultConfig.WriteTimeout != nil && config.WriteTimeout == nil {
 		config.SetWriteTimeout(*defaultConfig.WriteTimeout)
 	}
+
 	if defaultConfig.RedirectIfNotTLS != nil && config.RedirectIfNotTLS == nil {
 		config.SetRedirectIfNotTLS(*defaultConfig.RedirectIfNotTLS)
 	}
+
 	if defaultConfig.DoNotForward != nil && config.DoNotForward == nil {
 		config.SetDoNotForward(*defaultConfig.DoNotForward)
 	}
@@ -224,11 +248,13 @@ func ResolvePathConfig(host, path string, defaultPathConfig *PathConfig, pathCon
 	if c, ok := pathConfig[key]; ok {
 		return c
 	}
+
 	return defaultPathConfig
 }
 
 func WriteFile(path string, content []byte) error {
 	dir := filepath.Dir(path)
+
 	tempFile, err := os.CreateTemp(dir, "nghttpx")
 	if err != nil {
 		return err
@@ -237,11 +263,13 @@ func WriteFile(path string, content []byte) error {
 	if _, err := tempFile.Write(content); err != nil {
 		tempFile.Close()
 		os.Remove(tempFile.Name())
+
 		return err
 	}
 
 	if err := tempFile.Close(); err != nil {
 		os.Remove(tempFile.Name())
+
 		return err
 	}
 
@@ -252,6 +280,7 @@ func WriteFile(path string, content []byte) error {
 func Checksum(b []byte) []byte {
 	h := sha256.New()
 	h.Write(b) // nolint: errcheck
+
 	return h.Sum(nil)
 }
 
@@ -280,9 +309,11 @@ func MkdirAll(path string) error {
 func nghttpxDuration(d time.Duration) string {
 	d = d.Round(time.Millisecond)
 	msec := d.Nanoseconds() / int64(time.Millisecond)
+
 	if msec%1000 == 0 {
 		return strconv.FormatInt(msec/1000, 10)
 	}
+
 	return fmt.Sprintf("%vms", msec)
 }
 

@@ -20,6 +20,7 @@ const (
 // CreateQUICSecretFile creates given QUIC keying materials file.
 func CreateQUICSecretFile(dir string, quicKeyingMaterials []byte) *PrivateChecksumFile {
 	checksum := Checksum(quicKeyingMaterials)
+
 	return &PrivateChecksumFile{
 		Path:     filepath.Join(dir, "quic-secret.txt"),
 		Content:  quicKeyingMaterials,
@@ -44,6 +45,7 @@ func writeQUICSecretFile(ingConfig *IngressConfig) error {
 // VerifyQUICKeyingMaterials verifies that km is a well formatted QUIC keying material.
 func VerifyQUICKeyingMaterials(km []byte) error {
 	sc := bufio.NewScanner(bytes.NewBuffer(km))
+
 	var idBits uint8
 
 	for sc.Scan() {
@@ -156,6 +158,7 @@ func UpdateQUICKeyingMaterialsFunc(km []byte, newKeyingMaterialFunc func() ([]by
 
 	// The last key is the new key generated in the last update.
 	lastKM := keys[len(keys)-1]
+
 	b, err := hex.DecodeString(lastKM[0:2])
 	if err != nil {
 		return nil, err
