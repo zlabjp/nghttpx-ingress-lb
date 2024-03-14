@@ -50,6 +50,7 @@ func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error 
 	lb.cmd = exec.Command(path, "--conf", confPath)
 	lb.cmd.Stdout = os.Stdout
 	lb.cmd.Stderr = os.Stderr
+
 	if err := lb.cmd.Start(); err != nil {
 		log.Error(err, "nghttpx did not start successfully")
 		return err
@@ -61,6 +62,7 @@ func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error 
 		if err := lb.cmd.Wait(); err != nil {
 			log.Error(err, "nghttpx did not finish successfully")
 		}
+
 		cancel()
 	}()
 
@@ -68,10 +70,12 @@ func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error 
 	case <-waitCtx.Done():
 	case <-ctx.Done():
 		log.Info("Sending QUIT signal to nghttpx process to shut down gracefully", "PID", lb.cmd.Process.Pid)
+
 		if err := lb.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
 			log.Error(err, "Unable to send signal to nghttpx process", "PID", lb.cmd.Process.Pid)
 			cancel()
 		}
+
 		<-waitCtx.Done()
 	}
 
@@ -111,23 +115,29 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 		if err != nil {
 			return false, err
 		}
+
 		if err := writeTLSKeyCert(ingressCfg); err != nil {
 			return false, err
 		}
+
 		if err := writeMrubyFile(ingressCfg); err != nil {
 			return false, err
 		}
+
 		if err := writePerPatternMrubyFile(ingressCfg); err != nil {
 			return false, err
 		}
+
 		if err := writeTLSTicketKeyFiles(ingressCfg); err != nil {
 			return false, err
 		}
+
 		if err := writeQUICSecretFile(ingressCfg); err != nil {
 			return false, err
 		}
 
 		log.Info("Change in configuration detected. Reloading...")
+
 		if err := lb.cmd.Process.Signal(syscall.SIGHUP); err != nil {
 			return false, fmt.Errorf("unable to to send signal to nghttpx process (PID %v): %w", lb.cmd.Process.Pid, err)
 		}
@@ -167,9 +177,11 @@ func (lb *LoadBalancer) deleteStaleAssets(ctx context.Context, ingConfig *Ingres
 	if err := lb.deleteStaleTLSAssets(ctx, ingConfig, t); err != nil {
 		return fmt.Errorf("unable to delete stale TLS assets: %w", err)
 	}
+
 	if err := lb.deleteStaleMrubyAssets(ctx, ingConfig, t); err != nil {
 		return fmt.Errorf("unable to delete stale mruby assets: %w", err)
 	}
+
 	return nil
 }
 
@@ -200,6 +212,7 @@ func deleteAssetFiles(ctx context.Context, dir string, t time.Time, staleAssetsT
 		if f.IsDir() {
 			continue
 		}
+
 		path := filepath.Join(dir, f.Name())
 
 		info, err := f.Info()
@@ -213,6 +226,7 @@ func deleteAssetFiles(ctx context.Context, dir string, t time.Time, staleAssetsT
 		}
 
 		log.V(4).Info("Removing stale asset file", "path", path)
+
 		if err := os.Remove(path); err != nil {
 			return err
 		}
@@ -315,6 +329,7 @@ func (lb *LoadBalancer) getNghttpxConfigRevision(ctx context.Context) (int64, er
 	}
 
 	s := r.Data["configRevision"]
+
 	confRev, ok := s.(int64)
 	if !ok {
 		return 0, errors.New("nghttpx configuration API result has non int64 configRevision")

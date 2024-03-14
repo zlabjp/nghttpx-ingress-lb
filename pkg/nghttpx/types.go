@@ -237,6 +237,7 @@ func (pbc *BackendConfig) GetProto() Protocol {
 	if pbc.Proto == nil {
 		return ProtocolH1
 	}
+
 	return *pbc.Proto
 }
 
@@ -249,6 +250,7 @@ func (pbc *BackendConfig) GetTLS() bool {
 	if pbc.TLS == nil {
 		return false
 	}
+
 	return *pbc.TLS
 }
 
@@ -261,6 +263,7 @@ func (pbc *BackendConfig) GetSNI() string {
 	if pbc.SNI == nil {
 		return ""
 	}
+
 	return *pbc.SNI
 }
 
@@ -273,6 +276,7 @@ func (pbc *BackendConfig) GetDNS() bool {
 	if pbc.DNS == nil {
 		return false
 	}
+
 	return *pbc.DNS
 }
 
@@ -285,6 +289,7 @@ func (pbc *BackendConfig) GetWeight() uint32 {
 	if pbc == nil || pbc.Weight == nil {
 		return 0
 	}
+
 	return *pbc.Weight
 }
 
@@ -342,6 +347,7 @@ func (pc *PathConfig) GetMruby() string {
 	if pc == nil || pc.Mruby == nil {
 		return ""
 	}
+
 	return *pc.Mruby
 }
 
@@ -354,6 +360,7 @@ func (pc *PathConfig) GetAffinity() Affinity {
 	if pc == nil || pc.Affinity == nil {
 		return AffinityNone
 	}
+
 	return *pc.Affinity
 }
 
@@ -366,6 +373,7 @@ func (pc *PathConfig) GetAffinityCookieName() string {
 	if pc == nil || pc.AffinityCookieName == nil {
 		return ""
 	}
+
 	return *pc.AffinityCookieName
 }
 
@@ -378,6 +386,7 @@ func (pc *PathConfig) GetAffinityCookiePath() string {
 	if pc == nil || pc.AffinityCookiePath == nil {
 		return ""
 	}
+
 	return *pc.AffinityCookiePath
 }
 
@@ -390,6 +399,7 @@ func (pc *PathConfig) GetAffinityCookieSecure() AffinityCookieSecure {
 	if pc == nil || pc.AffinityCookieSecure == nil {
 		return AffinityCookieSecureAuto
 	}
+
 	return *pc.AffinityCookieSecure
 }
 
@@ -402,6 +412,7 @@ func (pc *PathConfig) GetAffinityCookieStickiness() AffinityCookieStickiness {
 	if pc == nil || pc.AffinityCookieStickiness == nil {
 		return AffinityCookieStickinessLoose
 	}
+
 	return *pc.AffinityCookieStickiness
 }
 
@@ -414,6 +425,7 @@ func (pc *PathConfig) GetReadTimeout() *metav1.Duration {
 	if pc == nil {
 		return nil
 	}
+
 	return pc.ReadTimeout
 }
 
@@ -426,6 +438,7 @@ func (pc *PathConfig) GetWriteTimeout() *metav1.Duration {
 	if pc == nil {
 		return nil
 	}
+
 	return pc.WriteTimeout
 }
 
@@ -438,6 +451,7 @@ func (pc *PathConfig) GetRedirectIfNotTLS() bool {
 	if pc == nil || pc.RedirectIfNotTLS == nil {
 		return true
 	}
+
 	return *pc.RedirectIfNotTLS
 }
 
@@ -450,6 +464,7 @@ func (pc *PathConfig) GetDoNotForward() bool {
 	if pc == nil || pc.DoNotForward == nil {
 		return false
 	}
+
 	return *pc.DoNotForward
 }
 

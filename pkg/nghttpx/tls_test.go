@@ -64,12 +64,15 @@ func TestCreateTLSCred(t *testing.T) {
 	if got, want := tlsCred.Name, "tls"; got != want {
 		t.Errorf("tlsCred.Name = %v, want %v", got, want)
 	}
+
 	if got, want := tlsCred.Key.Path, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dKey))+".key"); got != want {
 		t.Errorf("tlsCred.Key.Path = %v, want %v", got, want)
 	}
+
 	if got, want := tlsCred.Cert.Path, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dCrt))+".crt"); got != want {
 		t.Errorf("tlsCred.Cert.Path = %v, want %v", got, want)
 	}
+
 	if got, want := tlsCred.OCSPResp.Path, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum([]byte(tlsOCSPResp)))+".ocsp-resp"); got != want {
 		t.Errorf("tlsCred.OCSPResp.Path = %v, want %v", got, want)
 	}
@@ -256,6 +259,7 @@ func TestVerifyCertificate(t *testing.T) {
 			if err := VerifyCertificate(context.Background(), cert, time.Now()); err != nil {
 				errMsg = err.Error()
 			}
+
 			if got, want := errMsg, tt.wantErr; got != want {
 				t.Errorf("errMsg = %v, want %v", got, want)
 			}

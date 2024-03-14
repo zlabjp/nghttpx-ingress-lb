@@ -67,6 +67,7 @@ func (ia ingressAnnotation) NewBackendConfigMapper(ctx context.Context) *nghttpx
 		log.Error(err, "Unexpected error while reading annotation", "annotation", defaultBackendConfigKey)
 		return nghttpx.NewBackendConfigMapper(nil, nil)
 	}
+
 	nghttpx.FixupBackendConfig(ctx, &defaultConfig)
 
 	for _, v := range config {
@@ -84,6 +85,7 @@ func (ia ingressAnnotation) NewPathConfigMapper(ctx context.Context) *nghttpx.Pa
 	log := klog.FromContext(ctx)
 
 	data := ia[pathConfigKey]
+
 	var config nghttpx.PathConfigMapping
 	if data != "" {
 		if err := unmarshal(ctx, []byte(data), &config); err != nil {
@@ -109,6 +111,7 @@ func (ia ingressAnnotation) NewPathConfigMapper(ctx context.Context) *nghttpx.Pa
 		log.Error(err, "Unexpected error while reading annotation", "annotation", defaultPathConfigKey)
 		return nghttpx.NewPathConfigMapper(nil, nil)
 	}
+
 	nghttpx.FixupPathConfig(ctx, &defaultConfig)
 
 	for _, v := range config {
@@ -125,6 +128,7 @@ func normalizePathKey(src map[string]*nghttpx.PathConfig) map[string]*nghttpx.Pa
 	}
 
 	dst := make(map[string]*nghttpx.PathConfig, len(src))
+
 	for k, v := range src {
 		if !strings.Contains(k, "/") {
 			dst[k+"/"] = v

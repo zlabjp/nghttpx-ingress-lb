@@ -92,6 +92,7 @@ svc:
 			if !reflect.DeepEqual(bcm.DefaultBackendConfig, tt.wantDefaultConfig) {
 				t.Errorf("bcm.DefaultBackendConfig = %+v, want %+v", bcm.DefaultBackendConfig, tt.wantDefaultConfig)
 			}
+
 			if !reflect.DeepEqual(bcm.BackendConfigMapping, tt.wantConfig) {
 				t.Errorf("bcm.BackendConfigMapping = %+v, want %+v", bcm.BackendConfigMapping, tt.wantConfig)
 			}
@@ -167,6 +168,7 @@ example.com/alpha:
 			if !reflect.DeepEqual(pcm.DefaultPathConfig, tt.wantDefaultConfig) {
 				t.Errorf("pcm.DefaultPathConfig = %+v, want %+v", pcm.DefaultPathConfig, tt.wantDefaultConfig)
 			}
+
 			if !reflect.DeepEqual(pcm.PathConfigMapping, tt.wantConfig) {
 				t.Errorf("pcm.PathConfigMapping = %+v, want %+v", pcm.PathConfigMapping, tt.wantConfig)
 			}

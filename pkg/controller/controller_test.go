@@ -203,43 +203,52 @@ func (f *fixture) setupStore() {
 		if err := f.lbc.ingIndexer.Add(ing); err != nil {
 			panic(err)
 		}
+
 		if err := f.lc.ingIndexer.Add(ing); err != nil {
 			panic(err)
 		}
 	}
+
 	for _, ingClass := range f.ingClassStore {
 		if err := f.lbc.ingClassIndexer.Add(ingClass); err != nil {
 			panic(err)
 		}
+
 		if err := f.lc.ingClassIndexer.Add(ingClass); err != nil {
 			panic(err)
 		}
 	}
+
 	for _, es := range f.epSliceStore {
 		if err := f.lbc.epSliceIndexer.Add(es); err != nil {
 			panic(err)
 		}
 	}
+
 	for _, svc := range f.svcStore {
 		if err := f.lbc.svcIndexer.Add(svc); err != nil {
 			panic(err)
 		}
+
 		if f.lc.svcIndexer != nil {
 			if err := f.lc.svcIndexer.Add(svc); err != nil {
 				panic(err)
 			}
 		}
 	}
+
 	for _, secret := range f.secretStore {
 		if err := f.lbc.secretIndexer.Add(secret); err != nil {
 			panic(err)
 		}
+
 		if f.lc.secretIndexer != nil {
 			if err := f.lc.secretIndexer.Add(secret); err != nil {
 				panic(err)
 			}
 		}
 	}
+
 	if f.lbc.cmIndexer != nil {
 		for _, cm := range f.cmStore {
 			if err := f.lbc.cmIndexer.Add(cm); err != nil {
@@ -247,14 +256,17 @@ func (f *fixture) setupStore() {
 			}
 		}
 	}
+
 	for _, pod := range f.podStore {
 		if err := f.lbc.podIndexer.Add(pod); err != nil {
 			panic(err)
 		}
+
 		if err := f.lc.podIndexer.Add(pod); err != nil {
 			panic(err)
 		}
 	}
+
 	for _, node := range f.nodeStore {
 		if err := f.lc.nodeIndexer.Add(node); err != nil {
 			panic(err)
@@ -269,11 +281,13 @@ func (f *fixture) verifyActions() {
 			f.t.Errorf("%v unexpected action: %+v", len(actions)-len(f.actions), actions[i:])
 			break
 		}
+
 		expectedAction := f.actions[i]
 		if !expectedAction.Matches(action.GetVerb(), action.GetResource().Resource) {
 			f.t.Errorf("Expected\n\t%+v\ngot\n\t%+v", expectedAction, action)
 		}
 	}
+
 	if len(f.actions) > len(actions) {
 		f.t.Errorf("%v additional expected actions: %+v", len(f.actions)-len(actions), f.actions[len(actions):])
 	}
@@ -295,6 +309,7 @@ type fakeLoadBalancer struct {
 func newFakeLoadBalancer() *fakeLoadBalancer {
 	flb := &fakeLoadBalancer{}
 	flb.checkAndReloadHandler = flb.defaultCheckAndReload
+
 	return flb
 }
 
@@ -800,17 +815,22 @@ func TestSyncDefaultBackend(t *testing.T) {
 
 			cm := newEmptyConfigMap()
 			cm.Data[nghttpx.NghttpxExtraConfigKey] = "Test"
+
 			const mrubyContent = "mruby"
+
 			cm.Data[nghttpx.NghttpxMrubyFileContentKey] = mrubyContent
+
 			var (
 				svc *corev1.Service
 				ess []*discoveryv1.EndpointSlice
 			)
+
 			if tt.withoutSelectors {
 				svc, ess = newDefaultBackendWithoutSelectors()
 			} else {
 				svc, ess = newDefaultBackend()
 			}
+
 			nghttpxSecret := newNghttpxSecret()
 
 			f.cmStore = append(f.cmStore, cm)
@@ -835,14 +855,17 @@ func TestSyncDefaultBackend(t *testing.T) {
 				if got, want := upstream.Path, ""; got != want {
 					t.Errorf("upstream.Path = %v, want %v", got, want)
 				}
+
 				backends := upstream.Backends
 				if got, want := len(backends), 2; got != want {
 					t.Errorf("len(backends) = %v, want %v", got, want)
 				}
+
 				us := backends[0]
 				if got, want := us.Address, "192.168.100.1"; got != want {
 					t.Errorf("0: us.Address = %v, want %v", got, want)
 				}
+
 				if got, want := us.Port, "8080"; got != want {
 					t.Errorf("0: us.Port = %v, want %v", got, want)
 				}
@@ -851,6 +874,7 @@ func TestSyncDefaultBackend(t *testing.T) {
 			if got, want := flb.ingConfig.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
 				t.Errorf("flb.cfg.ExtraConfig = %v, want %v", got, want)
 			}
+
 			if got, want := flb.ingConfig.MrubyFile, (&nghttpx.ChecksumFile{
 				Path:     nghttpx.MrubyRbPath(defaultConfDir),
 				Content:  []byte(mrubyContent),
@@ -917,12 +941,15 @@ func TestSyncDefaultSecret(t *testing.T) {
 	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(dKeyChecksum)); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
+
 	if got, want := ingConfig.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(defaultConfDir, hex.EncodeToString(dCrtChecksum)); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Cert.Path = %v, want %v", got, want)
 	}
+
 	if got, want := ingConfig.DefaultTLSCred.Key.Checksum, dKeyChecksum; !bytes.Equal(got, want) {
 		t.Errorf("ingConfig.DefaultTLSCred.Key.Checksum = %x, want %x", got, want)
 	}
+
 	if got, want := ingConfig.DefaultTLSCred.Cert.Checksum, dCrtChecksum; !bytes.Equal(got, want) {
 		t.Errorf("ingConfig.DefaultTLSCred.Cert.Checksum = %v, want %x", got, want)
 	}
@@ -971,6 +998,7 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(nghttpx.Checksum(dKey))); got != want {
 		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
 	}
+
 	if got, want := len(ingConfig.SubTLSCred), 0; got != want {
 		t.Errorf("len(ingConfig.SubTLSCred) = %v, want %v", got, want)
 	}
@@ -1044,6 +1072,7 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	if got, want := string(tlsCred.Cert.Content), tlsCrt; got != want {
 		t.Errorf("tlsCred.Cert.Content = %v, want %v", got, want)
 	}
+
 	if got, want := string(tlsCred.Key.Content), tlsKey; got != want {
 		t.Errorf("tlsCred.Key.Content = %v, want %v", got, want)
 	}
@@ -1060,6 +1089,7 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	if got, want := upstream.Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
 		t.Errorf("upstream.Ingress = %v, want %v", got, want)
 	}
+
 	if got, want := upstream.RedirectIfNotTLS, true; got != want {
 		t.Errorf("upstream.RedirectIfNotTLS = %v, want %v", got, want)
 	}
@@ -1395,6 +1425,7 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	}
 
 	var found bool
+
 	for _, upstream := range ingConfig.Upstreams {
 		if upstream.Name == "default/bravo,8281;/" {
 			found = true
@@ -1630,6 +1661,7 @@ func TestSyncIngress(t *testing.T) {
 			f.setupStore()
 
 			key := types.NamespacedName{Name: tt.ingress.Name, Namespace: tt.ingress.Namespace}.String()
+
 			err := f.lc.syncIngress(context.Background(), key)
 			if err != nil {
 				t.Fatalf("f.lc.syncIngress(...): %v", err)
@@ -2761,10 +2793,12 @@ func TestSyncWithTLSTicketKey(t *testing.T) {
 	dKey := []byte(tlsKey)
 	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
 	nghttpxSecret := newNghttpxSecret()
+
 	ticketKey, err := nghttpx.NewInitialTLSTicketKey()
 	if err != nil {
 		t.Fatalf("nghttpx.NewInitialTLSTicketKey: %v", err)
 	}
+
 	nghttpxSecret.Data = map[string][]byte{
 		nghttpxTLSTicketKeySecretKey: ticketKey,
 	}

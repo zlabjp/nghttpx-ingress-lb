@@ -71,10 +71,12 @@ func run(_ *cobra.Command, args []string) {
 			if len(certs) < 2 {
 				continue
 			}
+
 			respDER, err = getOCSPResponse(certs[0], certs[1])
 			if err != nil {
 				continue
 			}
+
 			break
 		}
 
@@ -82,6 +84,7 @@ func run(_ *cobra.Command, args []string) {
 			if err == nil {
 				err = errors.New("no issuer found")
 			}
+
 			fmt.Fprintf(os.Stderr, "Unable to get OCSP response: %v\n", err)
 			os.Exit(exitCode(err))
 		}
@@ -135,12 +138,15 @@ func loadCertificates(path string) ([]*x509.Certificate, error) {
 	}
 
 	var certs []*x509.Certificate
+
 	for {
 		blk, rest := pem.Decode(data)
 		if blk == nil {
 			return certs, nil
 		}
+
 		data = rest
+
 		if blk.Type != "CERTIFICATE" {
 			continue
 		}

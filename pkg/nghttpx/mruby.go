@@ -14,6 +14,7 @@ const (
 // CreatePerPatternMrubyChecksumFile creates ChecksumFile for given mruby content.
 func CreatePerPatternMrubyChecksumFile(dir string, mruby []byte) *ChecksumFile {
 	checksum := Checksum(mruby)
+
 	return &ChecksumFile{
 		Path:     filepath.Join(dir, mrubyDir, hex.EncodeToString(checksum)+".rb"),
 		Content:  mruby,
@@ -40,10 +41,12 @@ func writePerPatternMrubyFile(ingConfig *IngressConfig) error {
 	if err := MkdirAll(filepath.Join(ingConfig.ConfDir, mrubyDir)); err != nil {
 		return err
 	}
+
 	for _, upstream := range ingConfig.Upstreams {
 		if upstream.Mruby == nil {
 			continue
 		}
+
 		if err := WriteFile(upstream.Mruby.Path, upstream.Mruby.Content); err != nil {
 			return fmt.Errorf("unable to write per-pattern mruby file: %w", err)
 		}

@@ -14,6 +14,7 @@ func hexMustDecodeString(s string) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return b
 }
 
