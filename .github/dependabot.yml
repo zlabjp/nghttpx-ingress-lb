@@ -28,7 +28,7 @@ updates:
       - "k8s.io/apiserver"
       - "k8s.io/client-go"
       - "k8s.io/component-base"
-    kubernetes:
+    kubernetes-security:
       applies-to: security-updates
       patterns:
       - "k8s.io/api"
