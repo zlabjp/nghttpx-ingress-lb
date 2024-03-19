@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/pmezard/go-difflib v1.0.0
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.8.0
 	golang.org/x/crypto v0.17.0
 	golang.org/x/time v0.3.0
 	k8s.io/api v0.29.3
