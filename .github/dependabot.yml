@@ -4,3 +4,35 @@ updates:
   directory: "/"
   schedule:
     interval: "weekly"
+- package-ecosystem: "gomod"
+  directory: "/"
+  schedule:
+    interval: "weekly"
+  ignore:
+  - dependency-name: "k8s.io/api"
+    update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - dependency-name: "k8s.io/apimachinery"
+    update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - dependency-name: "k8s.io/apiserver"
+    update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - dependency-name: "k8s.io/client-go"
+    update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - dependency-name: "k8s.io/component-base"
+    update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  groups:
+    kubernetes:
+      applies-to: version-updates
+      patterns:
+      - "k8s.io/api"
+      - "k8s.io/apimachinery"
+      - "k8s.io/apiserver"
+      - "k8s.io/client-go"
+      - "k8s.io/component-base"
+    kubernetes:
+      applies-to: security-updates
+      patterns:
+      - "k8s.io/api"
+      - "k8s.io/apimachinery"
+      - "k8s.io/apiserver"
+      - "k8s.io/client-go"
+      - "k8s.io/component-base"
