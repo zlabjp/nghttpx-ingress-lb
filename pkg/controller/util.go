@@ -28,6 +28,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"slices"
 	"sort"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -64,23 +65,9 @@ func sortLoadBalancerIngress(a []networkingv1.IngressLoadBalancerIngress) {
 
 // uniqLoadBalancerIngress removes duplicated items from a.  This function assumes a is sorted by sortLoadBalancerIngress.
 func uniqLoadBalancerIngress(a []networkingv1.IngressLoadBalancerIngress) []networkingv1.IngressLoadBalancerIngress {
-	if len(a) == 0 {
-		return a
-	}
-
-	p := 0
-	for i := 1; i < len(a); i++ {
-		if a[p].IP == a[i].IP && a[p].Hostname == a[i].Hostname {
-			continue
-		}
-
-		p++
-		if p != i {
-			a[p] = a[i]
-		}
-	}
-
-	return a[:p+1]
+	return slices.CompactFunc(a, func(a, b networkingv1.IngressLoadBalancerIngress) bool {
+		return a.IP == b.IP && a.Hostname == b.Hostname
+	})
 }
 
 // podFindPort is copied from
