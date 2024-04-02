@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"time"
 
@@ -160,29 +161,7 @@ func SortPems(pems []*TLSCred) {
 // RemoveDuplicatePems removes duplicates from pems, which share the same Key.Path, Cert.Path, and OCSPResp.Path.  It assumes that pems are
 // sorted by SortPems.
 func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
-	if len(pems) == 0 {
-		return pems
-	}
-
-	left := pems[1:]
-	j := 0
-
-	for i := range left {
-		a := pems[j]
-		b := left[i]
-
-		if PemsShareSamePaths(a, b) {
-			continue
-		}
-
-		j++
-
-		if j <= i {
-			pems[j] = left[i]
-		}
-	}
-
-	return pems[:j+1]
+	return slices.CompactFunc(pems, PemsShareSamePaths)
 }
 
 func ReadLeafCertificate(certPEM []byte) (*x509.Certificate, error) {

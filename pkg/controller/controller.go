@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1280,18 +1281,9 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 		})
 
 		// remove duplicate Backend
-		uniqBackends := []nghttpx.Backend{backends[0]}
-		for _, sv := range backends[1:] {
-			lastBackend := &uniqBackends[len(uniqBackends)-1]
-
-			if lastBackend.Address == sv.Address && lastBackend.Port == sv.Port {
-				continue
-			}
-
-			uniqBackends = append(uniqBackends, sv)
-		}
-
-		value.Backends = uniqBackends
+		value.Backends = slices.CompactFunc(backends, func(a, b nghttpx.Backend) bool {
+			return a.Address == b.Address && a.Port == b.Port
+		})
 	}
 
 	ingConfig.Upstreams = upstreams
