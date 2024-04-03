@@ -26,6 +26,7 @@ package nghttpx
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/x509"
 	"encoding/hex"
@@ -34,7 +35,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
-	"sort"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -141,21 +141,24 @@ func writeTLSCred(tlsCred *TLSCred) error {
 
 // TLSCredShareSamePaths returns if a and b share the same Key.Path, Cert.path, and OCSPResp.Path.
 func TLSCredShareSamePaths(a, b *TLSCred) bool {
-	return a.Key.Path == b.Key.Path && a.Cert.Path == b.Cert.Path &&
-		((a.OCSPResp == nil && b.OCSPResp == nil) ||
-			(a.OCSPResp != nil && b.OCSPResp != nil && a.OCSPResp.Path == b.OCSPResp.Path))
+	return TLSCredCompare(a, b) == 0
+}
+
+func TLSCredCompare(a, b *TLSCred) int {
+	if c := cmp.Compare(a.Key.Path, b.Key.Path); c != 0 {
+		return c
+	}
+
+	if c := cmp.Compare(a.Cert.Path, b.Cert.Path); c != 0 {
+		return c
+	}
+
+	return cmp.Compare(a.OCSPResp.GetPath(), b.OCSPResp.GetPath())
 }
 
 // SortTLSCred sorts creds in ascending order of Key.Path, Cert.Path, and OCSPResp.Path.
 func SortTLSCred(creds []*TLSCred) {
-	sort.Slice(creds, func(i, j int) bool {
-		lhs, rhs := creds[i], creds[j]
-
-		return lhs.Key.Path < rhs.Key.Path || (lhs.Key.Path == rhs.Key.Path && lhs.Cert.Path < rhs.Cert.Path) ||
-			(lhs.Key.Path == rhs.Key.Path && lhs.Cert.Path == rhs.Cert.Path &&
-				((lhs.OCSPResp == nil && rhs.OCSPResp != nil) ||
-					(lhs.OCSPResp != nil && rhs.OCSPResp != nil && lhs.OCSPResp.Path < rhs.OCSPResp.Path)))
-	})
+	slices.SortFunc(creds, TLSCredCompare)
 }
 
 // RemoveDuplicateTLSCred removes duplicates from creds, which share the same Key.Path, Cert.Path, and OCSPResp.Path.  It assumes that creds

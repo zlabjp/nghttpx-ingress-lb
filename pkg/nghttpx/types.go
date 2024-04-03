@@ -480,6 +480,14 @@ type ChecksumFile struct {
 	Checksum []byte
 }
 
+func (c *ChecksumFile) GetPath() string {
+	if c == nil {
+		return ""
+	}
+
+	return c.Path
+}
+
 // PrivateChecksumFile is a kind of ChecksumFile and it contains private data which should not be spilled out into log.
 type PrivateChecksumFile ChecksumFile
 
