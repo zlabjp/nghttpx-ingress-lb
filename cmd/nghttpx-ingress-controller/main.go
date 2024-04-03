@@ -34,6 +34,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -458,7 +459,7 @@ type healthzChecker struct {
 // newHealthzChecker returns new healthzChecker.
 func newHealthzChecker(healthPort int32) *healthzChecker {
 	return &healthzChecker{
-		targetURI: fmt.Sprintf("http://127.0.0.1:%v/healthz", healthPort),
+		targetURI: "http://127.0.0.1:" + strconv.FormatInt(int64(healthPort), 10) + "/healthz",
 	}
 }
 
@@ -512,7 +513,7 @@ func registerHandlers(ctx context.Context, cancel context.CancelFunc) {
 	}
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%v", healthzPort),
+		Addr:    ":" + strconv.FormatInt(int64(healthzPort), 10),
 		Handler: mux,
 	}
 	if err := server.ListenAndServe(); err != nil {

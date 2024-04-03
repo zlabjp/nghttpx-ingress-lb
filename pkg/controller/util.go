@@ -223,7 +223,7 @@ func ingressPortStatusFromPortStatus(ports []corev1.PortStatus) []networkingv1.I
 }
 
 func createCertCacheKey(s *corev1.Secret) string {
-	return fmt.Sprintf("%v/%v", s.Namespace, s.Name)
+	return s.Namespace + "/" + s.Name
 }
 
 func calculateCertificateHash(cert, key []byte) []byte {

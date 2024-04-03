@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -321,7 +322,7 @@ func CreateTLSTicketKeyFiles(dir string, ticketKey []byte) []*PrivateChecksumFil
 		key := ticketKey[offset : offset+TLSTicketKeySize]
 
 		files[i] = &PrivateChecksumFile{
-			Path:     filepath.Join(dir, fmt.Sprintf("key-%d", i)),
+			Path:     filepath.Join(dir, "key-"+strconv.Itoa(i)),
 			Content:  key,
 			Checksum: Checksum(key),
 		}
