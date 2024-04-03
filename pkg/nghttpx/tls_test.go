@@ -82,8 +82,8 @@ func TestCreateTLSCred(t *testing.T) {
 	}
 }
 
-// TestSortPems tests SortPems.
-func TestSortPems(t *testing.T) {
+// TestSortTLSCred tests SortTLSCred.
+func TestSortTLSCred(t *testing.T) {
 	tests := []struct {
 		desc string
 		in   []*TLSCred
@@ -127,7 +127,7 @@ func TestSortPems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			SortPems(tt.in)
+			SortTLSCred(tt.in)
 
 			if got, want := tt.in, tt.out; !reflect.DeepEqual(got, want) {
 				t.Errorf("tt.in = %v, want %v", got, want)
@@ -136,8 +136,8 @@ func TestSortPems(t *testing.T) {
 	}
 }
 
-// TestRemoveDuplicatePems tests RemoveDuplicatePems function.  We make sure that duplicates are removed from supplied input array.
-func TestRemoveDuplicatePems(t *testing.T) {
+// TestRemoveDuplicateTLSCred tests RemoveDuplicateTLSCred function.  We make sure that duplicates are removed from supplied input array.
+func TestRemoveDuplicateTLSCred(t *testing.T) {
 	tests := []struct {
 		desc string
 		in   []*TLSCred
@@ -210,8 +210,8 @@ func TestRemoveDuplicatePems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := RemoveDuplicatePems(tt.in), tt.out; !reflect.DeepEqual(got, want) {
-				t.Errorf("RemoveDuplicatePems(%v) = %v, want %v", tt.in, got, want)
+			if got, want := RemoveDuplicateTLSCred(tt.in), tt.out; !reflect.DeepEqual(got, want) {
+				t.Errorf("RemoveDuplicateTLSCred(%v) = %v, want %v", tt.in, got, want)
 			}
 		})
 	}

@@ -1135,7 +1135,7 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 
 	var (
 		upstreams []*nghttpx.Upstream
-		pems      []*nghttpx.TLSCred
+		creds     []*nghttpx.TLSCred
 	)
 
 	if lbc.defaultTLSSecret != nil {
@@ -1162,14 +1162,14 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 
 		var requireTLS bool
 
-		ingPems, err := lbc.getTLSCredFromIngress(ctx, ing)
+		ingCreds, err := lbc.getTLSCredFromIngress(ctx, ing)
 		if err != nil {
 			log.Error(err, "Ingress is disabled because its TLS Secret cannot be processed")
 			continue
 		}
 
-		pems = append(pems, ingPems...)
-		requireTLS = len(ingPems) > 0
+		creds = append(creds, ingCreds...)
+		requireTLS = len(ingCreds) > 0
 
 		bcm := ingressAnnotation(ing.Annotations).NewBackendConfigMapper(ctx)
 		pcm := ingressAnnotation(ing.Annotations).NewPathConfigMapper(ctx)
@@ -1230,23 +1230,23 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 		}
 	}
 
-	nghttpx.SortPems(pems)
-	pems = nghttpx.RemoveDuplicatePems(pems)
+	nghttpx.SortTLSCred(creds)
+	creds = nghttpx.RemoveDuplicateTLSCred(creds)
 
 	if ingConfig.DefaultTLSCred != nil {
-		// Remove default TLS key pair from pems.
-		for i := range pems {
-			if nghttpx.PemsShareSamePaths(ingConfig.DefaultTLSCred, pems[i]) {
-				pems = append(pems[:i], pems[i+1:]...)
+		// Remove default TLS key pair from creds.
+		for i := range creds {
+			if nghttpx.TLSCredShareSamePaths(ingConfig.DefaultTLSCred, creds[i]) {
+				creds = append(creds[:i], creds[i+1:]...)
 				break
 			}
 		}
 
-		ingConfig.SubTLSCred = pems
-	} else if len(pems) > 0 {
+		ingConfig.SubTLSCred = creds
+	} else if len(creds) > 0 {
 		ingConfig.TLS = true
-		ingConfig.DefaultTLSCred = pems[0]
-		ingConfig.SubTLSCred = pems[1:]
+		ingConfig.DefaultTLSCred = creds[0]
+		ingConfig.SubTLSCred = creds[1:]
 	}
 
 	// find default backend.  If only it is not found, use default backend.  This is useful to override default backend with ingress.
@@ -1641,7 +1641,7 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ctx context.Context, in
 		return nil, nil
 	}
 
-	pems := make([]*nghttpx.TLSCred, len(ing.Spec.TLS))
+	creds := make([]*nghttpx.TLSCred, len(ing.Spec.TLS))
 
 	for i := range ing.Spec.TLS {
 		tls := &ing.Spec.TLS[i]
@@ -1656,10 +1656,10 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ctx context.Context, in
 			return nil, err
 		}
 
-		pems[i] = tlsCred
+		creds[i] = tlsCred
 	}
 
-	return pems, nil
+	return creds, nil
 }
 
 // createTLSCredFromSecret creates nghttpx.TLSCred from secret.

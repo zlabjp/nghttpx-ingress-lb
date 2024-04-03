@@ -139,17 +139,17 @@ func writeTLSCred(tlsCred *TLSCred) error {
 	return nil
 }
 
-// PemsShareSamePaths returns if a and b share the same Key.Path, Cert.path, and OCSPResp.Path.
-func PemsShareSamePaths(a, b *TLSCred) bool {
+// TLSCredShareSamePaths returns if a and b share the same Key.Path, Cert.path, and OCSPResp.Path.
+func TLSCredShareSamePaths(a, b *TLSCred) bool {
 	return a.Key.Path == b.Key.Path && a.Cert.Path == b.Cert.Path &&
 		((a.OCSPResp == nil && b.OCSPResp == nil) ||
 			(a.OCSPResp != nil && b.OCSPResp != nil && a.OCSPResp.Path == b.OCSPResp.Path))
 }
 
-// SortPems sorts pems in ascending order of Key.Path, Cert.Path, and OCSPResp.Path.
-func SortPems(pems []*TLSCred) {
-	sort.Slice(pems, func(i, j int) bool {
-		lhs, rhs := pems[i], pems[j]
+// SortTLSCred sorts creds in ascending order of Key.Path, Cert.Path, and OCSPResp.Path.
+func SortTLSCred(creds []*TLSCred) {
+	sort.Slice(creds, func(i, j int) bool {
+		lhs, rhs := creds[i], creds[j]
 
 		return lhs.Key.Path < rhs.Key.Path || (lhs.Key.Path == rhs.Key.Path && lhs.Cert.Path < rhs.Cert.Path) ||
 			(lhs.Key.Path == rhs.Key.Path && lhs.Cert.Path == rhs.Cert.Path &&
@@ -158,10 +158,10 @@ func SortPems(pems []*TLSCred) {
 	})
 }
 
-// RemoveDuplicatePems removes duplicates from pems, which share the same Key.Path, Cert.Path, and OCSPResp.Path.  It assumes that pems are
-// sorted by SortPems.
-func RemoveDuplicatePems(pems []*TLSCred) []*TLSCred {
-	return slices.CompactFunc(pems, PemsShareSamePaths)
+// RemoveDuplicateTLSCred removes duplicates from creds, which share the same Key.Path, Cert.Path, and OCSPResp.Path.  It assumes that creds
+// are sorted by SortTLSCred.
+func RemoveDuplicateTLSCred(creds []*TLSCred) []*TLSCred {
+	return slices.CompactFunc(creds, TLSCredShareSamePaths)
 }
 
 func ReadLeafCertificate(certPEM []byte) (*x509.Certificate, error) {
