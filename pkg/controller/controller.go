@@ -26,6 +26,7 @@ package controller
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -33,7 +34,6 @@ import (
 	"fmt"
 	"net"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1235,11 +1235,11 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 
 	if ingConfig.DefaultTLSCred != nil {
 		// Remove default TLS key pair from creds.
-		for i := range creds {
-			if nghttpx.TLSCredShareSamePaths(ingConfig.DefaultTLSCred, creds[i]) {
-				creds = append(creds[:i], creds[i+1:]...)
-				break
-			}
+		i := slices.IndexFunc(creds, func(cred *nghttpx.TLSCred) bool {
+			return nghttpx.TLSCredShareSamePaths(ingConfig.DefaultTLSCred, cred)
+		})
+		if i != -1 {
+			creds = slices.Delete(creds, i, i+1)
 		}
 
 		ingConfig.SubTLSCred = creds
@@ -1267,17 +1267,24 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 		upstreams = append(upstreams, defaultUpstream)
 	}
 
-	sort.Slice(upstreams, func(i, j int) bool {
-		return upstreams[i].Host < upstreams[j].Host ||
-			(upstreams[i].Host == upstreams[j].Host && upstreams[i].Path < upstreams[j].Path)
+	slices.SortFunc(upstreams, func(a, b *nghttpx.Upstream) int {
+		if c := cmp.Compare(a.Host, b.Host); c != 0 {
+			return c
+		}
+
+		return cmp.Compare(a.Path, b.Path)
 	})
 
 	upstreams = removeUpstreamsWithInconsistentBackendParams(ctx, upstreams)
 
 	for _, value := range upstreams {
 		backends := value.Backends
-		sort.Slice(backends, func(i, j int) bool {
-			return backends[i].Address < backends[j].Address || (backends[i].Address == backends[j].Address && backends[i].Port < backends[j].Port)
+		slices.SortFunc(backends, func(a, b nghttpx.Backend) int {
+			if c := cmp.Compare(a.Address, b.Address); c != 0 {
+				return c
+			}
+
+			return cmp.Compare(a.Port, b.Port)
 		})
 
 		// remove duplicate Backend

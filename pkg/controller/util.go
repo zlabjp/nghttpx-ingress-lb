@@ -25,11 +25,11 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"fmt"
 	"slices"
-	"sort"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -57,9 +57,13 @@ func loadBalancerIngressesIPEqual(a, b []networkingv1.IngressLoadBalancerIngress
 }
 
 // sortLoadBalancerIngress sorts a by IP and Hostname in the ascending order.
-func sortLoadBalancerIngress(a []networkingv1.IngressLoadBalancerIngress) {
-	sort.Slice(a, func(i, j int) bool {
-		return a[i].IP < a[j].IP || (a[i].IP == a[j].IP && a[i].Hostname < a[j].Hostname)
+func sortLoadBalancerIngress(lbIngs []networkingv1.IngressLoadBalancerIngress) {
+	slices.SortFunc(lbIngs, func(a, b networkingv1.IngressLoadBalancerIngress) int {
+		if c := cmp.Compare(a.IP, b.IP); c != 0 {
+			return c
+		}
+
+		return cmp.Compare(a.Hostname, b.Hostname)
 	})
 }
 
