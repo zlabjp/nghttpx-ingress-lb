@@ -1498,17 +1498,17 @@ func (lbc *LoadBalancerController) createHealthzMruby() []byte {
 		code = 200
 	}
 
-	return []byte(fmt.Sprintf(`
+	return []byte(`
 class App
   def on_req(env)
     resp = env.resp
-    resp.status = %v
+    resp.status = ` + strconv.Itoa(code) + `
     resp.return ""
   end
 end
 
 App.new
-`, code))
+`)
 }
 
 // createUpstream creates new nghttpx.Upstream for ing, host, path and isb.
@@ -1543,7 +1543,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *netw
 	}
 
 	// The format of upsName is similar to backend option syntax of nghttpx.
-	upsName := fmt.Sprintf("%v/%v,%v;%v%v", ing.Namespace, isb.Name, portStr, host, normalizedPath)
+	upsName := ing.Namespace + "/" + isb.Name + "," + portStr + ";" + host + normalizedPath
 	ups := &nghttpx.Upstream{
 		Name:                     upsName,
 		Ingress:                  types.NamespacedName{Name: ing.Name, Namespace: ing.Namespace},

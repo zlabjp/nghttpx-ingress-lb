@@ -28,8 +28,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -585,7 +585,7 @@ func newBackend(name string, addrs []string) (*corev1.Service, *discoveryv1.Endp
 			Addresses: []string{addr},
 			TargetRef: &corev1.ObjectReference{
 				Kind:      "Pod",
-				Name:      fmt.Sprintf("%v-pod-%v", name, i+1),
+				Name:      name + "-pod-" + strconv.Itoa(i+1),
 				Namespace: namespace,
 			},
 		})
@@ -695,7 +695,7 @@ func (b *ingressBuilder) WithDefaultRule(svc string, port networkingv1.ServiceBa
 }
 
 func (b *ingressBuilder) WithRule(path, svc string, port networkingv1.ServiceBackendPort) *ingressBuilder {
-	return b.WithRuleHost(fmt.Sprintf("%v.%v.test", b.Name, b.Namespace), path, svc, port)
+	return b.WithRuleHost(b.Name+"."+b.Namespace+".test", path, svc, port)
 }
 
 func (b *ingressBuilder) WithRuleHost(host, path, svc string, port networkingv1.ServiceBackendPort) *ingressBuilder {

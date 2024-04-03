@@ -25,9 +25,9 @@ limitations under the License.
 package nghttpx
 
 import (
-	"fmt"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"text/template"
 	"time"
 
@@ -77,6 +77,7 @@ func NewLoadBalancer(config LoadBalancerConfig) (*LoadBalancer, error) {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	// Disable keep alive connection, so that API request does not interfere graceful shutdown of nghttpx.
 	tr.DisableKeepAlives = true
+	apiURI := "http://127.0.0.1:" + strconv.FormatInt(int64(config.NghttpxAPIPort), 10)
 
 	lb := &LoadBalancer{
 		httpClient: &http.Client{
@@ -84,8 +85,8 @@ func NewLoadBalancer(config LoadBalancerConfig) (*LoadBalancer, error) {
 		},
 		pod:                  config.Pod,
 		eventRecorder:        config.EventRecorder,
-		backendconfigURI:     fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/backendconfig", config.NghttpxAPIPort),
-		configrevisionURI:    fmt.Sprintf("http://127.0.0.1:%v/api/v1beta1/configrevision", config.NghttpxAPIPort),
+		backendconfigURI:     apiURI + "/api/v1beta1/backendconfig",
+		configrevisionURI:    apiURI + "/api/v1beta1/configrevision",
 		reloadTimeout:        config.ReloadTimeout,
 		staleAssetsThreshold: config.StaleAssetsThreshold,
 	}

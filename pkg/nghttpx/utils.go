@@ -29,7 +29,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -314,7 +313,7 @@ func nghttpxDuration(d time.Duration) string {
 		return strconv.FormatInt(msec/1000, 10)
 	}
 
-	return fmt.Sprintf("%vms", msec)
+	return strconv.FormatInt(msec, 10) + "ms"
 }
 
 // GenerateCryptoKey generates cryptographic key of length len(out) in out.  info is an optional context information.

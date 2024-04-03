@@ -3,7 +3,6 @@ package nghttpx
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"testing"
 )
 
@@ -17,7 +16,7 @@ func TestCreatePerPatternMrubyChecksumFile(t *testing.T) {
 
 	f := CreatePerPatternMrubyChecksumFile("/foo/bar", content)
 
-	if got, want := f.Path, fmt.Sprintf("/foo/bar/mruby/%v.rb", checksum); got != want {
+	if got, want := f.Path, "/foo/bar/mruby/"+string(checksum)+".rb"; got != want {
 		t.Errorf("f.path = %v, want %v", got, want)
 	}
 
