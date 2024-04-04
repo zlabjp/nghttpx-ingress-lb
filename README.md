@@ -16,23 +16,16 @@ Hub](https://hub.docker.com/r/zlabjp/nghttpx-ingress-controller/).
 
 ## Requirements
 
+If `--internal-default-backend` flag is given to false, the default
+backend service is necessary:
+
 - default backend [404-server](examples/default-backend.yaml)
 
 Actually, any backend web server will suffice as long as it returns
 some kind of error code for any requests.
 
-If `--internal-default-backend` flag is given, the default backend
-service is not necessary.  The controller configures nghttpx to act as
-a default backend.
 
 ## Deploy the Ingress controller
-
-Before the deploy of the Ingress controller we need a default backend:
-
-```
-$ kubectl create -f examples/default-backend.yaml
-$ kubectl expose deployment default-http-backend --port=80 --target-port=8080 --name=default-http-backend
-```
 
 Load balancers are created via a Deployment or DaemonSet:
 
@@ -304,14 +297,14 @@ kubctl apply -f examples/proxyproto/
 The default backend is used when the request does not match any given
 rules.  The default backend must be set in command-line flag of
 nghttpx Ingress controller unless `--internal-default-backend` flag is
-given, see below.  It can be overridden by specifying
+given to false, see below.  It can be overridden by specifying
 Ingress.Spec.Backend.  If multiple Ingress resources have
 .Spec.Backend, one of them is used, but it is undefined which one is
 used.  The default backend always does not require TLS.
 
-If `--internal-default-backend` is used, the controller configures
-nghttpx to act as a default backend.  In this case, the default
-backend service is not necessary.
+If `--internal-default-backend` is given to true, which is the
+default, the controller configures nghttpx to act as a default
+backend.  In this case, the default backend service is not necessary.
 
 ## Services without selectors
 
