@@ -88,7 +88,7 @@ var (
 	noDefaultBackendOverride = false
 	deferredShutdownPeriod   time.Duration
 	configOverrides          clientcmd.ConfigOverrides
-	internalDefaultBackend   = false
+	internalDefaultBackend   = true
 	http3                    = false
 	nghttpxSecret            = "nghttpx-km"
 	shareTLSTicketKey        = false

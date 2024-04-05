@@ -59,7 +59,6 @@ spec:
           hostPort: 443
         args:
         - /nghttpx-ingress-controller
-        - --default-backend-service=$(POD_NAMESPACE)/default-http-backend
         - --nghttpx-configmap=$(POD_NAMESPACE)/nghttpx-ingress-lb-config
         - --healthz-port=11249
         - --proxy-proto=true
