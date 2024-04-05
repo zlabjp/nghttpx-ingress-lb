@@ -42,6 +42,11 @@ func writeQUICSecretFile(ingConfig *IngressConfig) error {
 	return nil
 }
 
+const (
+	idNBits = 3
+	idMask  = ^(uint8(1<<(8-idNBits)) - 1)
+)
+
 // VerifyQUICKeyingMaterials verifies that km is a well formatted QUIC keying material.
 func VerifyQUICKeyingMaterials(km []byte) error {
 	sc := bufio.NewScanner(bytes.NewBuffer(km))
@@ -63,7 +68,7 @@ func VerifyQUICKeyingMaterials(km []byte) error {
 			return fmt.Errorf("unable to decode QUIC keying materials from hex string: %w", err)
 		}
 
-		id := b[0] >> 6
+		id := b[0] >> (8 - idNBits)
 		mask := uint8(1 << id)
 
 		if (idBits & mask) != 0 {
@@ -104,7 +109,7 @@ func NewInitialQUICKeyingMaterials() ([]byte, error) {
 			return nil, err
 		}
 
-		b[0] = (b[0] & 0x3f) | byte((i << 6))
+		b[0] = (b[0] & ^idMask) | byte(i<<(8-idNBits))
 
 		keys[i] = hex.EncodeToString(b)
 	}
@@ -164,20 +169,20 @@ func UpdateQUICKeyingMaterialsFunc(km []byte, newKeyingMaterialFunc func() ([]by
 		return nil, err
 	}
 
-	nextID := (b[0] + 0x40) & 0xc0
+	nextID := (b[0] + (1 << (8 - idNBits))) & idMask
 
 	newKM, err := newKeyingMaterialFunc()
 	if err != nil {
 		return nil, err
 	}
 
-	newKM[0] = (newKM[0] & 0x3f) | nextID
+	newKM[0] = (newKM[0] & ^idMask) | nextID
 
 	var newKeysLen int
-	if len(keys) < 4 {
+	if len(keys) < 8 {
 		newKeysLen = len(keys) + 1
 	} else {
-		newKeysLen = 4
+		newKeysLen = 8
 	}
 
 	newKeys := make([]string, newKeysLen)
