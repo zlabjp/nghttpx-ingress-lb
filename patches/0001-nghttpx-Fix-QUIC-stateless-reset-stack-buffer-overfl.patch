@@ -1,0 +1,25 @@
+From dcc5d44094e798bd313bec859da809bad65d0416 Mon Sep 17 00:00:00 2001
+From: Tatsuhiro Tsujikawa <tatsuhiro.t@gmail.com>
+Date: Fri, 5 Apr 2024 16:47:17 +0900
+Subject: [PATCH] nghttpx: Fix QUIC stateless reset stack buffer overflow
+
+---
+ src/shrpx_quic_connection_handler.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/shrpx_quic_connection_handler.cc b/src/shrpx_quic_connection_handler.cc
+index b810aa68..44da6260 100644
+--- a/src/shrpx_quic_connection_handler.cc
++++ b/src/shrpx_quic_connection_handler.cc
+@@ -590,7 +590,7 @@ int QUICConnectionHandler::send_stateless_reset(
+ 
+   // SCID + minimum expansion - NGTCP2_STATELESS_RESET_TOKENLEN
+   constexpr size_t max_rand_byteslen =
+-      SHRPX_QUIC_SCIDLEN + 22 - NGTCP2_STATELESS_RESET_TOKENLEN;
++      NGTCP2_MAX_CIDLEN + 22 - NGTCP2_STATELESS_RESET_TOKENLEN;
+ 
+   size_t rand_byteslen;
+ 
+-- 
+2.34.1
+
