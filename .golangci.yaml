@@ -18,3 +18,8 @@ linters:
   - perfsprint
   - mirror
   - wsl
+linters-settings:
+  govet:
+    enable:
+    - nilness
+    - unusedwrite
