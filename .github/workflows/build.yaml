@@ -18,7 +18,7 @@ jobs:
 
     strategy:
       matrix:
-        os: linux
+        os: [linux]
         arch: [amd64, arm64]
 
     steps:
