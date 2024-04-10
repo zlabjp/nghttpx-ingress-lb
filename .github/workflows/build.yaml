@@ -48,3 +48,4 @@ jobs:
         push: ${{ steps.imageprops.outputs.push == 'true' }}
         tags: ghcr.io/zlabjp/nghttpx-ingress-controller:${{ steps.imageprops.outputs.tag }}
         provenance: false
+        platforms: linux/amd64,linux/arm64
