@@ -7,11 +7,11 @@ require (
 	github.com/spf13/cobra v1.8.0
 	golang.org/x/crypto v0.22.0
 	golang.org/x/time v0.5.0
-	k8s.io/api v0.29.3
-	k8s.io/apimachinery v0.29.3
-	k8s.io/apiserver v0.29.3
-	k8s.io/client-go v0.29.3
-	k8s.io/component-base v0.29.3
+	k8s.io/api v0.29.4
+	k8s.io/apimachinery v0.29.4
+	k8s.io/apiserver v0.29.4
+	k8s.io/client-go v0.29.4
+	k8s.io/component-base v0.29.4
 	k8s.io/klog/v2 v2.120.1
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd
 )
