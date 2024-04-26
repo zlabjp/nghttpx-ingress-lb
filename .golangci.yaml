@@ -18,6 +18,7 @@ linters:
   - perfsprint
   - mirror
   - wsl
+  - copyloopvar
 linters-settings:
   govet:
     enable:
