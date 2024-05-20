@@ -52,6 +52,8 @@ import (
 	"k8s.io/component-base/cli"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
@@ -110,6 +112,8 @@ var (
 	staleAssetsThreshold                    = time.Hour
 	tlsTicketKeyPeriod                      = time.Hour
 	quicSecretPeriod                        = 4 * time.Hour
+	gatewayAPI                              = false
+	gatewayClassController                  = "zlab.co.jp/nghttpx"
 )
 
 func main() {
@@ -245,6 +249,11 @@ func main() {
 	rootCmd.Flags().DurationVar(&quicSecretPeriod, "quic-secret-period", quicSecretPeriod,
 		`Duration before QUIC keying materials are rotated and new key is generated.`)
 
+	rootCmd.Flags().BoolVar(&gatewayAPI, "gateway-api", gatewayAPI, `Enable Gateway API.`)
+
+	rootCmd.Flags().StringVar(&gatewayClassController, "gateway-class-controller", gatewayClassController,
+		`The name of GatewayClass controller for this controller.  This is the value specified in GatewayClass.spec.controllerName.`)
+
 	code := cli.Run(rootCmd)
 	os.Exit(code)
 }
@@ -346,6 +355,16 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
+	var gatewayClientset gatewayclientset.Interface
+
+	if gatewayAPI {
+		gatewayClientset, err = gatewayclientset.NewForConfig(config)
+		if err != nil {
+			log.Error(err, "Unable to create GatewayClientset")
+			os.Exit(1)
+		}
+	}
+
 	podInfo := types.NamespacedName{Name: os.Getenv("POD_NAME"), Namespace: os.Getenv("POD_NAMESPACE")}
 
 	if podInfo.Name == "" {
@@ -405,6 +424,8 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		RequireIngressClass:                     requireIngressClass,
 		TLSTicketKeyPeriod:                      tlsTicketKeyPeriod,
 		QUICSecretPeriod:                        quicSecretPeriod,
+		GatewayAPI:                              gatewayAPI,
+		GatewayClassController:                  gatewayv1.GatewayController(gatewayClassController),
 		Pod:                                     thisPod,
 		EventRecorder:                           eventRecorder,
 	}
@@ -425,7 +446,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	lbc, err := controller.NewLoadBalancerController(ctx, clientset, lb, controllerConfig)
+	lbc, err := controller.NewLoadBalancerController(ctx, clientset, gatewayClientset, lb, controllerConfig)
 	if err != nil {
 		log.Error(err, "Unable to create LoadBalancerController")
 		os.Exit(1)

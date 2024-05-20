@@ -34,10 +34,14 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	listersnetworkingv1 "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewaylistersv1 "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
 )
 
 // loadBalancerIngressesIPEqual compares a and b, and if their IP fields are equal, returns true.  a and b might not be sorted in the
@@ -176,6 +180,55 @@ func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingres
 	return true
 }
 
+func validateGatewayGatewayClass(ctx context.Context, gtw *gatewayv1.Gateway, gatewayClassController gatewayv1.GatewayController,
+	gatewayClassLister gatewaylistersv1.GatewayClassLister) bool {
+	log := klog.FromContext(ctx)
+
+	log = klog.LoggerWithValues(log, "gateway", klog.KObj(gtw))
+
+	gc, err := gatewayClassLister.Get(string(gtw.Spec.GatewayClassName))
+	if err != nil {
+		log.Error(err, "Unable to get GatewayClass")
+
+		return false
+	}
+
+	return gc.Spec.ControllerName == gatewayClassController
+}
+
+func parentGateway(httpRoute *gatewayv1.HTTPRoute, paRef *gatewayv1.ParentReference) bool {
+	return ptr.Deref(paRef.Group, gatewayv1.GroupName) == gatewayv1.GroupName &&
+		ptr.Deref(paRef.Kind, "Gateway") == "Gateway" &&
+		ptr.Deref(paRef.Namespace, gatewayv1.Namespace(httpRoute.Namespace)) == gatewayv1.Namespace(httpRoute.Namespace)
+}
+
+func validateHTTPRouteGatewayClass(ctx context.Context, httpRoute *gatewayv1.HTTPRoute, gatewayClassController gatewayv1.GatewayController,
+	gatewayClassLister gatewaylistersv1.GatewayClassLister, gatewayLister gatewaylistersv1.GatewayLister) bool {
+	log := klog.FromContext(ctx)
+
+	log = klog.LoggerWithValues(log, "httpRoute", klog.KObj(httpRoute))
+
+	for i := range httpRoute.Spec.ParentRefs {
+		paRef := &httpRoute.Spec.ParentRefs[i]
+
+		if !parentGateway(httpRoute, paRef) {
+			continue
+		}
+
+		gtw, err := gatewayLister.Gateways(httpRoute.Namespace).Get(string(paRef.Name))
+		if err != nil {
+			log.Error(err, "Unable to get Gateway")
+			continue
+		}
+
+		if validateGatewayGatewayClass(ctx, gtw, gatewayClassController, gatewayClassLister) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func ingressLoadBalancerIngressFromService(svc *corev1.Service) []networkingv1.IngressLoadBalancerIngress {
 	l := len(svc.Status.LoadBalancer.Ingress) + len(svc.Spec.ExternalIPs)
 	if l == 0 {
@@ -232,4 +285,35 @@ func calculateCertificateHash(cert, key []byte) []byte {
 	h.Write(key)
 
 	return h.Sum(nil)
+}
+
+func parentRefEqual(a, b *gatewayv1.ParentReference, namespace string) bool {
+	return ptr.Deref(a.Group, gatewayv1.GroupName) == ptr.Deref(b.Group, gatewayv1.GroupName) &&
+		ptr.Deref(a.Kind, "Gateway") == ptr.Deref(b.Kind, "Gateway") &&
+		ptr.Deref(a.Namespace, gatewayv1.Namespace(namespace)) == ptr.Deref(b.Namespace, gatewayv1.Namespace(namespace)) &&
+		a.Name == b.Name &&
+		ptr.Deref(a.SectionName, "*") == ptr.Deref(b.SectionName, "*") &&
+		ptr.Deref(a.Port, 65536) == ptr.Deref(b.Port, 65536)
+}
+
+func findCondition(conditions []metav1.Condition, condType string) *metav1.Condition {
+	i := slices.IndexFunc(conditions, func(cond metav1.Condition) bool {
+		return cond.Type == condType
+	})
+	if i == -1 {
+		return nil
+	}
+
+	return &conditions[i]
+}
+
+func findHTTPRouteParentStatus(httpRoute *gatewayv1.HTTPRoute, paRef *gatewayv1.ParentReference) *gatewayv1.RouteParentStatus {
+	i := slices.IndexFunc(httpRoute.Status.Parents, func(s gatewayv1.RouteParentStatus) bool {
+		return parentRefEqual(&s.ParentRef, paRef, httpRoute.Namespace)
+	})
+	if i == -1 {
+		return nil
+	}
+
+	return &httpRoute.Status.Parents[i]
 }

@@ -47,6 +47,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/informers"
@@ -62,6 +63,10 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
+	gatewayinformers "sigs.k8s.io/gateway-api/pkg/client/informers/externalversions"
+	gatewaylistersv1 "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -91,20 +96,25 @@ const (
 
 // LoadBalancerController watches the kubernetes api and adds/removes services from the loadbalancer
 type LoadBalancerController struct {
-	clientset clientset.Interface
+	clientset        clientset.Interface
+	gatewayClientset gatewayclientset.Interface
 
 	watchNSInformers informers.SharedInformerFactory
 	allNSInformers   informers.SharedInformerFactory
 	cmNSInformers    informers.SharedInformerFactory
+	gatewayInformers gatewayinformers.SharedInformerFactory
 
 	// For tests
-	ingIndexer      cache.Indexer
-	ingClassIndexer cache.Indexer
-	epSliceIndexer  cache.Indexer
-	svcIndexer      cache.Indexer
-	secretIndexer   cache.Indexer
-	cmIndexer       cache.Indexer
-	podIndexer      cache.Indexer
+	ingIndexer          cache.Indexer
+	ingClassIndexer     cache.Indexer
+	epSliceIndexer      cache.Indexer
+	svcIndexer          cache.Indexer
+	secretIndexer       cache.Indexer
+	cmIndexer           cache.Indexer
+	podIndexer          cache.Indexer
+	gatewayClassIndexer cache.Indexer
+	gatewayIndexer      cache.Indexer
+	httpRouteIndexer    cache.Indexer
 
 	ingLister                               listersnetworkingv1.IngressLister
 	ingClassLister                          listersnetworkingv1.IngressClassLister
@@ -113,6 +123,9 @@ type LoadBalancerController struct {
 	secretLister                            listerscorev1.SecretLister
 	cmLister                                listerscorev1.ConfigMapLister
 	podLister                               listerscorev1.PodLister
+	gatewayClassLister                      gatewaylistersv1.GatewayClassLister
+	gatewayLister                           gatewaylistersv1.GatewayLister
+	httpRouteLister                         gatewaylistersv1.HTTPRouteLister
 	nghttpx                                 nghttpx.ServerReloader
 	pod                                     *corev1.Pod
 	defaultSvc                              *types.NamespacedName
@@ -146,6 +159,8 @@ type LoadBalancerController struct {
 	requireIngressClass                     bool
 	tlsTicketKeyPeriod                      time.Duration
 	quicSecretPeriod                        time.Duration
+	gatewayAPI                              bool
+	gatewayClassController                  gatewayv1.GatewayController
 	reloadRateLimiter                       flowcontrol.RateLimiter
 	eventRecorder                           events.EventRecorder
 	syncQueue                               workqueue.Interface
@@ -225,6 +240,10 @@ type Config struct {
 	TLSTicketKeyPeriod time.Duration
 	// QUICSecretPeriod is the duration before QUIC keying materials are rotated and new key is generated.
 	QUICSecretPeriod time.Duration
+	// GatewayAPI, if true, enables Gateway API.
+	GatewayAPI bool
+	// GatewayClassController is the name of GatewayClass controller for this controller.
+	GatewayClassController gatewayv1.GatewayController
 	// Pod is the Pod where this controller runs.
 	Pod *corev1.Pod
 	// EventRecorder is the event recorder.
@@ -232,13 +251,15 @@ type Config struct {
 }
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
-func NewLoadBalancerController(ctx context.Context, clientset clientset.Interface, nghttpx nghttpx.ServerReloader, config Config) (*LoadBalancerController, error) {
+func NewLoadBalancerController(ctx context.Context, clientset clientset.Interface, gatewayClientset gatewayclientset.Interface,
+	nghttpx nghttpx.ServerReloader, config Config) (*LoadBalancerController, error) {
 	log := klog.LoggerWithName(klog.FromContext(ctx), "loadBalancerController")
 
 	ctx = klog.NewContext(ctx, log)
 
 	lbc := LoadBalancerController{
 		clientset:                               clientset,
+		gatewayClientset:                        gatewayClientset,
 		watchNSInformers:                        informers.NewSharedInformerFactoryWithOptions(clientset, noResyncPeriod, informers.WithNamespace(config.WatchNamespace)),
 		allNSInformers:                          informers.NewSharedInformerFactory(clientset, noResyncPeriod),
 		pod:                                     config.Pod,
@@ -274,6 +295,8 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		requireIngressClass:                     config.RequireIngressClass,
 		tlsTicketKeyPeriod:                      config.TLSTicketKeyPeriod,
 		quicSecretPeriod:                        config.QUICSecretPeriod,
+		gatewayAPI:                              config.GatewayAPI,
+		gatewayClassController:                  config.GatewayClassController,
 		eventRecorder:                           config.EventRecorder,
 		syncQueue:                               workqueue.New(),
 		reloadRateLimiter:                       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
@@ -403,6 +426,62 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		}
 
 		lbc.cmIndexer = inf.GetIndexer()
+	}
+
+	if lbc.gatewayAPI {
+		lbc.gatewayInformers = gatewayinformers.NewSharedInformerFactoryWithOptions(
+			gatewayClientset, noResyncPeriod, gatewayinformers.WithNamespace(config.WatchNamespace))
+
+		{
+			f := lbc.gatewayInformers.Gateway().V1().GatewayClasses()
+			lbc.gatewayClassLister = f.Lister()
+			inf := f.Informer()
+
+			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    addFuncContext(ctx, lbc.addGatewayClassNotification),
+				UpdateFunc: updateFuncContext(ctx, lbc.updateGatewayClassNotification),
+				DeleteFunc: deleteFuncContext(ctx, lbc.deleteGatewayClassNotification),
+			}); err != nil {
+				log.Error(err, "Unable to add GatewayClass event handler")
+				return nil, err
+			}
+
+			lbc.gatewayClassIndexer = inf.GetIndexer()
+		}
+
+		{
+			f := lbc.gatewayInformers.Gateway().V1().Gateways()
+			lbc.gatewayLister = f.Lister()
+			inf := f.Informer()
+
+			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    addFuncContext(ctx, lbc.addGatewayNotification),
+				UpdateFunc: updateFuncContext(ctx, lbc.updateGatewayNotification),
+				DeleteFunc: deleteFuncContext(ctx, lbc.deleteGatewayNotification),
+			}); err != nil {
+				log.Error(err, "Unable to add Gateway event handler")
+				return nil, err
+			}
+
+			lbc.gatewayIndexer = inf.GetIndexer()
+		}
+
+		{
+			f := lbc.gatewayInformers.Gateway().V1().HTTPRoutes()
+			lbc.httpRouteLister = f.Lister()
+			inf := f.Informer()
+
+			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    addFuncContext(ctx, lbc.addHTTPRouteNotification),
+				UpdateFunc: updateFuncContext(ctx, lbc.updateHTTPRouteNotification),
+				DeleteFunc: deleteFuncContext(ctx, lbc.deleteHTTPRouteNotification),
+			}); err != nil {
+				log.Error(err, "Unable to add HTTPRoute event handler")
+				return nil, err
+			}
+
+			lbc.httpRouteIndexer = inf.GetIndexer()
+		}
 	}
 
 	return &lbc, nil
@@ -978,12 +1057,7 @@ func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
 		log.Info("Finished syncing load balancer", "duration", time.Since(start))
 	}()
 
-	ings, err := lbc.ingLister.List(labels.Everything())
-	if err != nil {
-		return err
-	}
-
-	ingConfig, err := lbc.createIngressConfig(ctx, ings)
+	ingConfig, err := lbc.createConfig(ctx)
 	if err != nil {
 		return err
 	}
@@ -1114,10 +1188,8 @@ App.new
 	return upstream
 }
 
-// createIngressConfig creates nghttpx.IngressConfig.  In nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
-func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings []*networkingv1.Ingress) (*nghttpx.IngressConfig, error) {
-	log := klog.FromContext(ctx)
-
+// createConfig creates nghttpx.IngressConfig.  In nghttpx terminology, nghttpx.Upstream is backend, nghttpx.Server is frontend
+func (lbc *LoadBalancerController) createConfig(ctx context.Context) (*nghttpx.IngressConfig, error) {
 	ingConfig := &nghttpx.IngressConfig{
 		HealthPort:                       lbc.nghttpxHealthPort,
 		APIPort:                          lbc.nghttpxAPIPort,
@@ -1133,11 +1205,6 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 		ShareTLSTicketKey:                lbc.shareTLSTicketKey,
 	}
 
-	var (
-		upstreams []*nghttpx.Upstream
-		creds     []*nghttpx.TLSCred
-	)
-
 	if lbc.defaultTLSSecret != nil {
 		tlsCred, err := lbc.getTLSCredFromSecret(ctx, lbc.defaultTLSSecret)
 		if err != nil {
@@ -1148,86 +1215,30 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 		ingConfig.DefaultTLSCred = tlsCred
 	}
 
-	var defaultUpstream *nghttpx.Upstream
+	ings, err := lbc.ingLister.List(labels.Everything())
+	if err != nil {
+		return nil, err
+	}
 
-	for _, ing := range ings {
-		if !lbc.validateIngressClass(ctx, ing) {
-			continue
-		}
+	upstreams, defaultUpstream, creds := lbc.createIngressUpstreams(ctx, ings)
 
-		log := klog.LoggerWithValues(log, "ingress", klog.KObj(ing))
-		ctx := klog.NewContext(ctx, log)
-
-		log.V(4).Info("Processing Ingress")
-
-		var requireTLS bool
-
-		ingCreds, err := lbc.getTLSCredFromIngress(ctx, ing)
+	if lbc.gatewayAPI {
+		httpRoutes, err := lbc.httpRouteLister.List(labels.Everything())
 		if err != nil {
-			log.Error(err, "Ingress is disabled because its TLS Secret cannot be processed")
-			continue
+			return nil, err
 		}
 
-		creds = append(creds, ingCreds...)
-		requireTLS = len(ingCreds) > 0
+		gatewayUpstreams := lbc.createGatewayUpstreams(ctx, httpRoutes)
 
-		bcm := ingressAnnotation(ing.Annotations).NewBackendConfigMapper(ctx)
-		pcm := ingressAnnotation(ing.Annotations).NewPathConfigMapper(ctx)
-
-		if !lbc.noDefaultBackendOverride {
-			if isb := getDefaultBackendService(ing); isb != nil {
-				// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress
-				// resource specifies this.  But specification does not any rules how to deal with it.  Just use the one we
-				// meet last.
-				if ups, err := lbc.createUpstream(ctx, ing, "", "/", isb, false /* requireTLS */, pcm, bcm); err != nil {
-					log.Error(err, "Unable to create default backend")
-				} else {
-					defaultUpstream = ups
-				}
-			}
+		gtws, err := lbc.gatewayLister.List(labels.Everything())
+		if err != nil {
+			return nil, err
 		}
 
-		for i := range ing.Spec.Rules {
-			rule := &ing.Spec.Rules[i]
+		gatewayCreds := lbc.createGatewayCredentials(ctx, gtws)
 
-			if rule.HTTP == nil {
-				continue
-			}
-
-			for i := range rule.HTTP.Paths {
-				path := &rule.HTTP.Paths[i]
-
-				reqPath := path.Path
-				if idx := strings.Index(reqPath, "#"); idx != -1 {
-					log.Error(nil, "Path includes fragment", "path", reqPath)
-					reqPath = reqPath[:idx]
-				}
-
-				if idx := strings.Index(reqPath, "?"); idx != -1 {
-					log.Error(nil, "Path includes query", "path", reqPath)
-					reqPath = reqPath[:idx]
-				}
-
-				if lbc.noDefaultBackendOverride && (rule.Host == "" && (reqPath == "" || reqPath == "/")) {
-					log.Error(nil, "Ignore rule which overrides default backend")
-					continue
-				}
-
-				isb := path.Backend.Service
-				if isb == nil {
-					log.Error(nil, "No Service is set for path", "path", reqPath)
-					continue
-				}
-
-				ups, err := lbc.createUpstream(ctx, ing, rule.Host, reqPath, isb, requireTLS, pcm, bcm)
-				if err != nil {
-					log.Error(err, "Unable to create backend", "path", reqPath)
-					continue
-				}
-
-				upstreams = append(upstreams, ups)
-			}
-		}
+		upstreams = append(upstreams, gatewayUpstreams...)
+		creds = append(creds, gatewayCreds...)
 	}
 
 	nghttpx.SortTLSCred(creds)
@@ -1300,6 +1311,95 @@ func (lbc *LoadBalancerController) createIngressConfig(ctx context.Context, ings
 	}
 
 	return ingConfig, nil
+}
+
+func (lbc *LoadBalancerController) createIngressUpstreams(ctx context.Context, ings []*networkingv1.Ingress) (upstreams []*nghttpx.Upstream, defaultUpstream *nghttpx.Upstream, creds []*nghttpx.TLSCred) {
+	log := klog.FromContext(ctx)
+
+	for _, ing := range ings {
+		if !lbc.validateIngressClass(ctx, ing) {
+			continue
+		}
+
+		log := klog.LoggerWithValues(log, "ingress", klog.KObj(ing))
+		ctx := klog.NewContext(ctx, log)
+
+		log.V(4).Info("Processing Ingress")
+
+		var requireTLS bool
+
+		ingCreds, err := lbc.getTLSCredFromIngress(ctx, ing)
+		if err != nil {
+			log.Error(err, "Ingress is disabled because its TLS Secret cannot be processed")
+			continue
+		}
+
+		creds = append(creds, ingCreds...)
+		requireTLS = len(ingCreds) > 0
+
+		bcm := ingressAnnotation(ing.Annotations).NewBackendConfigMapper(ctx)
+		pcm := ingressAnnotation(ing.Annotations).NewPathConfigMapper(ctx)
+
+		if !lbc.noDefaultBackendOverride {
+			if isb := getDefaultBackendService(ing); isb != nil {
+				// This overrides the default backend specified in command-line.  It is possible that the multiple Ingress
+				// resource specifies this.  But specification does not any rules how to deal with it.  Just use the one we
+				// meet last.
+				gvk := networkingv1.SchemeGroupVersion.WithKind("Ingress")
+				if ups, err := lbc.createUpstream(ctx, gvk, ing, "", "/", isb, false /* requireTLS */, pcm, bcm); err != nil {
+					log.Error(err, "Unable to create default backend")
+				} else {
+					defaultUpstream = ups
+				}
+			}
+		}
+
+		for i := range ing.Spec.Rules {
+			rule := &ing.Spec.Rules[i]
+
+			if rule.HTTP == nil {
+				continue
+			}
+
+			for i := range rule.HTTP.Paths {
+				path := &rule.HTTP.Paths[i]
+
+				reqPath := path.Path
+				if idx := strings.Index(reqPath, "#"); idx != -1 {
+					log.Error(nil, "Path includes fragment", "path", reqPath)
+					reqPath = reqPath[:idx]
+				}
+
+				if idx := strings.Index(reqPath, "?"); idx != -1 {
+					log.Error(nil, "Path includes query", "path", reqPath)
+					reqPath = reqPath[:idx]
+				}
+
+				if lbc.noDefaultBackendOverride && (rule.Host == "" && (reqPath == "" || reqPath == "/")) {
+					log.Error(nil, "Ignore rule which overrides default backend")
+					continue
+				}
+
+				isb := path.Backend.Service
+				if isb == nil {
+					log.Error(nil, "No Service is set for path", "path", reqPath)
+					continue
+				}
+
+				gvk := networkingv1.SchemeGroupVersion.WithKind("Ingress")
+
+				ups, err := lbc.createUpstream(ctx, gvk, ing, rule.Host, reqPath, isb, requireTLS, pcm, bcm)
+				if err != nil {
+					log.Error(err, "Unable to create backend", "path", reqPath)
+					continue
+				}
+
+				upstreams = append(upstreams, ups)
+			}
+		}
+	}
+
+	return
 }
 
 type backendOpts struct {
@@ -1403,7 +1503,7 @@ func removeUpstreamsWithInconsistentBackendParams(ctx context.Context, upstreams
 
 		for j := opts.index; j < i; j++ {
 			log.Error(nil, "Skip upstream which contains inconsistent backend parameters",
-				"upstream", upstreams[j].Name, "ingress", upstreams[j].Ingress)
+				"upstream", upstreams[j].Name, "gvk", upstreams[j].GroupVersionKind, "source", upstreams[j].Source)
 		}
 
 		if i == len(upstreams) {
@@ -1512,7 +1612,7 @@ App.new
 }
 
 // createUpstream creates new nghttpx.Upstream for ing, host, path and isb.
-func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *networkingv1.Ingress, host, path string, isb *networkingv1.IngressServiceBackend,
+func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schema.GroupVersionKind, obj metav1.Object, host, path string, isb *networkingv1.IngressServiceBackend,
 	requireTLS bool, pcm *nghttpx.PathConfigMapper, bcm *nghttpx.BackendConfigMapper) (*nghttpx.Upstream, error) {
 	log := klog.FromContext(ctx)
 
@@ -1539,14 +1639,15 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *netw
 	pc := pcm.ConfigFor(host, normalizedPath)
 
 	if pc.GetAffinity() == nghttpx.AffinityCookie && pc.GetAffinityCookieName() == "" {
-		return nil, fmt.Errorf("Ingress %v/%v has empty affinity cookie name", ing.Namespace, ing.Name)
+		return nil, fmt.Errorf("%v %v/%v has empty affinity cookie name", gvk.Kind, obj.GetNamespace(), obj.GetName())
 	}
 
 	// The format of upsName is similar to backend option syntax of nghttpx.
-	upsName := ing.Namespace + "/" + isb.Name + "," + portStr + ";" + host + normalizedPath
+	upsName := gvk.Group + "/" + gvk.Version + "/" + gvk.Kind + ":" + obj.GetNamespace() + "/" + isb.Name + "," + portStr + ";" + host + normalizedPath
 	ups := &nghttpx.Upstream{
 		Name:                     upsName,
-		Ingress:                  types.NamespacedName{Name: ing.Name, Namespace: ing.Namespace},
+		GroupVersionKind:         gvk,
+		Source:                   types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()},
 		Host:                     host,
 		Path:                     normalizedPath,
 		RedirectIfNotTLS:         pc.GetRedirectIfNotTLS() && (requireTLS || lbc.defaultTLSSecret != nil),
@@ -1563,7 +1664,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *netw
 	if mruby := pc.GetMruby(); mruby != "" {
 		ups.Mruby = nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, []byte(mruby))
 	} else if ups.DoNotForward {
-		return nil, fmt.Errorf("Ingress %v/%v lacks mruby but doNotForward is used", ing.Namespace, ing.Name)
+		return nil, fmt.Errorf("%v %v/%v lacks mruby but doNotForward is used", gvk.Kind, obj.GetNamespace(), obj.GetName())
 	}
 
 	log.V(4).Info("Found rule", "upstream", upsName, "host", ups.Host, "path", ups.Path)
@@ -1573,9 +1674,9 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, ing *netw
 		return ups, nil
 	}
 
-	svcKey := strings.Join([]string{ing.Namespace, isb.Name}, "/")
+	svcKey := strings.Join([]string{obj.GetNamespace(), isb.Name}, "/")
 
-	svc, err := lbc.svcLister.Services(ing.Namespace).Get(isb.Name)
+	svc, err := lbc.svcLister.Services(obj.GetNamespace()).Get(isb.Name)
 	if err != nil {
 		return nil, fmt.Errorf("error getting Service %v from the cache: %w", svcKey, err)
 	}
@@ -2103,8 +2204,22 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		defer f.Shutdown()
 	}
 
+	if lbc.gatewayInformers != nil {
+		lbc.gatewayInformers.Start(ctrlCtx.Done())
+		defer lbc.gatewayInformers.Shutdown()
+	}
+
 	for _, f := range allInformers {
 		for v, ok := range f.WaitForCacheSync(ctrlCtx.Done()) {
+			if !ok {
+				log.Error(nil, "Unable to sync cache", "type", v)
+				return
+			}
+		}
+	}
+
+	if lbc.gatewayInformers != nil {
+		for v, ok := range lbc.gatewayInformers.WaitForCacheSync(ctrlCtx.Done()) {
 			if !ok {
 				log.Error(nil, "Unable to sync cache", "type", v)
 				return
@@ -2236,24 +2351,34 @@ type LeaderController struct {
 	secretInformers  informers.SharedInformerFactory
 	svcInformers     informers.SharedInformerFactory
 	allNSInformers   informers.SharedInformerFactory
+	gatewayInformers gatewayinformers.SharedInformerFactory
 
 	// For tests
-	ingIndexer      cache.Indexer
-	ingClassIndexer cache.Indexer
-	svcIndexer      cache.Indexer
-	podIndexer      cache.Indexer
-	secretIndexer   cache.Indexer
-	nodeIndexer     cache.Indexer
+	ingIndexer          cache.Indexer
+	ingClassIndexer     cache.Indexer
+	svcIndexer          cache.Indexer
+	podIndexer          cache.Indexer
+	secretIndexer       cache.Indexer
+	nodeIndexer         cache.Indexer
+	gatewayClassIndexer cache.Indexer
+	gatewayIndexer      cache.Indexer
+	httpRouteIndexer    cache.Indexer
 
-	ingLister      listersnetworkingv1.IngressLister
-	ingClassLister listersnetworkingv1.IngressClassLister
-	svcLister      listerscorev1.ServiceLister
-	podLister      listerscorev1.PodLister
-	secretLister   listerscorev1.SecretLister
-	nodeLister     listerscorev1.NodeLister
+	ingLister          listersnetworkingv1.IngressLister
+	ingClassLister     listersnetworkingv1.IngressClassLister
+	svcLister          listerscorev1.ServiceLister
+	podLister          listerscorev1.PodLister
+	secretLister       listerscorev1.SecretLister
+	nodeLister         listerscorev1.NodeLister
+	gatewayClassLister gatewaylistersv1.GatewayClassLister
+	gatewayLister      gatewaylistersv1.GatewayLister
+	httpRouteLister    gatewaylistersv1.HTTPRouteLister
 
-	ingQueue    workqueue.RateLimitingInterface
-	secretQueue workqueue.RateLimitingInterface
+	ingQueue          workqueue.RateLimitingInterface
+	secretQueue       workqueue.RateLimitingInterface
+	gatewayClassQueue workqueue.RateLimitingInterface
+	gatewayQueue      workqueue.RateLimitingInterface
+	httpRouteQueue    workqueue.RateLimitingInterface
 }
 
 func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*LeaderController, error) {
@@ -2383,6 +2508,77 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		lc.nodeIndexer = f.Informer().GetIndexer()
 	}
 
+	if lbc.gatewayAPI {
+		lc.gatewayClassQueue = workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		))
+
+		lc.gatewayQueue = workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		))
+
+		lc.httpRouteQueue = workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		))
+
+		lc.gatewayInformers = gatewayinformers.NewSharedInformerFactoryWithOptions(
+			lbc.gatewayClientset, noResyncPeriod, gatewayinformers.WithNamespace(lbc.watchNamespace))
+
+		{
+			f := lc.gatewayInformers.Gateway().V1().GatewayClasses()
+			lc.gatewayClassLister = f.Lister()
+			inf := f.Informer()
+
+			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    addFuncContext(ctx, lc.addGatewayClassNotification),
+				UpdateFunc: updateFuncContext(ctx, lc.updateGatewayClassNotification),
+				DeleteFunc: deleteFuncContext(ctx, lc.deleteGatewayClassNotification),
+			}); err != nil {
+				log.Error(err, "Unable to add GatewayClass event handler")
+				return nil, err
+			}
+
+			lc.gatewayClassIndexer = inf.GetIndexer()
+		}
+
+		{
+			f := lc.gatewayInformers.Gateway().V1().Gateways()
+			lc.gatewayLister = f.Lister()
+			inf := f.Informer()
+
+			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    addFuncContext(ctx, lc.addGatewayNotification),
+				UpdateFunc: updateFuncContext(ctx, lc.updateGatewayNotification),
+				DeleteFunc: deleteFuncContext(ctx, lc.deleteGatewayNotification),
+			}); err != nil {
+				log.Error(err, "Unable to add Gateway event handler")
+				return nil, err
+			}
+
+			lc.gatewayIndexer = inf.GetIndexer()
+		}
+
+		{
+			f := lc.gatewayInformers.Gateway().V1().HTTPRoutes()
+			lc.httpRouteLister = f.Lister()
+			inf := f.Informer()
+
+			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    addFuncContext(ctx, lc.addHTTPRouteNotification),
+				UpdateFunc: updateFuncContext(ctx, lc.updateHTTPRouteNotification),
+				DeleteFunc: deleteFuncContext(ctx, lc.deleteHTTPRouteNotification),
+			}); err != nil {
+				log.Error(err, "Unable to add HTTPRoute event handler")
+				return nil, err
+			}
+
+			lc.httpRouteIndexer = inf.GetIndexer()
+		}
+	}
+
 	return lc, nil
 }
 
@@ -2410,10 +2606,23 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 		defer f.Shutdown()
 	}
 
+	if lc.gatewayInformers != nil {
+		lc.gatewayInformers.Start(ctx.Done())
+		defer lc.gatewayInformers.Shutdown()
+	}
+
 	for _, f := range allInformers {
 		for v, ok := range f.WaitForCacheSync(ctx.Done()) {
 			if !ok {
 				return fmt.Errorf("Unable to sync cache %v", v)
+			}
+		}
+	}
+
+	if lc.gatewayInformers != nil {
+		for v, ok := range lc.gatewayInformers.WaitForCacheSync(ctx.Done()) {
+			if !ok {
+				return fmt.Errorf("Unable to sync cache: %v", v)
 			}
 		}
 	}
@@ -2437,6 +2646,32 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 		lc.ingressWorker(ctx)
 	}()
 
+	if lc.lbc.gatewayAPI {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			lc.gatewayClassWorker(ctx)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			lc.gatewayWorker(ctx)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			lc.httpRouteWorker(ctx)
+		}()
+	}
+
 	<-ctx.Done()
 
 	log.Info("Shutting down leader controller")
@@ -2445,6 +2680,12 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 
 	if lc.lbc.http3 {
 		lc.secretQueue.ShutDown()
+	}
+
+	if lc.lbc.gatewayAPI {
+		lc.gatewayClassQueue.ShutDown()
+		lc.gatewayQueue.ShutDown()
+		lc.httpRouteQueue.ShutDown()
 	}
 
 	wg.Wait()

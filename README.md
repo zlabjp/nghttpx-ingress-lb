@@ -231,6 +231,33 @@ spec:
         ...
 ```
 
+## Gateway API support (Experimental)
+
+[Gateway API](https://gateway-api.sigs.k8s.io/) support is
+experimental and its quality is pre-alpha level.  To enable Gateway
+API, specify `--gateway-api` flag.  Create GatewayClass resource like so:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: nghttpx
+spec:
+  controllerName: zlab.co.jp/nghttpx
+```
+
+Add the following ClusterRole rules that are applied to a subject that
+runs this controller:
+
+```yaml
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gatewayclasses", "gateways", "httproutes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gatewayclasses/status", "gateways/status", "httproutes/status"]
+  verbs: ["update"]
+```
+
 ## PROXY protocol support - preserving ClientIP addresses
 
 In case you are running nghttpx-ingress-lb behind a LoadBalancer you might
