@@ -46,6 +46,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/events"
+	gatewayfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -53,7 +54,8 @@ import (
 type fixture struct {
 	t *testing.T
 
-	clientset *fake.Clientset
+	clientset        *fake.Clientset
+	gatewayClientset *gatewayfake.Clientset
 
 	lbc *LoadBalancerController
 	lc  *LeaderController
@@ -142,6 +144,7 @@ func (f *fixture) prepare() {
 
 func (f *fixture) preparePod(pod *corev1.Pod) {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
+	f.gatewayClientset = gatewayfake.NewSimpleClientset()
 	config := Config{
 		DefaultBackendService: &types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
 		WatchNamespace:        defaultIngNamespace,
@@ -164,7 +167,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		EventRecorder:          &events.FakeRecorder{},
 	}
 
-	lbc, err := NewLoadBalancerController(context.Background(), f.clientset, newFakeLoadBalancer(), config)
+	lbc, err := NewLoadBalancerController(context.Background(), f.clientset, f.gatewayClientset, newFakeLoadBalancer(), config)
 	if err != nil {
 		f.t.Fatalf("NewLoadBalancerController: %v", err)
 	}
@@ -1086,8 +1089,8 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	}
 
 	upstream := ingConfig.Upstreams[1]
-	if got, want := upstream.Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-		t.Errorf("upstream.Ingress = %v, want %v", got, want)
+	if got, want := upstream.Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+		t.Errorf("upstream.Source = %v, want %v", got, want)
 	}
 
 	if got, want := upstream.RedirectIfNotTLS, true; got != want {
@@ -1182,8 +1185,8 @@ func TestSyncStringNamedPort(t *testing.T) {
 				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 			}
 
-			if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-				t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
+			if got, want := ingConfig.Upstreams[1].Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+				t.Errorf("ingConfig.Upstreams[1].Source = %v, want %v", got, want)
 			}
 
 			if got, want := len(ingConfig.Upstreams[1].Backends), 2; got != want {
@@ -1233,8 +1236,8 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-		t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
+	if got, want := ingConfig.Upstreams[1].Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+		t.Errorf("ingConfig.Upstreams[1].Source = %v, want %v", got, want)
 	}
 
 	backend := ingConfig.Upstreams[1].Backends[0]
@@ -1281,8 +1284,8 @@ func TestSyncWithoutSelectors(t *testing.T) {
 				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 			}
 
-			if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-				t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
+			if got, want := ingConfig.Upstreams[1].Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+				t.Errorf("ingConfig.Upstreams[1].Source = %v, want %v", got, want)
 			}
 
 			backend := ingConfig.Upstreams[1].Backends[0]
@@ -1427,7 +1430,7 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	var found bool
 
 	for _, upstream := range ingConfig.Upstreams {
-		if upstream.Name == "default/bravo,8281;/" {
+		if upstream.Name == "networking.k8s.io/v1/Ingress:default/bravo,8281;/" {
 			found = true
 			break
 		}
@@ -1488,8 +1491,8 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 				t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 			}
 
-			if got, want := ingConfig.Upstreams[0].Ingress, (types.NamespacedName{}); got != want {
-				t.Errorf("ingConfig.Upstreams[0].Ingress = %v, want %v", got, want)
+			if got, want := ingConfig.Upstreams[0].Source, (types.NamespacedName{}); got != want {
+				t.Errorf("ingConfig.Upstreams[0].Source = %v, want %v", got, want)
 			}
 
 			if got, want := ingConfig.Upstreams[0].Name, f.lbc.defaultSvc.String(); got != want {
@@ -1715,8 +1718,8 @@ func TestSyncNamedServicePort(t *testing.T) {
 		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
 	}
 
-	if got, want := ingConfig.Upstreams[1].Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-		t.Errorf("ingConfig.Upstreams[1].Ingress = %v, want %v", got, want)
+	if got, want := ingConfig.Upstreams[1].Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+		t.Errorf("ingConfig.Upstreams[1].Source = %v, want %v", got, want)
 	}
 
 	backend := ingConfig.Upstreams[1].Backends[0]
@@ -1812,8 +1815,8 @@ func TestSyncDoNotForward(t *testing.T) {
 
 	upstream := ingConfig.Upstreams[1]
 
-	if got, want := upstream.Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-		t.Errorf("upstream.Ingress = %v, want %v", got, want)
+	if got, want := upstream.Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+		t.Errorf("upstream.Source = %v, want %v", got, want)
 	}
 
 	if got, want := upstream.DoNotForward, true; got != want {
@@ -1885,8 +1888,8 @@ func TestSyncNormalizePath(t *testing.T) {
 
 			upstream := ingConfig.Upstreams[1]
 
-			if got, want := upstream.Ingress, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-				t.Errorf("upstream.Ingress = %v, want %v", got, want)
+			if got, want := upstream.Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
+				t.Errorf("upstream.Source = %v, want %v", got, want)
 			}
 
 			if got, want := upstream.Path, tt.want; got != want {
@@ -2676,8 +2679,8 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 
 	upstream := ingConfig.Upstreams[1]
 
-	if got, want := upstream.Ingress, (types.NamespacedName{Name: ing3.Name, Namespace: ing3.Namespace}); got != want {
-		t.Errorf("upstream.Ingress = %v, want %v", got, want)
+	if got, want := upstream.Source, (types.NamespacedName{Name: ing3.Name, Namespace: ing3.Namespace}); got != want {
+		t.Errorf("upstream.Source = %v, want %v", got, want)
 	}
 }
 
@@ -2739,8 +2742,8 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 
 	upstream := ingConfig.Upstreams[1]
 
-	if got, want := upstream.Ingress, (types.NamespacedName{Name: ing3.Name, Namespace: ing3.Namespace}); got != want {
-		t.Errorf("upstream.Ingress = %v, want %v", got, want)
+	if got, want := upstream.Source, (types.NamespacedName{Name: ing3.Name, Namespace: ing3.Namespace}); got != want {
+		t.Errorf("upstream.Source = %v, want %v", got, want)
 	}
 }
 

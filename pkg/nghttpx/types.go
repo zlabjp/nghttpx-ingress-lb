@@ -30,6 +30,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 )
@@ -94,7 +95,8 @@ type IngressConfig struct {
 // Upstream describes an nghttpx upstream
 type Upstream struct {
 	Name                     string
-	Ingress                  types.NamespacedName
+	GroupVersionKind         schema.GroupVersionKind
+	Source                   types.NamespacedName
 	Host                     string
 	Path                     string
 	Backends                 []Backend
