@@ -266,7 +266,7 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 	for i := range httpRoute.Spec.ParentRefs {
 		paRef := &httpRoute.Spec.ParentRefs[i]
 
-		if !parentGateway(httpRoute, paRef) {
+		if !parentGateway(paRef, httpRoute.Namespace) {
 			continue
 		}
 
@@ -600,7 +600,7 @@ func (lc *LeaderController) enqueueHTTPRouteFromGateway(ctx context.Context, gtw
 
 	for _, httpRoute := range httpRoutes {
 		if i := slices.IndexFunc(httpRoute.Spec.ParentRefs, func(paRef gatewayv1.ParentReference) bool {
-			return parentGateway(httpRoute, &paRef) && paRef.Name == gatewayv1.ObjectName(gtw.Name)
+			return parentGateway(&paRef, httpRoute.Namespace) && paRef.Name == gatewayv1.ObjectName(gtw.Name)
 		}); i != -1 {
 			lc.enqueueHTTPRoute(httpRoute)
 		}
@@ -903,7 +903,7 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error
 	for i := range httpRoute.Spec.ParentRefs {
 		paRef := &httpRoute.Spec.ParentRefs[i]
 
-		if !parentGateway(httpRoute, paRef) {
+		if !parentGateway(paRef, httpRoute.Namespace) {
 			continue
 		}
 
