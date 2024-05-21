@@ -2379,6 +2379,9 @@ type LeaderController struct {
 	gatewayClassQueue workqueue.RateLimitingInterface
 	gatewayQueue      workqueue.RateLimitingInterface
 	httpRouteQueue    workqueue.RateLimitingInterface
+
+	// timeNow returns the current time and abstracted for test.
+	timeNow func() metav1.Time
 }
 
 func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*LeaderController, error) {
@@ -2410,6 +2413,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 		)),
+		timeNow: metav1.Now,
 	}
 
 	{

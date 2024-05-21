@@ -673,7 +673,7 @@ func (lc *LeaderController) syncGatewayClass(ctx context.Context, key string) er
 
 	if cond.Status != metav1.ConditionTrue {
 		cond.Status = metav1.ConditionTrue
-		cond.LastTransitionTime = metav1.Now()
+		cond.LastTransitionTime = lc.timeNow()
 	}
 
 	if equality.Semantic.DeepEqual(gc.Status, newGC.Status) {
@@ -771,6 +771,8 @@ func (lc *LeaderController) syncGateway(ctx context.Context, key string) error {
 
 	newGtw := gtw.DeepCopy()
 
+	t := lc.timeNow()
+
 	cond := findCondition(newGtw.Status.Conditions, string(gatewayv1.GatewayConditionAccepted))
 	cond.Reason = string(gatewayv1.GatewayReasonAccepted)
 	cond.Message = ""
@@ -778,7 +780,7 @@ func (lc *LeaderController) syncGateway(ctx context.Context, key string) error {
 
 	if cond.Status != metav1.ConditionTrue {
 		cond.Status = metav1.ConditionTrue
-		cond.LastTransitionTime = metav1.Now()
+		cond.LastTransitionTime = t
 	}
 
 	cond = findCondition(newGtw.Status.Conditions, string(gatewayv1.GatewayConditionProgrammed))
@@ -788,7 +790,7 @@ func (lc *LeaderController) syncGateway(ctx context.Context, key string) error {
 
 	if cond.Status != metav1.ConditionTrue {
 		cond.Status = metav1.ConditionTrue
-		cond.LastTransitionTime = metav1.Now()
+		cond.LastTransitionTime = t
 	}
 
 	if equality.Semantic.DeepEqual(gtw.Status, newGtw.Status) {
@@ -806,6 +808,8 @@ func (lc *LeaderController) syncGateway(ctx context.Context, key string) error {
 func (lc *LeaderController) updateGatewayStatusWithError(ctx context.Context, gtw *gatewayv1.Gateway, statusErr error) error {
 	log := klog.FromContext(ctx)
 
+	t := lc.timeNow()
+
 	newGtw := gtw.DeepCopy()
 
 	cond := findCondition(newGtw.Status.Conditions, string(gatewayv1.GatewayConditionAccepted))
@@ -815,7 +819,7 @@ func (lc *LeaderController) updateGatewayStatusWithError(ctx context.Context, gt
 
 	if cond.Status != metav1.ConditionFalse {
 		cond.Status = metav1.ConditionFalse
-		cond.LastTransitionTime = metav1.Now()
+		cond.LastTransitionTime = t
 	}
 
 	cond = findCondition(newGtw.Status.Conditions, string(gatewayv1.GatewayConditionProgrammed))
@@ -825,7 +829,7 @@ func (lc *LeaderController) updateGatewayStatusWithError(ctx context.Context, gt
 
 	if cond.Status != metav1.ConditionFalse {
 		cond.Status = metav1.ConditionFalse
-		cond.LastTransitionTime = metav1.Now()
+		cond.LastTransitionTime = t
 	}
 
 	if equality.Semantic.DeepEqual(gtw.Status, newGtw.Status) {
@@ -896,7 +900,7 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error
 		return nil
 	}
 
-	t := metav1.Now()
+	t := lc.timeNow()
 
 	newHTTPRoute := httpRoute.DeepCopy()
 
@@ -917,7 +921,7 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error
 		}
 
 		if cond := findCondition(gtw.Status.Conditions, string(gatewayv1.GatewayConditionAccepted)); cond.Status != metav1.ConditionTrue {
-			lc.updateHTTPRouteParentRefStatus(newHTTPRoute, paRef, string(gatewayv1.RouteReasonPending), metav1.ConditionFalse, t)
+			lc.updateHTTPRouteParentRefStatus(newHTTPRoute, paRef, string(gatewayv1.RouteReasonPending), metav1.ConditionUnknown, t)
 			continue
 		}
 

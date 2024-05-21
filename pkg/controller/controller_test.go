@@ -46,6 +46,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/events"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
@@ -60,23 +61,30 @@ type fixture struct {
 	lbc *LoadBalancerController
 	lc  *LeaderController
 
-	ingStore      []*networkingv1.Ingress
-	ingClassStore []*networkingv1.IngressClass
-	svcStore      []*corev1.Service
-	secretStore   []*corev1.Secret
-	cmStore       []*corev1.ConfigMap
-	podStore      []*corev1.Pod
-	nodeStore     []*corev1.Node
-	epSliceStore  []*discoveryv1.EndpointSlice
+	ingStore          []*networkingv1.Ingress
+	ingClassStore     []*networkingv1.IngressClass
+	svcStore          []*corev1.Service
+	secretStore       []*corev1.Secret
+	cmStore           []*corev1.ConfigMap
+	podStore          []*corev1.Pod
+	nodeStore         []*corev1.Node
+	epSliceStore      []*discoveryv1.EndpointSlice
+	gatewayClassStore []*gatewayv1.GatewayClass
+	gatewayStore      []*gatewayv1.Gateway
+	httpRouteStore    []*gatewayv1.HTTPRoute
 
-	objects []runtime.Object
+	objects        []runtime.Object
+	gatewayObjects []runtime.Object
 
-	actions []core.Action
+	actions        []core.Action
+	gatewayActions []core.Action
 
 	http3               bool
 	shareTLSTicketKey   bool
 	publishService      *types.NamespacedName
 	requireIngressClass bool
+	gatewayAPI          bool
+	currentTime         metav1.Time
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -93,6 +101,7 @@ const (
 	defaultConfigMapName          = "ing-config"
 	defaultConfigMapNamespace     = "kube-system"
 	defaultIngressClassController = "zlab.co.jp/nghttpx"
+	defaultGatewayClassController = "zlab.co.jp/nghttpx"
 	defaultConfDir                = "conf"
 	defaultTLSTicketKeyPeriod     = time.Hour
 	defaultQUICSecretPeriod       = time.Hour
@@ -144,7 +153,24 @@ func (f *fixture) prepare() {
 
 func (f *fixture) preparePod(pod *corev1.Pod) {
 	f.clientset = fake.NewSimpleClientset(f.objects...)
+
 	f.gatewayClientset = gatewayfake.NewSimpleClientset()
+
+	// Needs special handling for Gateway due to https://github.com/kubernetes/client-go/issues/1082
+	gatewayv1GVR := gatewayv1.SchemeGroupVersion.WithResource("gateways")
+
+	for _, o := range f.gatewayObjects {
+		if gtw, ok := o.(*gatewayv1.Gateway); ok {
+			if err := f.gatewayClientset.Tracker().Create(gatewayv1GVR, gtw, gtw.Namespace); err != nil {
+				panic(err)
+			}
+		} else {
+			if err := f.gatewayClientset.Tracker().Add(o); err != nil {
+				panic(err)
+			}
+		}
+	}
+
 	config := Config{
 		DefaultBackendService: &types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
 		WatchNamespace:        defaultIngNamespace,
@@ -155,6 +181,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 			Namespace: defaultNghttpxSecret.Namespace,
 		},
 		IngressClassController: defaultIngressClassController,
+		GatewayClassController: defaultGatewayClassController,
 		ReloadRate:             1.0,
 		ReloadBurst:            1,
 		HTTP3:                  f.http3,
@@ -163,6 +190,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		RequireIngressClass:    f.requireIngressClass,
 		TLSTicketKeyPeriod:     defaultTLSTicketKeyPeriod,
 		QUICSecretPeriod:       defaultQUICSecretPeriod,
+		GatewayAPI:             f.gatewayAPI,
 		Pod:                    pod,
 		EventRecorder:          &events.FakeRecorder{},
 	}
@@ -175,6 +203,12 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 	lc, err := NewLeaderController(context.Background(), lbc)
 	if err != nil {
 		f.t.Fatalf("NewLeaderController: %v", err)
+	}
+
+	if !f.currentTime.IsZero() {
+		lc.timeNow = func() metav1.Time {
+			return f.currentTime
+		}
 	}
 
 	f.lbc = lbc
@@ -275,6 +309,24 @@ func (f *fixture) setupStore() {
 			panic(err)
 		}
 	}
+
+	for _, gc := range f.gatewayClassStore {
+		if err := f.lc.gatewayClassIndexer.Add(gc); err != nil {
+			panic(err)
+		}
+	}
+
+	for _, gtw := range f.gatewayStore {
+		if err := f.lc.gatewayIndexer.Add(gtw); err != nil {
+			panic(err)
+		}
+	}
+
+	for _, httpRoute := range f.httpRouteStore {
+		if err := f.lc.httpRouteIndexer.Add(httpRoute); err != nil {
+			panic(err)
+		}
+	}
 }
 
 func (f *fixture) verifyActions() {
@@ -294,11 +346,43 @@ func (f *fixture) verifyActions() {
 	if len(f.actions) > len(actions) {
 		f.t.Errorf("%v additional expected actions: %+v", len(f.actions)-len(actions), f.actions[len(actions):])
 	}
+
+	actions = f.gatewayClientset.Actions()
+	for i, action := range actions {
+		if len(f.gatewayActions) < i+1 {
+			f.t.Errorf("%v unexpected action: %+v", len(actions)-len(f.gatewayActions), actions[i:])
+			break
+		}
+
+		expectedAction := f.gatewayActions[i]
+		if !expectedAction.Matches(action.GetVerb(), action.GetResource().Resource) {
+			f.t.Errorf("Expected\n\t%+v\ngot\n\t%+v", expectedAction, action)
+		}
+	}
+
+	if len(f.gatewayActions) > len(actions) {
+		f.t.Errorf("%v additional expected actions: %+v", len(f.gatewayActions)-len(actions), f.gatewayActions[len(actions):])
+	}
 }
 
 // expectUpdateIngAction adds an expectation that update for ing should occur.
 func (f *fixture) expectUpdateIngAction(ing *networkingv1.Ingress) {
 	f.actions = append(f.actions, core.NewUpdateAction(schema.GroupVersionResource{Resource: "ingresses"}, ing.Namespace, ing))
+}
+
+func (f *fixture) expectUpdateStatusGatewayClassAction(gc *gatewayv1.GatewayClass) {
+	gvr := gatewayv1.SchemeGroupVersion.WithResource("gatewayclasses")
+	f.gatewayActions = append(f.gatewayActions, core.NewUpdateSubresourceAction(gvr, "status", "", gc))
+}
+
+func (f *fixture) expectUpdateStatusGatewayAction(gtw *gatewayv1.Gateway) {
+	gvr := gatewayv1.SchemeGroupVersion.WithResource("gateways")
+	f.gatewayActions = append(f.gatewayActions, core.NewUpdateSubresourceAction(gvr, "status", "", gtw))
+}
+
+func (f *fixture) expectUpdateStatusHTTPRouteAction(httpRoute *gatewayv1.HTTPRoute) {
+	gvr := gatewayv1.SchemeGroupVersion.WithResource("httproutes")
+	f.gatewayActions = append(f.gatewayActions, core.NewUpdateSubresourceAction(gvr, "status", "", httpRoute))
 }
 
 // fakeLoadBalancer implements nghttpx.ServerReloader.
