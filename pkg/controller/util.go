@@ -196,10 +196,11 @@ func validateGatewayGatewayClass(ctx context.Context, gtw *gatewayv1.Gateway, ga
 	return gc.Spec.ControllerName == gatewayClassController
 }
 
-func parentGateway(httpRoute *gatewayv1.HTTPRoute, paRef *gatewayv1.ParentReference) bool {
+// parentGateway returns true if paRef refers to a Gateway that exists in namespace.
+func parentGateway(paRef *gatewayv1.ParentReference, namespace string) bool {
 	return ptr.Deref(paRef.Group, gatewayv1.GroupName) == gatewayv1.GroupName &&
 		ptr.Deref(paRef.Kind, "Gateway") == "Gateway" &&
-		ptr.Deref(paRef.Namespace, gatewayv1.Namespace(httpRoute.Namespace)) == gatewayv1.Namespace(httpRoute.Namespace)
+		ptr.Deref(paRef.Namespace, gatewayv1.Namespace(namespace)) == gatewayv1.Namespace(namespace)
 }
 
 func validateHTTPRouteGatewayClass(ctx context.Context, httpRoute *gatewayv1.HTTPRoute, gatewayClassController gatewayv1.GatewayController,
@@ -211,7 +212,7 @@ func validateHTTPRouteGatewayClass(ctx context.Context, httpRoute *gatewayv1.HTT
 	for i := range httpRoute.Spec.ParentRefs {
 		paRef := &httpRoute.Spec.ParentRefs[i]
 
-		if !parentGateway(httpRoute, paRef) {
+		if !parentGateway(paRef, httpRoute.Namespace) {
 			continue
 		}
 
@@ -287,6 +288,7 @@ func calculateCertificateHash(cert, key []byte) []byte {
 	return h.Sum(nil)
 }
 
+// parentRefEqual returns true if a and b are equal.  namespace is the defaulted namespace.
 func parentRefEqual(a, b *gatewayv1.ParentReference, namespace string) bool {
 	return ptr.Deref(a.Group, gatewayv1.GroupName) == ptr.Deref(b.Group, gatewayv1.GroupName) &&
 		ptr.Deref(a.Kind, "Gateway") == ptr.Deref(b.Kind, "Gateway") &&
@@ -296,6 +298,7 @@ func parentRefEqual(a, b *gatewayv1.ParentReference, namespace string) bool {
 		ptr.Deref(a.Port, 65536) == ptr.Deref(b.Port, 65536)
 }
 
+// findCondition returns a pointer to the first metav1.Condition whose Type is condType in conditions.
 func findCondition(conditions []metav1.Condition, condType string) *metav1.Condition {
 	i := slices.IndexFunc(conditions, func(cond metav1.Condition) bool {
 		return cond.Type == condType
@@ -307,6 +310,7 @@ func findCondition(conditions []metav1.Condition, condType string) *metav1.Condi
 	return &conditions[i]
 }
 
+// findHTTPRouteParentStatus returns a pointer to the first gatewayv1.RouteParentStatus which includes paRef in httpRoute.Status.Parents.
 func findHTTPRouteParentStatus(httpRoute *gatewayv1.HTTPRoute, paRef *gatewayv1.ParentReference) *gatewayv1.RouteParentStatus {
 	i := slices.IndexFunc(httpRoute.Status.Parents, func(s gatewayv1.RouteParentStatus) bool {
 		return parentRefEqual(&s.ParentRef, paRef, httpRoute.Namespace)
