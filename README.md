@@ -258,6 +258,52 @@ runs this controller:
   verbs: ["update"]
 ```
 
+Here it the current implementation status:
+
+* GatewayClass
+  * spec
+    * parametersRef: Not supported
+    * description: Not supported
+  * status
+    * supportedFeatures: Not supported
+
+* Gateway
+  * spec
+    * listeners: Due to the limitation of nghttpx, the abilities of listener are limit hostnames allowed in HTTPRoute and add TLS certificates.  It does not configure load balancer in any other way.
+      * hostname: It is only used by filtering hostnames of HTTPRoute.  It is not used to match SNI or HTTP request host.
+      * port: Not supported
+      * protocol: Only HTTP and HTTPS are supported
+      * tls
+        * mode: Only Terminate is supported
+        * certificateRefs: Only Secret is supported
+        * frontendValidation: Not supported
+        * options: Not supported
+      * allowedRoutes: Not supported
+    * addresses: Not supported
+    * infrastructure: Not supported
+  * status
+    * addresses: Not supported
+    * listeners: Not supported
+
+* HTTPRoute
+  * spec
+    * hostnames: Hostname that is allowed by at least one Gateway listener is accepted.  Because of the limitation of nghttpx, allowed hostnames are available for all listeners, not limited to the listener that allowed them.
+    * rules
+      * matches
+        * path
+          * type: Not supported.  The path value is processed by the rule described in nghttpx -b option.
+        * headers: Not supported
+        * queryParams: Not supported
+        * method: Not supported
+      * filters: Not supported
+      * backends: Only Service is supported
+        * weight: Not supported.  Use `ingress.zlab.co.jp/backend-config` annotation instead.
+        * filters: Not supported
+      * timeouts: Not supported
+      * sessionPersistence: Not supported.  Use `ingress.zlab.co.jp/path-config` annotation instead.
+
+No cross-namespace references are allowed.
+
 ## PROXY protocol support - preserving ClientIP addresses
 
 In case you are running nghttpx-ingress-lb behind a LoadBalancer you might
