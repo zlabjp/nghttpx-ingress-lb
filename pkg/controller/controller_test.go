@@ -311,18 +311,30 @@ func (f *fixture) setupStore() {
 	}
 
 	for _, gc := range f.gatewayClassStore {
+		if err := f.lbc.gatewayClassIndexer.Add(gc); err != nil {
+			panic(err)
+		}
+
 		if err := f.lc.gatewayClassIndexer.Add(gc); err != nil {
 			panic(err)
 		}
 	}
 
 	for _, gtw := range f.gatewayStore {
+		if err := f.lbc.gatewayIndexer.Add(gtw); err != nil {
+			panic(err)
+		}
+
 		if err := f.lc.gatewayIndexer.Add(gtw); err != nil {
 			panic(err)
 		}
 	}
 
 	for _, httpRoute := range f.httpRouteStore {
+		if err := f.lbc.httpRouteIndexer.Add(httpRoute); err != nil {
+			panic(err)
+		}
+
 		if err := f.lc.httpRouteIndexer.Add(httpRoute); err != nil {
 			panic(err)
 		}

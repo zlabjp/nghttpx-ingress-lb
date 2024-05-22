@@ -202,8 +202,8 @@ func (lbc *LoadBalancerController) createGatewayUpstreams(ctx context.Context, h
 
 		log.V(4).Info("Processing HTTPRoute")
 
-		accepted, requireTLS, err := lbc.httpRouteAccepted(ctx, httpRoute)
-		if err != nil || !accepted {
+		accepted, requireTLS := lbc.httpRouteAccepted(ctx, httpRoute)
+		if !accepted {
 			continue
 		}
 
@@ -258,7 +258,7 @@ func (lbc *LoadBalancerController) createGatewayUpstreams(ctx context.Context, h
 	return
 }
 
-func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRoute *gatewayv1.HTTPRoute) (accepted, requireTLS bool, err error) {
+func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRoute *gatewayv1.HTTPRoute) (accepted, requireTLS bool) {
 	log := klog.FromContext(ctx)
 
 	var requireTLSP *bool
@@ -282,7 +282,7 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 		gtw, err := lbc.gatewayLister.Gateways(httpRoute.Namespace).Get(string(paRef.Name))
 		if err != nil {
 			log.Error(err, "Unable to get Gateway")
-			return false, false, err
+			continue
 		}
 
 		if !lbc.validateGatewayGatewayClass(ctx, gtw) {
@@ -293,11 +293,11 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 			continue
 		}
 
-		accepted = true
-
 		sectionName := ptr.Deref(paRef.SectionName, gatewayv1.SectionName(""))
 		if sectionName == "" {
+			accepted = true
 			requireTLSP = ptr.To(false)
+
 			continue
 		}
 
@@ -305,8 +305,10 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 			return l.Name == sectionName
 		})
 		if lidx == -1 {
-			return false, false, errors.New("listener not found")
+			continue
 		}
+
+		accepted = true
 
 		if gtw.Spec.Listeners[lidx].Protocol == gatewayv1.HTTPSProtocolType {
 			if requireTLSP == nil {
@@ -317,7 +319,7 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 		}
 	}
 
-	return accepted, ptr.Deref(requireTLSP, false), nil
+	return accepted, ptr.Deref(requireTLSP, false)
 }
 
 func (lbc *LoadBalancerController) createHTTPRouteBackends(httpRoute *gatewayv1.HTTPRoute,

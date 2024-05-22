@@ -2,14 +2,18 @@ package controller
 
 import (
 	"context"
+	"encoding/hex"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
 
 var (
@@ -1041,6 +1045,1351 @@ func TestSyncHTTPRoute(t *testing.T) {
 				if got, want := updatedHTTPRoute.Status.Parents, tt.wantParentStatus; !equality.Semantic.DeepEqual(got, want) {
 					t.Errorf("updatedHTTPRoute.Status.Parents = %v, want %v", klog.Format(got), klog.Format(want))
 				}
+			}
+		})
+	}
+}
+
+func TestCreateGatewayUpstream(t *testing.T) {
+	gc := &gatewayv1.GatewayClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gc",
+		},
+		Spec: gatewayv1.GatewayClassSpec{
+			ControllerName: defaultGatewayClassController,
+		},
+		Status: gatewayv1.GatewayClassStatus{
+			Conditions: defaultGatewayClassConditions,
+		},
+	}
+
+	bs1, bes1 := newBackend("alpha", []string{"192.168.10.1"})
+
+	tests := []struct {
+		desc       string
+		gateways   []*gatewayv1.Gateway
+		httpRoutes []*gatewayv1.HTTPRoute
+		want       []*nghttpx.Upstream
+	}{
+		{
+			desc: "No HTTPRoutes",
+		},
+		{
+			desc: "Create upstreams",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: metav1.NamespaceDefault,
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName("cert"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoutes: []*gatewayv1.HTTPRoute{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "auth",
+						Namespace: metav1.NamespaceDefault,
+					},
+					Spec: gatewayv1.HTTPRouteSpec{
+						CommonRouteSpec: gatewayv1.CommonRouteSpec{
+							ParentRefs: []gatewayv1.ParentReference{
+								{
+									Name:        "gtw",
+									SectionName: ptr.To(gatewayv1.SectionName("https")),
+								},
+							},
+						},
+						Hostnames: []gatewayv1.Hostname{
+							"auth.example.com",
+							"www.auth.example.com",
+						},
+						Rules: []gatewayv1.HTTPRouteRule{
+							{
+								Matches: []gatewayv1.HTTPRouteMatch{
+									{
+										Path: &gatewayv1.HTTPPathMatch{
+											Value: ptr.To("/login"),
+										},
+									},
+									{
+										Path: &gatewayv1.HTTPPathMatch{
+											Value: ptr.To("/auth"),
+										},
+									},
+								},
+								BackendRefs: []gatewayv1.HTTPBackendRef{
+									{
+										BackendRef: gatewayv1.BackendRef{
+											BackendObjectReference: gatewayv1.BackendObjectReference{
+												Name: gatewayv1.ObjectName(bs1.Name),
+												Port: ptr.To(gatewayv1.PortNumber(bs1.Spec.Ports[0].Port)),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.HTTPRouteStatus{
+						RouteStatus: gatewayv1.RouteStatus{
+							Parents: []gatewayv1.RouteParentStatus{
+								{
+									ParentRef: gatewayv1.ParentReference{
+										Name:        "gtw",
+										SectionName: ptr.To(gatewayv1.SectionName("https")),
+									},
+									ControllerName: defaultGatewayClassController,
+									Conditions: []metav1.Condition{
+										{
+											Type:   string(gatewayv1.RouteConditionAccepted),
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: []*nghttpx.Upstream{
+				{
+					Name:             "gateway.networking.k8s.io/v1/HTTPRoute:default/alpha,8281;auth.example.com/login",
+					GroupVersionKind: gatewayv1.SchemeGroupVersion.WithKind("HTTPRoute"),
+					Source:           types.NamespacedName{Name: "auth", Namespace: metav1.NamespaceDefault},
+					Host:             "auth.example.com",
+					Path:             "/login",
+					Backends: []nghttpx.Backend{
+						{
+							Address:  "192.168.10.1",
+							Port:     "80",
+							Protocol: nghttpx.ProtocolH1,
+							Group:    "default/alpha",
+						},
+					},
+					RedirectIfNotTLS:         true,
+					Affinity:                 nghttpx.AffinityNone,
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureAuto,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessLoose,
+				},
+				{
+					Name:             "gateway.networking.k8s.io/v1/HTTPRoute:default/alpha,8281;www.auth.example.com/login",
+					GroupVersionKind: gatewayv1.SchemeGroupVersion.WithKind("HTTPRoute"),
+					Source:           types.NamespacedName{Name: "auth", Namespace: metav1.NamespaceDefault},
+					Host:             "www.auth.example.com",
+					Path:             "/login",
+					Backends: []nghttpx.Backend{
+						{
+							Address:  "192.168.10.1",
+							Port:     "80",
+							Protocol: nghttpx.ProtocolH1,
+							Group:    "default/alpha",
+						},
+					},
+					RedirectIfNotTLS:         true,
+					Affinity:                 nghttpx.AffinityNone,
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureAuto,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessLoose,
+				},
+				{
+					Name:             "gateway.networking.k8s.io/v1/HTTPRoute:default/alpha,8281;auth.example.com/auth",
+					GroupVersionKind: gatewayv1.SchemeGroupVersion.WithKind("HTTPRoute"),
+					Source:           types.NamespacedName{Name: "auth", Namespace: metav1.NamespaceDefault},
+					Host:             "auth.example.com",
+					Path:             "/auth",
+					Backends: []nghttpx.Backend{
+						{
+							Address:  "192.168.10.1",
+							Port:     "80",
+							Protocol: nghttpx.ProtocolH1,
+							Group:    "default/alpha",
+						},
+					},
+					RedirectIfNotTLS:         true,
+					Affinity:                 nghttpx.AffinityNone,
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureAuto,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessLoose,
+				},
+				{
+					Name:             "gateway.networking.k8s.io/v1/HTTPRoute:default/alpha,8281;www.auth.example.com/auth",
+					GroupVersionKind: gatewayv1.SchemeGroupVersion.WithKind("HTTPRoute"),
+					Source:           types.NamespacedName{Name: "auth", Namespace: metav1.NamespaceDefault},
+					Host:             "www.auth.example.com",
+					Path:             "/auth",
+					Backends: []nghttpx.Backend{
+						{
+							Address:  "192.168.10.1",
+							Port:     "80",
+							Protocol: nghttpx.ProtocolH1,
+							Group:    "default/alpha",
+						},
+					},
+					RedirectIfNotTLS:         true,
+					Affinity:                 nghttpx.AffinityNone,
+					AffinityCookieSecure:     nghttpx.AffinityCookieSecureAuto,
+					AffinityCookieStickiness: nghttpx.AffinityCookieStickinessLoose,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+			f.gatewayAPI = true
+
+			f.svcStore = append(f.svcStore, bs1)
+			f.epSliceStore = append(f.epSliceStore, bes1)
+			f.gatewayClassStore = append(f.gatewayClassStore, gc)
+			f.gatewayStore = append(f.gatewayStore, tt.gateways...)
+			f.httpRouteStore = append(f.httpRouteStore, tt.httpRoutes...)
+
+			f.prepare()
+			f.setupStore()
+
+			got := f.lbc.createGatewayUpstreams(context.Background(), tt.httpRoutes)
+
+			if got, want := got, tt.want; !equality.Semantic.DeepEqual(got, want) {
+				t.Errorf("got = %v, want %v", klog.Format(got), klog.Format(want))
+			}
+		})
+	}
+}
+
+func TestHTTPRouteAccepted(t *testing.T) {
+	gc := &gatewayv1.GatewayClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gc",
+		},
+		Spec: gatewayv1.GatewayClassSpec{
+			ControllerName: defaultGatewayClassController,
+		},
+		Status: gatewayv1.GatewayClassStatus{
+			Conditions: defaultGatewayClassConditions,
+		},
+	}
+
+	uncontrolledGC := &gatewayv1.GatewayClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "uncontrolled",
+		},
+		Spec: gatewayv1.GatewayClassSpec{
+			ControllerName: "uncontrolled",
+		},
+		Status: gatewayv1.GatewayClassStatus{
+			Conditions: defaultGatewayClassConditions,
+		},
+	}
+
+	tests := []struct {
+		desc           string
+		gateways       []*gatewayv1.Gateway
+		httpRoute      gatewayv1.HTTPRoute
+		wantAccepted   bool
+		wantRequireTLS bool
+	}{
+		{
+			desc: "Accept HTTPRoute",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+		},
+		{
+			desc: "Require TLS",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName("cert"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("https")),
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name:        "gtw",
+									SectionName: ptr.To(gatewayv1.SectionName("https")),
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted:   true,
+			wantRequireTLS: true,
+		},
+		{
+			desc: "Not require TLS because HTTPRoute does not refer to the section",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName("cert"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+		},
+		{
+			desc: "Not require TLS because HTTPRoute refers to cleartext listener as well",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName("cert"),
+										},
+									},
+								},
+							},
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("https")),
+							},
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("http")),
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name:        "gtw",
+									SectionName: ptr.To(gatewayv1.SectionName("https")),
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name:        "gtw",
+									SectionName: ptr.To(gatewayv1.SectionName("http")),
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+		},
+		{
+			desc: "Not require TLS because HTTPRoute refers to cleartext listener in another Gateway",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName("cert"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw2",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("https")),
+							},
+							{
+								Name:        "gtw2",
+								SectionName: ptr.To(gatewayv1.SectionName("http")),
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name:        "gtw",
+									SectionName: ptr.To(gatewayv1.SectionName("https")),
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name:        "gtw2",
+									SectionName: ptr.To(gatewayv1.SectionName("http")),
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+		},
+		{
+			desc: "Not accept HTTPRoute because its status is not true",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionUnknown,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "Not accept HTTPRoute because the referred Gateway status is not true",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionUnknown,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "Not accept HTTPRoute because it is not controlled by this controller",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(uncontrolledGC.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "Accept HTTPRoute even if one of the referenced Gateway is not found",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+							{
+								Name: "gtw2",
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+			f.gatewayAPI = true
+
+			f.gatewayClassStore = append(f.gatewayClassStore, gc, uncontrolledGC)
+			f.gatewayStore = append(f.gatewayStore, tt.gateways...)
+			f.httpRouteStore = append(f.httpRouteStore, &tt.httpRoute)
+
+			f.prepare()
+			f.setupStore()
+
+			accepted, requireTLS := f.lbc.httpRouteAccepted(context.Background(), &tt.httpRoute)
+
+			if got, want := accepted, tt.wantAccepted; got != want {
+				t.Errorf("accepted = %v, want %v", got, want)
+			}
+
+			if got, want := requireTLS, tt.wantRequireTLS; got != want {
+				t.Errorf("requireTLS = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestCreateGatewayCredentials(t *testing.T) {
+	gc := &gatewayv1.GatewayClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gc",
+		},
+		Spec: gatewayv1.GatewayClassSpec{
+			ControllerName: defaultGatewayClassController,
+		},
+		Status: gatewayv1.GatewayClassStatus{
+			Conditions: defaultGatewayClassConditions,
+		},
+	}
+
+	uncontrolledGC := &gatewayv1.GatewayClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "uncontrolled",
+		},
+		Spec: gatewayv1.GatewayClassSpec{
+			ControllerName: "uncontrolled",
+		},
+		Status: gatewayv1.GatewayClassStatus{
+			Conditions: defaultGatewayClassConditions,
+		},
+	}
+
+	cert1 := newTLSSecret("ns", "cert1", []byte(tlsCrt), []byte(tlsKey))
+	cert2 := newTLSSecret("ns", "cert2", []byte(tlsCrt), []byte(tlsKey))
+
+	certChecksum, err := hex.DecodeString("f2eae056c5e1c8153ba7b4d1a78f6ec6a9ef8c2e9dfcecd407033e2562207716")
+	if err != nil {
+		panic(err)
+	}
+
+	keyChecksum, err := hex.DecodeString("c70eb70e955140a677869e4a7db443a699a350a5173d412aad3c8dc4c06592f5")
+	if err != nil {
+		panic(err)
+	}
+
+	tests := []struct {
+		desc     string
+		gateways []*gatewayv1.Gateway
+		want     []*nghttpx.TLSCred
+	}{
+		{
+			desc: "No Gateways",
+		},
+		{
+			desc: "Create TLSCred",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName(cert1.Name),
+										},
+										{
+											Name: gatewayv1.ObjectName(cert2.Name),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			want: []*nghttpx.TLSCred{
+				{
+					Name: cert1.Namespace + "/" + cert1.Name,
+					Key: nghttpx.PrivateChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(keyChecksum) + ".key",
+						Content:  cert1.Data[corev1.TLSPrivateKeyKey],
+						Checksum: keyChecksum,
+					},
+					Cert: nghttpx.ChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(certChecksum) + ".crt",
+						Content:  cert1.Data[corev1.TLSCertKey],
+						Checksum: certChecksum,
+					},
+				},
+				{
+					Name: cert2.Namespace + "/" + cert2.Name,
+					Key: nghttpx.PrivateChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(keyChecksum) + ".key",
+						Content:  cert2.Data[corev1.TLSPrivateKeyKey],
+						Checksum: keyChecksum,
+					},
+					Cert: nghttpx.ChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(certChecksum) + ".crt",
+						Content:  cert2.Data[corev1.TLSCertKey],
+						Checksum: certChecksum,
+					},
+				},
+			},
+		},
+		{
+			desc: "Ignore certificate from a resource which is not Secret",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Kind: ptr.To(gatewayv1.Kind("ConfigMap")),
+											Name: gatewayv1.ObjectName(cert1.Name),
+										},
+										{
+											Name: gatewayv1.ObjectName(cert2.Name),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			want: []*nghttpx.TLSCred{
+				{
+					Name: cert2.Namespace + "/" + cert2.Name,
+					Key: nghttpx.PrivateChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(keyChecksum) + ".key",
+						Content:  cert2.Data[corev1.TLSPrivateKeyKey],
+						Checksum: keyChecksum,
+					},
+					Cert: nghttpx.ChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(certChecksum) + ".crt",
+						Content:  cert2.Data[corev1.TLSCertKey],
+						Checksum: certChecksum,
+					},
+				},
+			},
+		},
+		{
+			desc: "Ignore certificate from a Secret which belongs to the different namespace",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name:      gatewayv1.ObjectName(cert1.Name),
+											Namespace: ptr.To(gatewayv1.Namespace("other")),
+										},
+										{
+											Name: gatewayv1.ObjectName(cert2.Name),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			want: []*nghttpx.TLSCred{
+				{
+					Name: cert2.Namespace + "/" + cert2.Name,
+					Key: nghttpx.PrivateChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(keyChecksum) + ".key",
+						Content:  cert2.Data[corev1.TLSPrivateKeyKey],
+						Checksum: keyChecksum,
+					},
+					Cert: nghttpx.ChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(certChecksum) + ".crt",
+						Content:  cert2.Data[corev1.TLSCertKey],
+						Checksum: certChecksum,
+					},
+				},
+			},
+		},
+		{
+			desc: "Ignore certificate from Gateway which has not been accepted yet",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName(cert1.Name),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw-not-accepted",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName(cert2.Name),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionUnknown,
+							},
+						},
+					},
+				},
+			},
+			want: []*nghttpx.TLSCred{
+				{
+					Name: cert1.Namespace + "/" + cert1.Name,
+					Key: nghttpx.PrivateChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(keyChecksum) + ".key",
+						Content:  cert1.Data[corev1.TLSPrivateKeyKey],
+						Checksum: keyChecksum,
+					},
+					Cert: nghttpx.ChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(certChecksum) + ".crt",
+						Content:  cert1.Data[corev1.TLSCertKey],
+						Checksum: certChecksum,
+					},
+				},
+			},
+		},
+		{
+			desc: "Ignore certificate from Gateway which has not been accepted yet",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName(cert1.Name),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw-not-controlled",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(uncontrolledGC.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Protocol: gatewayv1.HTTPSProtocolType,
+								TLS: &gatewayv1.GatewayTLSConfig{
+									CertificateRefs: []gatewayv1.SecretObjectReference{
+										{
+											Name: gatewayv1.ObjectName(cert2.Name),
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			want: []*nghttpx.TLSCred{
+				{
+					Name: cert1.Namespace + "/" + cert1.Name,
+					Key: nghttpx.PrivateChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(keyChecksum) + ".key",
+						Content:  cert1.Data[corev1.TLSPrivateKeyKey],
+						Checksum: keyChecksum,
+					},
+					Cert: nghttpx.ChecksumFile{
+						Path:     "conf/tls/" + hex.EncodeToString(certChecksum) + ".crt",
+						Content:  cert1.Data[corev1.TLSCertKey],
+						Checksum: certChecksum,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
+			f.gatewayAPI = true
+
+			f.secretStore = append(f.secretStore, cert1, cert2)
+			f.gatewayClassStore = append(f.gatewayClassStore, gc, uncontrolledGC)
+			f.gatewayStore = append(f.gatewayStore, tt.gateways...)
+
+			f.prepare()
+			f.setupStore()
+
+			tlsCreds := f.lbc.createGatewayCredentials(context.Background(), tt.gateways)
+
+			if got, want := tlsCreds, tt.want; !equality.Semantic.DeepEqual(got, want) {
+				t.Errorf("tlsCreds = %v, want %v", klog.Format(got), klog.Format(want))
 			}
 		})
 	}
