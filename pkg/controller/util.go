@@ -30,6 +30,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"slices"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -320,4 +321,13 @@ func findHTTPRouteParentStatus(httpRoute *gatewayv1.HTTPRoute, paRef *gatewayv1.
 	}
 
 	return &httpRoute.Status.Parents[i]
+}
+
+// hostnameMatch returns true if pattern matches hostname.
+func hostnameMatch(pattern, hostname gatewayv1.Hostname) bool {
+	if strings.HasPrefix(string(pattern), "*.") {
+		return len(hostname) >= len(pattern) && strings.HasSuffix(string(hostname), string(pattern[1:]))
+	}
+
+	return pattern == hostname
 }

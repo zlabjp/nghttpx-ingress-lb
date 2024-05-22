@@ -202,21 +202,17 @@ func (lbc *LoadBalancerController) createGatewayUpstreams(ctx context.Context, h
 
 		log.V(4).Info("Processing HTTPRoute")
 
-		accepted, requireTLS := lbc.httpRouteAccepted(ctx, httpRoute)
+		accepted, requireTLS, hostnames := lbc.httpRouteAccepted(ctx, httpRoute)
 		if !accepted {
 			continue
 		}
 
+		if len(hostnames) == 0 {
+			hostnames = []gatewayv1.Hostname{""}
+		}
+
 		bcm := ingressAnnotation(httpRoute.Annotations).NewBackendConfigMapper(ctx)
 		pcm := ingressAnnotation(httpRoute.Annotations).NewPathConfigMapper(ctx)
-
-		var hostnames []gatewayv1.Hostname
-
-		if len(httpRoute.Spec.Hostnames) == 0 {
-			hostnames = []gatewayv1.Hostname{""}
-		} else {
-			hostnames = httpRoute.Spec.Hostnames
-		}
 
 		for i := range httpRoute.Spec.Rules {
 			rule := &httpRoute.Spec.Rules[i]
@@ -258,7 +254,7 @@ func (lbc *LoadBalancerController) createGatewayUpstreams(ctx context.Context, h
 	return
 }
 
-func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRoute *gatewayv1.HTTPRoute) (accepted, requireTLS bool) {
+func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRoute *gatewayv1.HTTPRoute) (accepted, requireTLS bool, hostnames []gatewayv1.Hostname) {
 	log := klog.FromContext(ctx)
 
 	var requireTLSP *bool
@@ -295,6 +291,39 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 
 		sectionName := ptr.Deref(paRef.SectionName, gatewayv1.SectionName(""))
 		if sectionName == "" {
+			if len(httpRoute.Spec.Hostnames) > 0 {
+				var hosts []gatewayv1.Hostname
+
+				for i := range gtw.Spec.Listeners {
+					l := &gtw.Spec.Listeners[i]
+
+					if l.Hostname == nil {
+						hosts = append(hosts, httpRoute.Spec.Hostnames...)
+						break
+					}
+
+					for _, h := range httpRoute.Spec.Hostnames {
+						if hostnameMatch(*l.Hostname, h) {
+							hosts = append(hosts, h)
+						}
+					}
+				}
+
+				if len(hosts) == 0 {
+					continue
+				}
+
+				hostnames = append(hostnames, hosts...)
+			} else {
+				for i := range gtw.Spec.Listeners {
+					l := &gtw.Spec.Listeners[i]
+
+					if l.Hostname != nil {
+						hostnames = append(hostnames, *l.Hostname)
+					}
+				}
+			}
+
 			accepted = true
 			requireTLSP = ptr.To(false)
 
@@ -308,6 +337,28 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 			continue
 		}
 
+		l := &gtw.Spec.Listeners[lidx]
+
+		if l.Hostname == nil {
+			hostnames = append(hostnames, httpRoute.Spec.Hostnames...)
+		} else if len(httpRoute.Spec.Hostnames) > 0 {
+			var hosts []gatewayv1.Hostname
+
+			for _, h := range httpRoute.Spec.Hostnames {
+				if hostnameMatch(*l.Hostname, h) {
+					hosts = append(hosts, h)
+				}
+			}
+
+			if len(hosts) == 0 {
+				continue
+			}
+
+			hostnames = append(hostnames, hosts...)
+		} else {
+			hostnames = append(hostnames, *l.Hostname)
+		}
+
 		accepted = true
 
 		if gtw.Spec.Listeners[lidx].Protocol == gatewayv1.HTTPSProtocolType {
@@ -319,7 +370,10 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 		}
 	}
 
-	return accepted, ptr.Deref(requireTLSP, false)
+	slices.Sort(hostnames)
+	hostnames = slices.Compact(hostnames)
+
+	return accepted, ptr.Deref(requireTLSP, false), hostnames
 }
 
 func (lbc *LoadBalancerController) createHTTPRouteBackends(httpRoute *gatewayv1.HTTPRoute,
@@ -929,7 +983,23 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error
 
 		sectionName := ptr.Deref(paRef.SectionName, gatewayv1.SectionName(""))
 		if sectionName == "" {
+			if len(httpRoute.Spec.Hostnames) > 0 {
+				if slices.IndexFunc(gtw.Spec.Listeners, func(l gatewayv1.Listener) bool {
+					if l.Hostname == nil {
+						return true
+					}
+
+					return slices.IndexFunc(httpRoute.Spec.Hostnames, func(h gatewayv1.Hostname) bool {
+						return hostnameMatch(*l.Hostname, h)
+					}) != -1
+				}) == -1 {
+					lc.updateHTTPRouteParentRefStatus(newHTTPRoute, paRef, string(gatewayv1.RouteReasonNoMatchingListenerHostname), metav1.ConditionFalse, t)
+					continue
+				}
+			}
+
 			lc.updateHTTPRouteParentRefStatus(newHTTPRoute, paRef, string(gatewayv1.RouteReasonAccepted), metav1.ConditionTrue, t)
+
 			continue
 		}
 
@@ -941,7 +1011,16 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error
 			continue
 		}
 
-		// TODO Validate hostnames here
+		l := &gtw.Spec.Listeners[lidx]
+
+		if l.Hostname != nil && len(httpRoute.Spec.Hostnames) > 0 {
+			if slices.IndexFunc(httpRoute.Spec.Hostnames, func(h gatewayv1.Hostname) bool {
+				return hostnameMatch(*l.Hostname, h)
+			}) == -1 {
+				lc.updateHTTPRouteParentRefStatus(newHTTPRoute, paRef, string(gatewayv1.RouteReasonNoMatchingListenerHostname), metav1.ConditionFalse, t)
+				continue
+			}
+		}
 
 		lc.updateHTTPRouteParentRefStatus(newHTTPRoute, paRef, string(gatewayv1.RouteReasonAccepted), metav1.ConditionTrue, t)
 	}

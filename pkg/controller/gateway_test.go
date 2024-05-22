@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/hex"
+	"slices"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -595,32 +596,34 @@ func TestSyncHTTPRoute(t *testing.T) {
 
 	tests := []struct {
 		desc             string
-		gateway          gatewayv1.Gateway
+		gateways         []*gatewayv1.Gateway
 		httpRoute        gatewayv1.HTTPRoute
 		noUpdate         bool
 		wantParentStatus []gatewayv1.RouteParentStatus
 	}{
 		{
 			desc: "Accept HTTPRoute",
-			gateway: gatewayv1.Gateway{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gtw",
-					Namespace: "ns",
-				},
-				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: gatewayv1.ObjectName(gc.Name),
-					Listeners: []gatewayv1.Listener{
-						{
-							Name:     "http",
-							Protocol: gatewayv1.HTTPProtocolType,
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
 						},
 					},
-				},
-				Status: gatewayv1.GatewayStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   string(gatewayv1.GatewayConditionAccepted),
-							Status: metav1.ConditionTrue,
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
 						},
 					},
 				},
@@ -659,25 +662,27 @@ func TestSyncHTTPRoute(t *testing.T) {
 		},
 		{
 			desc: "HTTPRoute status is up-to-date",
-			gateway: gatewayv1.Gateway{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gtw",
-					Namespace: "ns",
-				},
-				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: gatewayv1.ObjectName(gc.Name),
-					Listeners: []gatewayv1.Listener{
-						{
-							Name:     "http",
-							Protocol: gatewayv1.HTTPProtocolType,
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
 						},
 					},
-				},
-				Status: gatewayv1.GatewayStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   string(gatewayv1.GatewayConditionAccepted),
-							Status: metav1.ConditionTrue,
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
 						},
 					},
 				},
@@ -720,25 +725,27 @@ func TestSyncHTTPRoute(t *testing.T) {
 		},
 		{
 			desc: "Accept HTTPRoute with SectionName",
-			gateway: gatewayv1.Gateway{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gtw",
-					Namespace: "ns",
-				},
-				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: gatewayv1.ObjectName(gc.Name),
-					Listeners: []gatewayv1.Listener{
-						{
-							Name:     "http",
-							Protocol: gatewayv1.HTTPProtocolType,
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
 						},
 					},
-				},
-				Status: gatewayv1.GatewayStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   string(gatewayv1.GatewayConditionAccepted),
-							Status: metav1.ConditionTrue,
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
 						},
 					},
 				},
@@ -779,25 +786,27 @@ func TestSyncHTTPRoute(t *testing.T) {
 		},
 		{
 			desc: "Ignore HTTPRoute which is not controlled by this controller",
-			gateway: gatewayv1.Gateway{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gtw",
-					Namespace: "ns",
-				},
-				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: gatewayv1.ObjectName(uncontrolledGC.Name),
-					Listeners: []gatewayv1.Listener{
-						{
-							Name:     "http",
-							Protocol: gatewayv1.HTTPProtocolType,
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(uncontrolledGC.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
 						},
 					},
-				},
-				Status: gatewayv1.GatewayStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   string(gatewayv1.GatewayConditionAccepted),
-							Status: metav1.ConditionTrue,
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
 						},
 					},
 				},
@@ -821,22 +830,24 @@ func TestSyncHTTPRoute(t *testing.T) {
 		},
 		{
 			desc: "HTTPRoute which solely refers to Gateway which has not been accepted",
-			gateway: gatewayv1.Gateway{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gtw",
-					Namespace: "ns",
-				},
-				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: gatewayv1.ObjectName(gc.Name),
-					Listeners: []gatewayv1.Listener{
-						{
-							Name:     "http",
-							Protocol: gatewayv1.HTTPProtocolType,
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
 						},
 					},
-				},
-				Status: gatewayv1.GatewayStatus{
-					Conditions: defaultGatewayConditions,
+					Status: gatewayv1.GatewayStatus{
+						Conditions: defaultGatewayConditions,
+					},
 				},
 			},
 			httpRoute: gatewayv1.HTTPRoute{
@@ -873,25 +884,27 @@ func TestSyncHTTPRoute(t *testing.T) {
 		},
 		{
 			desc: "HTTPRoute has a ParentRef which refers to non-existing SectionName",
-			gateway: gatewayv1.Gateway{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gtw",
-					Namespace: "ns",
-				},
-				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: gatewayv1.ObjectName(gc.Name),
-					Listeners: []gatewayv1.Listener{
-						{
-							Name:     "http",
-							Protocol: gatewayv1.HTTPProtocolType,
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
 						},
 					},
-				},
-				Status: gatewayv1.GatewayStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   string(gatewayv1.GatewayConditionAccepted),
-							Status: metav1.ConditionTrue,
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
 						},
 					},
 				},
@@ -932,25 +945,27 @@ func TestSyncHTTPRoute(t *testing.T) {
 		},
 		{
 			desc: "Delete ParentStatus if there is no matching listener",
-			gateway: gatewayv1.Gateway{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gtw",
-					Namespace: "ns",
-				},
-				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: gatewayv1.ObjectName(gc.Name),
-					Listeners: []gatewayv1.Listener{
-						{
-							Name:     "http",
-							Protocol: gatewayv1.HTTPProtocolType,
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
 						},
 					},
-				},
-				Status: gatewayv1.GatewayStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   string(gatewayv1.GatewayConditionAccepted),
-							Status: metav1.ConditionTrue,
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
 						},
 					},
 				},
@@ -1006,6 +1021,389 @@ func TestSyncHTTPRoute(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc: "HTTPRoute is acceptable with hostnames",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+							{
+								Name:     "http2",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.org")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.net",
+						"www.example.com",
+					},
+				},
+			},
+			wantParentStatus: []gatewayv1.RouteParentStatus{
+				{
+					ParentRef: gatewayv1.ParentReference{
+						Name: "gtw",
+					},
+					ControllerName: defaultGatewayClassController,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(gatewayv1.RouteConditionAccepted),
+							Status:             metav1.ConditionTrue,
+							Reason:             string(gatewayv1.RouteReasonAccepted),
+							LastTransitionTime: ts,
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "HTTPRoute is not acceptable because none of its hostnames are allowed",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+							{
+								Name:     "http2",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.org")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.net",
+					},
+				},
+			},
+			wantParentStatus: []gatewayv1.RouteParentStatus{
+				{
+					ParentRef: gatewayv1.ParentReference{
+						Name: "gtw",
+					},
+					ControllerName: defaultGatewayClassController,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(gatewayv1.RouteConditionAccepted),
+							Status:             metav1.ConditionFalse,
+							Reason:             string(gatewayv1.RouteReasonNoMatchingListenerHostname),
+							LastTransitionTime: ts,
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "HTTPRoute is acceptable with hostnames and sectionName",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+							{
+								Name:     "http2",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.org")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("http")),
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.net",
+						"www.example.com",
+					},
+				},
+			},
+			wantParentStatus: []gatewayv1.RouteParentStatus{
+				{
+					ParentRef: gatewayv1.ParentReference{
+						Name:        "gtw",
+						SectionName: ptr.To(gatewayv1.SectionName("http")),
+					},
+					ControllerName: defaultGatewayClassController,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(gatewayv1.RouteConditionAccepted),
+							Status:             metav1.ConditionTrue,
+							Reason:             string(gatewayv1.RouteReasonAccepted),
+							LastTransitionTime: ts,
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "HTTPRoute is not acceptable with hostnames and sectionName",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+							{
+								Name:     "http2",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.org")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("http")),
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.net",
+						"www.example.org",
+					},
+				},
+			},
+			wantParentStatus: []gatewayv1.RouteParentStatus{
+				{
+					ParentRef: gatewayv1.ParentReference{
+						Name:        "gtw",
+						SectionName: ptr.To(gatewayv1.SectionName("http")),
+					},
+					ControllerName: defaultGatewayClassController,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(gatewayv1.RouteConditionAccepted),
+							Status:             metav1.ConditionFalse,
+							Reason:             string(gatewayv1.RouteReasonNoMatchingListenerHostname),
+							LastTransitionTime: ts,
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "Multiple Gateways one is OK but the other is not",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw2",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.net")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+							{
+								Name: "gtw2",
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.com",
+					},
+				},
+			},
+			wantParentStatus: []gatewayv1.RouteParentStatus{
+				{
+					ParentRef: gatewayv1.ParentReference{
+						Name: "gtw",
+					},
+					ControllerName: defaultGatewayClassController,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(gatewayv1.RouteConditionAccepted),
+							Status:             metav1.ConditionTrue,
+							Reason:             string(gatewayv1.RouteReasonAccepted),
+							LastTransitionTime: ts,
+						},
+					},
+				},
+				{
+					ParentRef: gatewayv1.ParentReference{
+						Name: "gtw2",
+					},
+					ControllerName: defaultGatewayClassController,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(gatewayv1.RouteConditionAccepted),
+							Status:             metav1.ConditionFalse,
+							Reason:             string(gatewayv1.RouteReasonNoMatchingListenerHostname),
+							LastTransitionTime: ts,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1015,7 +1413,7 @@ func TestSyncHTTPRoute(t *testing.T) {
 			f.currentTime = ts
 
 			f.gatewayClassStore = append(f.gatewayClassStore, gc, uncontrolledGC)
-			f.gatewayStore = append(f.gatewayStore, &tt.gateway)
+			f.gatewayStore = append(f.gatewayStore, tt.gateways...)
 			f.httpRouteStore = append(f.httpRouteStore, &tt.httpRoute)
 			f.gatewayObjects = append(f.gatewayObjects, &tt.httpRoute)
 
@@ -1310,6 +1708,7 @@ func TestHTTPRouteAccepted(t *testing.T) {
 		httpRoute      gatewayv1.HTTPRoute
 		wantAccepted   bool
 		wantRequireTLS bool
+		wantHostnames  []gatewayv1.Hostname
 	}{
 		{
 			desc: "Accept HTTPRoute",
@@ -1965,6 +2364,775 @@ func TestHTTPRouteAccepted(t *testing.T) {
 			},
 			wantAccepted: true,
 		},
+		{
+			desc: "With hostnames",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.com",
+						"cdn.example.com",
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+			wantHostnames: []gatewayv1.Hostname{
+				"cdn.example.com",
+				"www.example.com",
+			},
+		},
+		{
+			desc: "No matching hostname is dropped",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.net",
+						"cdn.example.com",
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+			wantHostnames: []gatewayv1.Hostname{
+				"cdn.example.com",
+			},
+		},
+		{
+			desc: "All hostnames are allowed because listener has no hostname",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.net",
+						"cdn.example.com",
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+			wantHostnames: []gatewayv1.Hostname{
+				"cdn.example.com",
+				"www.example.net",
+			},
+		},
+		{
+			desc: "Listener hostname is used if HTTPRoute does not specify one",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+			wantHostnames: []gatewayv1.Hostname{
+				"*.example.com",
+			},
+		},
+		{
+			desc: "HTTPRoute is not accepted because none of its hostnames are acceptable",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.net",
+						"cdn.example.net",
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "Hostnames are OR-ed across all listeners",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+							{
+								Name:     "http2",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.net")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.com",
+						"cdn.example.net",
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+			wantHostnames: []gatewayv1.Hostname{
+				"cdn.example.net",
+				"www.example.com",
+			},
+		},
+		{
+			desc: "With hostnames and sectionName",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+							{
+								Name:     "http2",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.net")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("http")),
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.com",
+						"cdn.example.com",
+						"cdn.example.net",
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name:        "gtw",
+									SectionName: ptr.To(gatewayv1.SectionName("http")),
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+			wantHostnames: []gatewayv1.Hostname{
+				"cdn.example.com",
+				"www.example.com",
+			},
+		},
+		{
+			desc: "Hostnames are OR-ed with the hostnames in the referenced listener if hostnames are not given",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.com")),
+							},
+							{
+								Name:     "http2",
+								Protocol: gatewayv1.HTTPProtocolType,
+								Hostname: ptr.To(gatewayv1.Hostname("*.example.net")),
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("http")),
+							},
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("http2")),
+							},
+						},
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name:        "gtw",
+									SectionName: ptr.To(gatewayv1.SectionName("http")),
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name:        "gtw",
+									SectionName: ptr.To(gatewayv1.SectionName("http2")),
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+			wantHostnames: []gatewayv1.Hostname{
+				"*.example.com",
+				"*.example.net",
+			},
+		},
+		{
+			desc: "All hostnames are acceptable if the referenced listener has no hostname",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name:        "gtw",
+								SectionName: ptr.To(gatewayv1.SectionName("http")),
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.com",
+						"cdn.example.com",
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name:        "gtw",
+									SectionName: ptr.To(gatewayv1.SectionName("http")),
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+			wantHostnames: []gatewayv1.Hostname{
+				"cdn.example.com",
+				"www.example.com",
+			},
+		},
+		{
+			desc: "Duplicated hostnames are discarded",
+			gateways: []*gatewayv1.Gateway{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gtw2",
+						Namespace: "ns",
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gc.Name),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "http",
+								Protocol: gatewayv1.HTTPProtocolType,
+							},
+						},
+					},
+					Status: gatewayv1.GatewayStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gatewayv1.GatewayConditionAccepted),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			httpRoute: gatewayv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "route",
+					Namespace: "ns",
+				},
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{
+								Name: "gtw",
+							},
+							{
+								Name: "gtw2",
+							},
+						},
+					},
+					Hostnames: []gatewayv1.Hostname{
+						"www.example.com",
+						"cdn.example.com",
+					},
+				},
+				Status: gatewayv1.HTTPRouteStatus{
+					RouteStatus: gatewayv1.RouteStatus{
+						Parents: []gatewayv1.RouteParentStatus{
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+							{
+								ParentRef: gatewayv1.ParentReference{
+									Name: "gtw2",
+								},
+								ControllerName: defaultGatewayClassController,
+								Conditions: []metav1.Condition{
+									{
+										Type:   string(gatewayv1.RouteConditionAccepted),
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantAccepted: true,
+			wantHostnames: []gatewayv1.Hostname{
+				"cdn.example.com",
+				"www.example.com",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1979,7 +3147,7 @@ func TestHTTPRouteAccepted(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			accepted, requireTLS := f.lbc.httpRouteAccepted(context.Background(), &tt.httpRoute)
+			accepted, requireTLS, hostnames := f.lbc.httpRouteAccepted(context.Background(), &tt.httpRoute)
 
 			if got, want := accepted, tt.wantAccepted; got != want {
 				t.Errorf("accepted = %v, want %v", got, want)
@@ -1987,6 +3155,10 @@ func TestHTTPRouteAccepted(t *testing.T) {
 
 			if got, want := requireTLS, tt.wantRequireTLS; got != want {
 				t.Errorf("requireTLS = %v, want %v", got, want)
+			}
+
+			if got, want := hostnames, tt.wantHostnames; !slices.Equal(got, want) {
+				t.Errorf("hostnames = %v, want %v", got, want)
 			}
 		})
 	}

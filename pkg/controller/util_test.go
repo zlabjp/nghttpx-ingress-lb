@@ -469,3 +469,75 @@ func TestFindHTTPRouteParentStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestHostnameMatch(t *testing.T) {
+	tests := []struct {
+		desc     string
+		pattern  gatewayv1.Hostname
+		hostname gatewayv1.Hostname
+		want     bool
+	}{
+		{
+			desc:     "Exact match",
+			pattern:  "example.com",
+			hostname: "example.com",
+			want:     true,
+		},
+		{
+			desc:     "Exact match failure",
+			pattern:  "www.example.com",
+			hostname: "example.com",
+		},
+		{
+			desc:     "Suffix match",
+			pattern:  "*.example.com",
+			hostname: "www.example.com",
+			want:     true,
+		},
+		{
+			desc:     "Suffix no match",
+			pattern:  "*.example.com",
+			hostname: "www.example.net",
+		},
+		{
+			desc:     "Must match at least one label",
+			pattern:  "*.example.com",
+			hostname: ".example.com",
+		},
+		{
+			desc:     "Must match extra label",
+			pattern:  "*.example.com",
+			hostname: "example.com",
+		},
+		{
+			desc:     "Match with wildcards in both hostnames",
+			pattern:  "*.example.com",
+			hostname: "*.example.com",
+			want:     true,
+		},
+		{
+			desc:     "No match with wildcards in both hostnames",
+			pattern:  "*.www.example.com",
+			hostname: "*.example.com",
+		},
+		{
+			desc:     "Pattern has no wildcard but hostname has one",
+			pattern:  "www.example.com",
+			hostname: "*.example.com",
+		},
+		{
+			desc:     "Match multiple labels",
+			pattern:  "*.example.com",
+			hostname: "www.sample.example.com",
+			want:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			if got, want := hostnameMatch(tt.pattern, tt.hostname), tt.want; got != want {
+				t.Errorf("hostnameMatch(%q, %q) = %v, want %v", tt.pattern, tt.hostname, got, want)
+			}
+		})
+	}
+}
