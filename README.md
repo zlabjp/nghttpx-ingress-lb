@@ -234,8 +234,13 @@ spec:
 ## Gateway API support (Experimental)
 
 [Gateway API](https://gateway-api.sigs.k8s.io/) support is
-experimental and its quality is pre-alpha level.  To enable Gateway
-API, specify `--gateway-api` flag.  Create GatewayClass resource like so:
+experimental and its quality is alpha level.  To enable Gateway API,
+specify `--gateway-api` flag.
+
+Apply Gateway API CRDs from
+https://github.com/kubernetes-sigs/gateway-api/tree/main/config/crd
+
+Create GatewayClass resource like so:
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
