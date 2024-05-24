@@ -62,7 +62,7 @@ RUN git clone --depth 1 -b v1.4.2 https://github.com/libbpf/libbpf && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.62.0 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --recursive --shallow-submodules --depth 1 -b v1.62.1 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     autoreconf -i && \
