@@ -56,6 +56,24 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - "gateway.networking.k8s.io"
+    resources:
+      - gatewayclasses
+      - gateways
+      - httproutes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "gateway.networking.k8s.io"
+    resources:
+      - gatewayclasses/status
+      - gateways/status
+      - httproutes/status
+    verbs:
+      - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
