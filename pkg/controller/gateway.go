@@ -655,9 +655,9 @@ func (lc *LeaderController) enqueueHTTPRouteFromGateway(ctx context.Context, gtw
 	}
 
 	for _, httpRoute := range httpRoutes {
-		if i := slices.IndexFunc(httpRoute.Spec.ParentRefs, func(paRef gatewayv1.ParentReference) bool {
+		if slices.ContainsFunc(httpRoute.Spec.ParentRefs, func(paRef gatewayv1.ParentReference) bool {
 			return parentGateway(&paRef, httpRoute.Namespace) && paRef.Name == gatewayv1.ObjectName(gtw.Name)
-		}); i != -1 {
+		}) {
 			lc.enqueueHTTPRoute(httpRoute)
 		}
 	}
@@ -984,15 +984,15 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error
 		sectionName := ptr.Deref(paRef.SectionName, gatewayv1.SectionName(""))
 		if sectionName == "" {
 			if len(httpRoute.Spec.Hostnames) > 0 {
-				if slices.IndexFunc(gtw.Spec.Listeners, func(l gatewayv1.Listener) bool {
+				if !slices.ContainsFunc(gtw.Spec.Listeners, func(l gatewayv1.Listener) bool {
 					if l.Hostname == nil {
 						return true
 					}
 
-					return slices.IndexFunc(httpRoute.Spec.Hostnames, func(h gatewayv1.Hostname) bool {
+					return slices.ContainsFunc(httpRoute.Spec.Hostnames, func(h gatewayv1.Hostname) bool {
 						return hostnameMatch(*l.Hostname, h)
-					}) != -1
-				}) == -1 {
+					})
+				}) {
 					lc.updateHTTPRouteParentRefStatus(newHTTPRoute, paRef, string(gatewayv1.RouteReasonNoMatchingListenerHostname), metav1.ConditionFalse, t)
 					continue
 				}
@@ -1014,9 +1014,9 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error
 		l := &gtw.Spec.Listeners[lidx]
 
 		if l.Hostname != nil && len(httpRoute.Spec.Hostnames) > 0 {
-			if slices.IndexFunc(httpRoute.Spec.Hostnames, func(h gatewayv1.Hostname) bool {
+			if !slices.ContainsFunc(httpRoute.Spec.Hostnames, func(h gatewayv1.Hostname) bool {
 				return hostnameMatch(*l.Hostname, h)
-			}) == -1 {
+			}) {
 				lc.updateHTTPRouteParentRefStatus(newHTTPRoute, paRef, string(gatewayv1.RouteReasonNoMatchingListenerHostname), metav1.ConditionFalse, t)
 				continue
 			}
@@ -1026,9 +1026,9 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error
 	}
 
 	newHTTPRoute.Status.Parents = slices.DeleteFunc(newHTTPRoute.Status.Parents, func(ps gatewayv1.RouteParentStatus) bool {
-		return slices.IndexFunc(newHTTPRoute.Spec.ParentRefs, func(paRef gatewayv1.ParentReference) bool {
+		return !slices.ContainsFunc(newHTTPRoute.Spec.ParentRefs, func(paRef gatewayv1.ParentReference) bool {
 			return parentRefEqual(&ps.ParentRef, &paRef, newHTTPRoute.Namespace)
-		}) == -1
+		})
 	})
 
 	if equality.Semantic.DeepEqual(httpRoute.Status, newHTTPRoute.Status) {
