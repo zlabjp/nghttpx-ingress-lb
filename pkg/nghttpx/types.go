@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/klog/v2"
 )
 
 // ServerReloader is the API to update underlying load balancer.
@@ -209,6 +210,7 @@ func NewBackendConfigMapper(defaultBackendConfig *BackendConfig, backendConfigMa
 func (bcm *BackendConfigMapper) ConfigFor(ctx context.Context, svc, port string) *BackendConfig {
 	c := bcm.BackendConfigMapping[svc][port]
 	if c == nil {
+		klog.Warningf("%v:%v doesn't exist in backend config", svc, port)
 		c = new(BackendConfig)
 
 		if bcm.DefaultBackendConfig != nil {
