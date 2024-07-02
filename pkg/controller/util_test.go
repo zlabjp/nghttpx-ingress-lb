@@ -10,6 +10,7 @@ package controller
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -372,6 +373,41 @@ func TestFindCondition(t *testing.T) {
 
 			if got != want {
 				t.Errorf("findCondition(...) = %#v, want %#v", got, want)
+			}
+		})
+	}
+}
+
+func TestAppendCondition(t *testing.T) {
+	tests := []struct {
+		desc       string
+		conditions []metav1.Condition
+		cond       metav1.Condition
+		want       []metav1.Condition
+	}{
+		{
+			desc: "Empty conditions",
+			cond: metav1.Condition{Type: "foo"},
+			want: []metav1.Condition{{Type: "foo"}},
+		},
+		{
+			desc:       "Non-empty conditions",
+			conditions: []metav1.Condition{{Type: "foo"}},
+			cond:       metav1.Condition{Type: "bar"},
+			want:       []metav1.Condition{{Type: "foo"}, {Type: "bar"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			conditions, cond := appendCondition(tt.conditions, tt.cond)
+
+			if got, want := conditions, tt.want; !slices.Equal(got, want) {
+				t.Fatalf("appendCondition = %v, want %v", got, want)
+			}
+
+			if got, want := cond, &conditions[len(conditions)-1]; got != want {
+				t.Errorf("cond = %v, want %v", got, want)
 			}
 		})
 	}

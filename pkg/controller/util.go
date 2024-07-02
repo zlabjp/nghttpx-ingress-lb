@@ -311,6 +311,12 @@ func findCondition(conditions []metav1.Condition, condType string) *metav1.Condi
 	return &conditions[i]
 }
 
+// appendCondition appends cond to conditions, and returns the updated slice and the pointer to the appended condition.
+func appendCondition(conditions []metav1.Condition, cond metav1.Condition) ([]metav1.Condition, *metav1.Condition) {
+	conditions = append(conditions, cond)
+	return conditions, &conditions[len(conditions)-1]
+}
+
 // findHTTPRouteParentStatus returns a pointer to the first gatewayv1.RouteParentStatus which includes paRef in httpRoute.Status.Parents.
 func findHTTPRouteParentStatus(httpRoute *gatewayv1.HTTPRoute, paRef *gatewayv1.ParentReference) *gatewayv1.RouteParentStatus {
 	i := slices.IndexFunc(httpRoute.Status.Parents, func(s gatewayv1.RouteParentStatus) bool {
