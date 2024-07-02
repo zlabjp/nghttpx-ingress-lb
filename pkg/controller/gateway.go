@@ -723,6 +723,11 @@ func (lc *LeaderController) syncGatewayClass(ctx context.Context, key string) er
 	newGC := gc.DeepCopy()
 
 	cond := findCondition(newGC.Status.Conditions, string(gatewayv1.GatewayClassConditionStatusAccepted))
+	if cond == nil {
+		newGC.Status.Conditions, cond = appendCondition(newGC.Status.Conditions,
+			metav1.Condition{Type: string(gatewayv1.GatewayClassConditionStatusAccepted)})
+	}
+
 	cond.Reason = string(gatewayv1.GatewayClassReasonAccepted)
 	cond.Message = ""
 	cond.ObservedGeneration = newGC.Generation
@@ -830,6 +835,11 @@ func (lc *LeaderController) syncGateway(ctx context.Context, key string) error {
 	t := lc.timeNow()
 
 	cond := findCondition(newGtw.Status.Conditions, string(gatewayv1.GatewayConditionAccepted))
+	if cond == nil {
+		newGtw.Status.Conditions, cond = appendCondition(newGtw.Status.Conditions,
+			metav1.Condition{Type: string(gatewayv1.GatewayConditionAccepted)})
+	}
+
 	cond.Reason = string(gatewayv1.GatewayReasonAccepted)
 	cond.Message = ""
 	cond.ObservedGeneration = newGtw.Generation
@@ -840,6 +850,11 @@ func (lc *LeaderController) syncGateway(ctx context.Context, key string) error {
 	}
 
 	cond = findCondition(newGtw.Status.Conditions, string(gatewayv1.GatewayConditionProgrammed))
+	if cond == nil {
+		newGtw.Status.Conditions, cond = appendCondition(newGtw.Status.Conditions,
+			metav1.Condition{Type: string(gatewayv1.GatewayConditionProgrammed)})
+	}
+
 	cond.Reason = string(gatewayv1.GatewayReasonProgrammed)
 	cond.Message = ""
 	cond.ObservedGeneration = newGtw.Generation
@@ -869,6 +884,11 @@ func (lc *LeaderController) updateGatewayStatusWithError(ctx context.Context, gt
 	newGtw := gtw.DeepCopy()
 
 	cond := findCondition(newGtw.Status.Conditions, string(gatewayv1.GatewayConditionAccepted))
+	if cond == nil {
+		newGtw.Status.Conditions, cond = appendCondition(newGtw.Status.Conditions,
+			metav1.Condition{Type: string(gatewayv1.GatewayConditionAccepted)})
+	}
+
 	cond.Reason = string(gatewayv1.GatewayReasonInvalid)
 	cond.Message = statusErr.Error()
 	cond.ObservedGeneration = newGtw.Generation
@@ -879,6 +899,11 @@ func (lc *LeaderController) updateGatewayStatusWithError(ctx context.Context, gt
 	}
 
 	cond = findCondition(newGtw.Status.Conditions, string(gatewayv1.GatewayConditionProgrammed))
+	if cond == nil {
+		newGtw.Status.Conditions, cond = appendCondition(newGtw.Status.Conditions,
+			metav1.Condition{Type: string(gatewayv1.GatewayConditionProgrammed)})
+	}
+
 	cond.Reason = string(gatewayv1.GatewayReasonInvalid)
 	cond.Message = statusErr.Error()
 	cond.ObservedGeneration = newGtw.Generation
@@ -976,7 +1001,7 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error
 			continue
 		}
 
-		if cond := findCondition(gtw.Status.Conditions, string(gatewayv1.GatewayConditionAccepted)); cond.Status != metav1.ConditionTrue {
+		if cond := findCondition(gtw.Status.Conditions, string(gatewayv1.GatewayConditionAccepted)); cond == nil || cond.Status != metav1.ConditionTrue {
 			lc.updateHTTPRouteParentRefStatus(newHTTPRoute, paRef, string(gatewayv1.RouteReasonPending), metav1.ConditionUnknown, t)
 			continue
 		}
@@ -1057,8 +1082,8 @@ func (lc *LeaderController) updateHTTPRouteParentRefStatus(httpRoute *gatewayv1.
 
 	cond := findCondition(paStatus.Conditions, string(gatewayv1.RouteConditionAccepted))
 	if cond == nil {
-		paStatus.Conditions = append(paStatus.Conditions, metav1.Condition{Type: string(gatewayv1.RouteConditionAccepted)})
-		cond = &paStatus.Conditions[len(paStatus.Conditions)-1]
+		paStatus.Conditions, cond = appendCondition(paStatus.Conditions,
+			metav1.Condition{Type: string(gatewayv1.RouteConditionAccepted)})
 	}
 
 	cond.Reason = reason
