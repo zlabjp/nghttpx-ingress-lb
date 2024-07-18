@@ -1973,11 +1973,8 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSliceWithoutServiceSe
 		for i := range es.Ports {
 			epPort := &es.Ports[i]
 
-			if epPort.Protocol != nil && *epPort.Protocol != corev1.ProtocolTCP {
-				continue
-			}
-
-			if epPort.Port == nil || *epPort.Port != targetPort {
+			if (epPort.Protocol != nil && *epPort.Protocol != corev1.ProtocolTCP) ||
+				epPort.Port == nil || *epPort.Port != targetPort {
 				continue
 			}
 
@@ -2911,11 +2908,7 @@ func (lc *LeaderController) enqueueIngressWithIngressClass(ctx context.Context, 
 	for _, ing := range ings {
 		switch {
 		case ing.Spec.IngressClassName == nil:
-			if lc.lbc.requireIngressClass {
-				continue
-			}
-
-			if !defaultIngClass {
+			if lc.lbc.requireIngressClass || !defaultIngClass {
 				continue
 			}
 		case *ing.Spec.IngressClassName != ingClass.Name:

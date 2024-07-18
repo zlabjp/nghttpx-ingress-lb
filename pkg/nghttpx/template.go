@@ -77,14 +77,14 @@ const (
 func (lb *LoadBalancer) generateCfg(ctx context.Context, ingConfig *IngressConfig) ([]byte, []byte, error) {
 	log := klog.FromContext(ctx)
 
-	mainConfigBuffer := new(bytes.Buffer)
-	if err := lb.template.Execute(mainConfigBuffer, ingConfig); err != nil {
+	var mainConfigBuffer bytes.Buffer
+	if err := lb.template.Execute(&mainConfigBuffer, ingConfig); err != nil {
 		log.Error(err, "nghttpx error while executing main configuration template")
 		return nil, nil, err
 	}
 
-	backendConfigBuffer := new(bytes.Buffer)
-	if err := lb.backendTemplate.Execute(backendConfigBuffer, ingConfig); err != nil {
+	var backendConfigBuffer bytes.Buffer
+	if err := lb.backendTemplate.Execute(&backendConfigBuffer, ingConfig); err != nil {
 		log.Error(err, "nghttpx error while executing backend configuration template")
 		return nil, nil, err
 	}
