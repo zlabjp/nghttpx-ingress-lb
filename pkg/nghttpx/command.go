@@ -353,11 +353,7 @@ func (lb *LoadBalancer) waitUntilConfigRevisionChanges(ctx context.Context, oldC
 			return false, nil
 		}
 
-		if newConfRev == oldConfRev {
-			return false, nil
-		}
-
-		return true, nil
+		return newConfRev != oldConfRev, nil
 	}); err != nil {
 		return fmt.Errorf("unable to get new nghttpx configRevision: %w", err)
 	}
