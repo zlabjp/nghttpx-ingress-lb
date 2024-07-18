@@ -43,22 +43,16 @@ import (
 	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewaylistersv1 "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
+
+	slicesutil "github.com/zlabjp/nghttpx-ingress-lb/pkg/util/slices"
 )
 
 // loadBalancerIngressesIPEqual compares a and b, and if their IP fields are equal, returns true.  a and b might not be sorted in the
 // particular order.  They just compared from first to last, and if there is a difference, this function returns false.
 func loadBalancerIngressesIPEqual(a, b []networkingv1.IngressLoadBalancerIngress) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for i := range a {
-		if a[i].IP != b[i].IP {
-			return false
-		}
-	}
-
-	return true
+	return slicesutil.EqualPtrFunc(a, b, func(a, b *networkingv1.IngressLoadBalancerIngress) bool {
+		return a.IP == b.IP
+	})
 }
 
 // sortLoadBalancerIngress sorts a by IP and Hostname in the ascending order.

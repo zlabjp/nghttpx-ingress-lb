@@ -69,6 +69,7 @@ import (
 	gatewaylistersv1 "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
+	slicesutil "github.com/zlabjp/nghttpx-ingress-lb/pkg/util/slices"
 )
 
 const (
@@ -732,9 +733,9 @@ func (lbc *LoadBalancerController) serviceReferenced(ctx context.Context, svc ty
 		return false
 	}
 
-	for _, ing := range ings {
+	return slices.ContainsFunc(ings, func(ing *networkingv1.Ingress) bool {
 		if !lbc.validateIngressClass(ctx, ing) {
-			continue
+			return false
 		}
 
 		if !lbc.noDefaultBackendOverride {
@@ -744,23 +745,18 @@ func (lbc *LoadBalancerController) serviceReferenced(ctx context.Context, svc ty
 			}
 		}
 
-		for i := range ing.Spec.Rules {
-			rule := &ing.Spec.Rules[i]
-			if rule.HTTP == nil {
-				continue
-			}
+		return slicesutil.ContainsPtrFunc(ing.Spec.Rules, func(rule *networkingv1.IngressRule) bool {
+			return rule.HTTP != nil &&
+				slicesutil.ContainsPtrFunc(rule.HTTP.Paths, func(path *networkingv1.HTTPIngressPath) bool {
+					if isb := path.Backend.Service; isb != nil && svc.Name == isb.Name {
+						log.V(4).Info("Referenced by Ingress", "service", svc, "ingress", klog.KObj(ing))
+						return true
+					}
 
-			for i := range rule.HTTP.Paths {
-				path := &rule.HTTP.Paths[i]
-				if isb := path.Backend.Service; isb != nil && svc.Name == isb.Name {
-					log.V(4).Info("Referenced by Ingress", "service", svc, "ingress", klog.KObj(ing))
-					return true
-				}
-			}
-		}
-	}
-
-	return false
+					return false
+				})
+		})
+	})
 }
 
 func getDefaultBackendService(ing *networkingv1.Ingress) *networkingv1.IngressServiceBackend {
@@ -936,9 +932,9 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 		return false
 	}
 
-	for _, ing := range ings {
+	return slices.ContainsFunc(ings, func(ing *networkingv1.Ingress) bool {
 		if !lbc.validateIngressClass(ctx, ing) {
-			continue
+			return false
 		}
 
 		if !lbc.noDefaultBackendOverride {
@@ -953,35 +949,29 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 			}
 		}
 
-		for i := range ing.Spec.Rules {
-			rule := &ing.Spec.Rules[i]
-			if rule.HTTP == nil {
-				continue
-			}
+		return slicesutil.ContainsPtrFunc(ing.Spec.Rules, func(rule *networkingv1.IngressRule) bool {
+			return rule.HTTP != nil &&
+				slicesutil.ContainsPtrFunc(rule.HTTP.Paths, func(path *networkingv1.HTTPIngressPath) bool {
+					isb := path.Backend.Service
+					if isb == nil {
+						return false
+					}
 
-			for i := range rule.HTTP.Paths {
-				path := &rule.HTTP.Paths[i]
+					svc, err := lbc.svcLister.Services(pod.Namespace).Get(isb.Name)
+					if err != nil {
+						return false
+					}
 
-				isb := path.Backend.Service
-				if isb == nil {
-					continue
-				}
+					if labels.ValidatedSetSelector(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
+						log.V(4).Info("Referenced by Ingress", "pod", klog.KObj(pod),
+							"ingress", klog.KObj(ing), "service", klog.KObj(svc))
+						return true
+					}
 
-				svc, err := lbc.svcLister.Services(pod.Namespace).Get(isb.Name)
-				if err != nil {
-					continue
-				}
-
-				if labels.ValidatedSetSelector(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
-					log.V(4).Info("Referenced by Ingress", "pod", klog.KObj(pod),
-						"ingress", klog.KObj(ing), "service", klog.KObj(svc))
-					return true
-				}
-			}
-		}
-	}
-
-	return false
+					return false
+				})
+		})
+	})
 }
 
 func (lbc *LoadBalancerController) enqueue() {
@@ -1261,14 +1251,9 @@ func (lbc *LoadBalancerController) createConfig(ctx context.Context) (*nghttpx.I
 	}
 
 	// find default backend.  If only it is not found, use default backend.  This is useful to override default backend with ingress.
-	defaultUpstreamFound := false
-
-	for _, upstream := range upstreams {
-		if upstream.Host == "" && (upstream.Path == "" || upstream.Path == "/") {
-			defaultUpstreamFound = true
-			break
-		}
-	}
+	defaultUpstreamFound := slices.ContainsFunc(upstreams, func(u *nghttpx.Upstream) bool {
+		return u.Host == "" && (u.Path == "" || u.Path == "/")
+	})
 
 	if !defaultUpstreamFound {
 		if defaultUpstream == nil {
@@ -1898,20 +1883,12 @@ func (lbc *LoadBalancerController) secretReferenced(ctx context.Context, s *core
 		return false
 	}
 
-	for _, ing := range ings {
-		if !lbc.validateIngressClass(ctx, ing) {
-			continue
-		}
-
-		for i := range ing.Spec.TLS {
-			tls := &ing.Spec.TLS[i]
-			if tls.SecretName == s.Name {
-				return true
-			}
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(ings, func(ing *networkingv1.Ingress) bool {
+		return lbc.validateIngressClass(ctx, ing) &&
+			slicesutil.ContainsPtrFunc(ing.Spec.TLS, func(tls *networkingv1.IngressTLS) bool {
+				return tls.SecretName == s.Name
+			})
+	})
 }
 
 // getEndpoints returns a list of Backend for a given service.  backendConfig is additional per-port configuration for backend, which must
