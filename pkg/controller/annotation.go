@@ -58,7 +58,7 @@ func (ia ingressAnnotation) NewBackendConfigMapper(ctx context.Context) *nghttpx
 
 	data = ia[defaultBackendConfigKey]
 	if data == "" {
-		log.V(4).Info("Annotation not found", "annoation", defaultBackendConfigKey)
+		log.V(4).Info("Annotation not found", "annotation", defaultBackendConfigKey)
 		return nghttpx.NewBackendConfigMapper(nil, config)
 	}
 
