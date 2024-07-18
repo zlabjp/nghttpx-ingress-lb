@@ -29,7 +29,9 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -68,19 +70,12 @@ func ReadConfig(ingConfig *IngressConfig, config *corev1.ConfigMap) {
 func needsReload(ctx context.Context, filename string, newCfg []byte) (bool, error) {
 	log := klog.FromContext(ctx)
 
-	in, err := os.Open(filename)
+	oldCfg, err := os.ReadFile(filename)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return true, nil
 		}
 
-		return false, err
-	}
-
-	oldCfg, err := io.ReadAll(in)
-	in.Close()
-
-	if err != nil {
 		return false, err
 	}
 
