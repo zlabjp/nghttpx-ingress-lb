@@ -1614,7 +1614,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 	ups := &nghttpx.Upstream{
 		Name:                     upsName,
 		GroupVersionKind:         gvk,
-		Source:                   types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()},
+		Source:                   namespacedName(obj),
 		Host:                     host,
 		Path:                     normalizedPath,
 		RedirectIfNotTLS:         pc.GetRedirectIfNotTLS() && (requireTLS || lbc.defaultTLSSecret != nil),
@@ -2845,8 +2845,7 @@ func (lc *LeaderController) deleteIngressClassNotification(ctx context.Context, 
 }
 
 func (lc *LeaderController) enqueueIngress(ing *networkingv1.Ingress) {
-	key := types.NamespacedName{Name: ing.Name, Namespace: ing.Namespace}.String()
-	lc.ingQueue.Add(key)
+	lc.ingQueue.Add(namespacedName(ing).String())
 }
 
 func (lc *LeaderController) enqueueIngressWithIngressClass(ctx context.Context, ingClass *networkingv1.IngressClass) {
