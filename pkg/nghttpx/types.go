@@ -37,7 +37,7 @@ import (
 
 // ServerReloader is the API to update underlying load balancer.
 type ServerReloader interface {
-	// Start starts a nghttpx process using executable at path with configuration file at confPath, and waits for the process to finish.
+	// Start starts an nghttpx process using executable at path with configuration file at confPath, and waits for the process to finish.
 	// If ctx is canceled, kill nghttpx process, and return.
 	Start(ctx context.Context, path, confPath string) error
 	// CheckAndReload checks whether the nghttpx configuration changed, and if so, make nghttpx reload its configuration.  If reloading

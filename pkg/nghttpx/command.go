@@ -42,7 +42,7 @@ import (
 	kjson "sigs.k8s.io/json"
 )
 
-// Start starts a nghttpx process using nghttpx executable at path, and wait.
+// Start starts an nghttpx process using nghttpx executable at path, and wait.
 func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error {
 	log := klog.FromContext(ctx)
 
