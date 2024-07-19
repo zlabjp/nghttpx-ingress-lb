@@ -653,11 +653,8 @@ func (lbc *LoadBalancerController) deleteEndpointSliceNotification(ctx context.C
 // endpointSliceReferenced returns true if we are interested in es.
 func (lbc *LoadBalancerController) endpointSliceReferenced(ctx context.Context, es *discoveryv1.EndpointSlice) bool {
 	svcName := es.Labels[discoveryv1.LabelServiceName]
-	if svcName == "" {
-		return false
-	}
 
-	return lbc.serviceReferenced(ctx, types.NamespacedName{Name: svcName, Namespace: es.Namespace})
+	return svcName != "" && lbc.serviceReferenced(ctx, types.NamespacedName{Name: svcName, Namespace: es.Namespace})
 }
 
 func (lbc *LoadBalancerController) addServiceNotification(ctx context.Context, obj any) {
@@ -1522,11 +1519,7 @@ func validateUpstreamBackendParams(upstream *nghttpx.Upstream, opts backendOpts)
 }
 
 func validateUpstreamBackendParamsMruby(upstream *nghttpx.Upstream, opts backendOpts) error {
-	if upstream.Mruby == nil || opts.mruby == nil {
-		return nil
-	}
-
-	if upstream.Mruby.Path == opts.mruby.Path {
+	if upstream.Mruby == nil || opts.mruby == nil || upstream.Mruby.Path == opts.mruby.Path {
 		return nil
 	}
 
@@ -1534,15 +1527,12 @@ func validateUpstreamBackendParamsMruby(upstream *nghttpx.Upstream, opts backend
 }
 
 func validateUpstreamBackendParamsAffinity(upstream *nghttpx.Upstream, opts backendOpts) error {
-	if upstream.Affinity == nghttpx.AffinityNone || opts.affinity == nghttpx.AffinityNone {
-		return nil
-	}
-
-	if upstream.Affinity == opts.affinity &&
-		upstream.AffinityCookieName == opts.affinityCookieName &&
-		upstream.AffinityCookiePath == opts.affinityCookiePath &&
-		upstream.AffinityCookieSecure == opts.affinityCookieSecure &&
-		upstream.AffinityCookieStickiness == opts.affinityCookieStickiness {
+	if upstream.Affinity == nghttpx.AffinityNone || opts.affinity == nghttpx.AffinityNone ||
+		(upstream.Affinity == opts.affinity &&
+			upstream.AffinityCookieName == opts.affinityCookieName &&
+			upstream.AffinityCookiePath == opts.affinityCookiePath &&
+			upstream.AffinityCookieSecure == opts.affinityCookieSecure &&
+			upstream.AffinityCookieStickiness == opts.affinityCookieStickiness) {
 		return nil
 	}
 
@@ -1552,11 +1542,7 @@ func validateUpstreamBackendParamsAffinity(upstream *nghttpx.Upstream, opts back
 }
 
 func validateUpstreamBackendParamsReadTimeout(upstream *nghttpx.Upstream, opts backendOpts) error {
-	if upstream.ReadTimeout == nil || opts.readTimeout == nil {
-		return nil
-	}
-
-	if *upstream.ReadTimeout == *opts.readTimeout {
+	if upstream.ReadTimeout == nil || opts.readTimeout == nil || *upstream.ReadTimeout == *opts.readTimeout {
 		return nil
 	}
 
@@ -1564,11 +1550,7 @@ func validateUpstreamBackendParamsReadTimeout(upstream *nghttpx.Upstream, opts b
 }
 
 func validateUpstreamBackendParamsWriteTimeout(upstream *nghttpx.Upstream, opts backendOpts) error {
-	if upstream.WriteTimeout == nil || opts.writeTimeout == nil {
-		return nil
-	}
-
-	if *upstream.WriteTimeout == *opts.writeTimeout {
+	if upstream.WriteTimeout == nil || opts.writeTimeout == nil || *upstream.WriteTimeout == *opts.writeTimeout {
 		return nil
 	}
 
