@@ -95,6 +95,17 @@ const (
 	certificateGarbageCollectionPeriod = time.Hour
 )
 
+// serverReloader is the API to update underlying load balancer.
+type serverReloader interface {
+	// Start starts an nghttpx process using executable at path with configuration file at confPath, and waits for the process to finish.
+	// If ctx is canceled, kill nghttpx process, and return.
+	Start(ctx context.Context, path, confPath string) error
+	// CheckAndReload checks whether the nghttpx configuration changed, and if so, make nghttpx reload its configuration.  If reloading
+	// is required, and it successfully issues reloading, returns true.  If there is no need to reloading, it returns false.  On error,
+	// it returns false, and non-nil error.
+	CheckAndReload(ctx context.Context, ingressCfg *nghttpx.IngressConfig) (bool, error)
+}
+
 // LoadBalancerController watches the kubernetes api and adds/removes services from the loadbalancer
 type LoadBalancerController struct {
 	clientset        clientset.Interface
@@ -127,7 +138,7 @@ type LoadBalancerController struct {
 	gatewayClassLister                      gatewaylistersv1.GatewayClassLister
 	gatewayLister                           gatewaylistersv1.GatewayLister
 	httpRouteLister                         gatewaylistersv1.HTTPRouteLister
-	nghttpx                                 nghttpx.ServerReloader
+	nghttpx                                 serverReloader
 	pod                                     *corev1.Pod
 	defaultSvc                              *types.NamespacedName
 	nghttpxConfigMap                        *types.NamespacedName
@@ -253,7 +264,7 @@ type Config struct {
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
 func NewLoadBalancerController(ctx context.Context, clientset clientset.Interface, gatewayClientset gatewayclientset.Interface,
-	nghttpx nghttpx.ServerReloader, config Config) (*LoadBalancerController, error) {
+	nghttpx serverReloader, config Config) (*LoadBalancerController, error) {
 	log := klog.LoggerWithName(klog.FromContext(ctx), "loadBalancerController")
 
 	ctx = klog.NewContext(ctx, log)

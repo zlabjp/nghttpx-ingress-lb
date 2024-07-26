@@ -45,7 +45,7 @@ type LoadBalancerConfig struct {
 	StaleAssetsThreshold time.Duration
 }
 
-// LoadBalancer starts nghttpx and reloads its configuration on demand.  It implements ServerReloader.
+// LoadBalancer starts nghttpx and reloads its configuration on demand.
 type LoadBalancer struct {
 	// httpClient is used to issue backend API request to nghttpx
 	httpClient    *http.Client
