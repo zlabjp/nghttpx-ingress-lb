@@ -397,12 +397,14 @@ func (f *fixture) expectUpdateStatusHTTPRouteAction(httpRoute *gatewayv1.HTTPRou
 	f.gatewayActions = append(f.gatewayActions, core.NewUpdateSubresourceAction(gvr, "status", "", httpRoute))
 }
 
-// fakeLoadBalancer implements nghttpx.ServerReloader.
+// fakeLoadBalancer implements serverReloader.
 type fakeLoadBalancer struct {
 	checkAndReloadHandler func(ingConfig *nghttpx.IngressConfig) (bool, error)
 
 	ingConfig *nghttpx.IngressConfig
 }
+
+var _ serverReloader = &fakeLoadBalancer{}
 
 // newFakeLoadBalancer creates new fakeLoadBalancer.
 func newFakeLoadBalancer() *fakeLoadBalancer {
