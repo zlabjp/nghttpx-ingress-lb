@@ -267,7 +267,13 @@ func WriteFile(path string, content []byte) error {
 		return err
 	}
 
-	return os.Rename(tempFile.Name(), path)
+	if err := os.Rename(tempFile.Name(), path); err != nil {
+		os.Remove(tempFile.Name())
+
+		return err
+	}
+
+	return nil
 }
 
 // Checksum calculates and returns checksum of b in hex string.
