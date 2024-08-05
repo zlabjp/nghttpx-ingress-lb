@@ -8,7 +8,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/spf13/cobra v1.8.1
 	golang.org/x/crypto v0.25.0
-	golang.org/x/time v0.5.0
+	golang.org/x/time v0.6.0
 	k8s.io/api v0.30.3
 	k8s.io/apimachinery v0.30.3
 	k8s.io/apiserver v0.30.3
