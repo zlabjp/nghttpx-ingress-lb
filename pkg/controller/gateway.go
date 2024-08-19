@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -634,15 +635,15 @@ func (lc *LeaderController) deleteHTTPRouteNotification(ctx context.Context, obj
 }
 
 func (lc *LeaderController) enqueueGatewayClass(gc *gatewayv1.GatewayClass) {
-	lc.gatewayClassQueue.Add(gc.Name)
+	lc.gatewayClassQueue.Add(namespacedName(gc))
 }
 
 func (lc *LeaderController) enqueueGateway(gtw *gatewayv1.Gateway) {
-	lc.gatewayQueue.Add(namespacedName(gtw).String())
+	lc.gatewayQueue.Add(namespacedName(gtw))
 }
 
 func (lc *LeaderController) enqueueHTTPRoute(httpRoute *gatewayv1.HTTPRoute) {
-	lc.httpRouteQueue.Add(namespacedName(httpRoute).String())
+	lc.httpRouteQueue.Add(namespacedName(httpRoute))
 }
 
 func (lc *LeaderController) enqueueHTTPRouteFromGateway(ctx context.Context, gtw *gatewayv1.Gateway) {
@@ -687,7 +688,7 @@ func (lc *LeaderController) gatewayClassWorker(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(klog.NewContext(ctx, log), lc.lbc.reconcileTimeout)
 		defer cancel()
 
-		if err := lc.syncGatewayClass(ctx, key.(string)); err != nil {
+		if err := lc.syncGatewayClass(ctx, key); err != nil {
 			log.Error(err, "Unable to sync GatewayClass")
 			lc.gatewayClassQueue.AddRateLimited(key)
 		} else {
@@ -704,12 +705,12 @@ func (lc *LeaderController) gatewayClassWorker(ctx context.Context) {
 	}
 }
 
-func (lc *LeaderController) syncGatewayClass(ctx context.Context, key string) error {
+func (lc *LeaderController) syncGatewayClass(ctx context.Context, key types.NamespacedName) error {
 	log := klog.FromContext(ctx)
 
 	log.V(2).Info("Syncing GatewayClass")
 
-	gc, err := lc.gatewayClassLister.Get(key)
+	gc, err := lc.gatewayClassLister.Get(key.Name)
 	if err != nil {
 		log.Error(err, "Unable to get GatewayClass")
 		return err
@@ -765,7 +766,7 @@ func (lc *LeaderController) gatewayWorker(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(klog.NewContext(ctx, log), lc.lbc.reconcileTimeout)
 		defer cancel()
 
-		if err := lc.syncGateway(ctx, key.(string)); err != nil {
+		if err := lc.syncGateway(ctx, key); err != nil {
 			log.Error(err, "Unable to sync Gateway")
 			lc.gatewayQueue.AddRateLimited(key)
 		} else {
@@ -782,19 +783,12 @@ func (lc *LeaderController) gatewayWorker(ctx context.Context) {
 	}
 }
 
-func (lc *LeaderController) syncGateway(ctx context.Context, key string) error {
+func (lc *LeaderController) syncGateway(ctx context.Context, key types.NamespacedName) error {
 	log := klog.FromContext(ctx)
 
 	log.V(2).Info("Syncing Gateway")
 
-	ns, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		log.Error(err, "Unable to split namespace and name from key", "key", key)
-		// Since key is broken, we do not retry.
-		return nil
-	}
-
-	gtw, err := lc.gatewayLister.Gateways(ns).Get(name)
+	gtw, err := lc.gatewayLister.Gateways(key.Namespace).Get(key.Name)
 	if err != nil {
 		log.Error(err, "Unable to get Gateway")
 		return err
@@ -941,7 +935,7 @@ func (lc *LeaderController) httpRouteWorker(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(klog.NewContext(ctx, log), lc.lbc.reconcileTimeout)
 		defer cancel()
 
-		if err := lc.syncHTTPRoute(ctx, key.(string)); err != nil {
+		if err := lc.syncHTTPRoute(ctx, key); err != nil {
 			log.Error(err, "Unable to sync HTTPRoute")
 			lc.httpRouteQueue.AddRateLimited(key)
 		} else {
@@ -958,19 +952,12 @@ func (lc *LeaderController) httpRouteWorker(ctx context.Context) {
 	}
 }
 
-func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key string) error {
+func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key types.NamespacedName) error {
 	log := klog.FromContext(ctx)
 
 	log.V(2).Info("Syncing HTTPRoute")
 
-	ns, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		log.Error(err, "Unable to split namespace and name from key", "key", key)
-		// Since key is broken, we do not retry.
-		return nil
-	}
-
-	httpRoute, err := lc.httpRouteLister.HTTPRoutes(ns).Get(name)
+	httpRoute, err := lc.httpRouteLister.HTTPRoutes(key.Namespace).Get(key.Name)
 	if err != nil {
 		log.Error(err, "Unable to get HTTPRoute")
 		return err

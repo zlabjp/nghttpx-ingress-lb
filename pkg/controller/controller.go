@@ -73,10 +73,6 @@ import (
 )
 
 const (
-	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
-	// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
-	syncKey = "ingress"
-
 	noResyncPeriod = 0
 
 	// nghttpxQUICKeyingMaterialsSecretKey is a field name of QUIC keying materials in Secret.
@@ -93,6 +89,12 @@ const (
 
 	// certificateGarbageCollectionPeriod is the period between garbage collection against certificate cache is performed.
 	certificateGarbageCollectionPeriod = time.Hour
+)
+
+var (
+	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
+	// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
+	syncKey = struct{}{}
 )
 
 // serverReloader is the API to update underlying load balancer.
@@ -175,7 +177,7 @@ type LoadBalancerController struct {
 	gatewayClassController                  gatewayv1.GatewayController
 	reloadRateLimiter                       flowcontrol.RateLimiter
 	eventRecorder                           events.EventRecorder
-	syncQueue                               workqueue.Interface
+	syncQueue                               workqueue.TypedInterface[struct{}]
 
 	// shutdownMu protects shutdown from the concurrent read/write.
 	shutdownMu sync.RWMutex
@@ -310,7 +312,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		gatewayAPI:                              config.GatewayAPI,
 		gatewayClassController:                  config.GatewayClassController,
 		eventRecorder:                           config.EventRecorder,
-		syncQueue:                               workqueue.New(),
+		syncQueue:                               workqueue.NewTyped[struct{}](),
 		reloadRateLimiter:                       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
 		certCache:                               make(map[string]*certificateCacheEntry),
 	}
@@ -1005,7 +1007,7 @@ func (lbc *LoadBalancerController) worker(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(ctx, lbc.reconcileTimeout)
 		defer cancel()
 
-		if err := lbc.sync(ctx, key.(string)); err != nil {
+		if err := lbc.sync(ctx, key); err != nil {
 			log.Error(err, "Unable to reconcile load balancer")
 		}
 
@@ -1040,7 +1042,7 @@ func (lbc *LoadBalancerController) getConfigMap(ctx context.Context, cmKey *type
 	return cm, nil
 }
 
-func (lbc *LoadBalancerController) sync(ctx context.Context, key string) error {
+func (lbc *LoadBalancerController) sync(ctx context.Context, key struct{}) error {
 	log := klog.FromContext(ctx)
 
 	start := time.Now()
@@ -2298,7 +2300,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 	wg.Wait()
 }
 
-func (lbc *LoadBalancerController) retryOrForget(key interface{}, requeue bool) {
+func (lbc *LoadBalancerController) retryOrForget(key struct{}, requeue bool) {
 	if requeue {
 		lbc.syncQueue.Add(key)
 	}
@@ -2341,11 +2343,11 @@ type LeaderController struct {
 	gatewayLister      gatewaylistersv1.GatewayLister
 	httpRouteLister    gatewaylistersv1.HTTPRouteLister
 
-	ingQueue          workqueue.RateLimitingInterface
-	secretQueue       workqueue.RateLimitingInterface
-	gatewayClassQueue workqueue.RateLimitingInterface
-	gatewayQueue      workqueue.RateLimitingInterface
-	httpRouteQueue    workqueue.RateLimitingInterface
+	ingQueue          workqueue.TypedRateLimitingInterface[types.NamespacedName]
+	secretQueue       workqueue.TypedRateLimitingInterface[types.NamespacedName]
+	gatewayClassQueue workqueue.TypedRateLimitingInterface[types.NamespacedName]
+	gatewayQueue      workqueue.TypedRateLimitingInterface[types.NamespacedName]
+	httpRouteQueue    workqueue.TypedRateLimitingInterface[types.NamespacedName]
 
 	// timeNow returns the current time and abstracted for test.
 	timeNow func() metav1.Time
@@ -2372,13 +2374,13 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 				opts.FieldSelector = "metadata.name=" + lbc.nghttpxSecret.Name
 			}),
 		),
-		ingQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		ingQueue: workqueue.NewTypedRateLimitingQueue[types.NamespacedName](workqueue.NewTypedMaxOfRateLimiter[types.NamespacedName](
+			workqueue.NewTypedItemExponentialFailureRateLimiter[types.NamespacedName](5*time.Millisecond, 30*time.Second),
+			&workqueue.TypedBucketRateLimiter[types.NamespacedName]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 		)),
-		secretQueue: workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		secretQueue: workqueue.NewTypedRateLimitingQueue[types.NamespacedName](workqueue.NewTypedMaxOfRateLimiter[types.NamespacedName](
+			workqueue.NewTypedItemExponentialFailureRateLimiter[types.NamespacedName](5*time.Millisecond, 30*time.Second),
+			&workqueue.TypedBucketRateLimiter[types.NamespacedName]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 		)),
 		timeNow: metav1.Now,
 	}
@@ -2480,19 +2482,19 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 	}
 
 	if lbc.gatewayAPI {
-		lc.gatewayClassQueue = workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		lc.gatewayClassQueue = workqueue.NewTypedRateLimitingQueue[types.NamespacedName](workqueue.NewTypedMaxOfRateLimiter[types.NamespacedName](
+			workqueue.NewTypedItemExponentialFailureRateLimiter[types.NamespacedName](5*time.Millisecond, 30*time.Second),
+			&workqueue.TypedBucketRateLimiter[types.NamespacedName]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 		))
 
-		lc.gatewayQueue = workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		lc.gatewayQueue = workqueue.NewTypedRateLimitingQueue[types.NamespacedName](workqueue.NewTypedMaxOfRateLimiter[types.NamespacedName](
+			workqueue.NewTypedItemExponentialFailureRateLimiter[types.NamespacedName](5*time.Millisecond, 30*time.Second),
+			&workqueue.TypedBucketRateLimiter[types.NamespacedName]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 		))
 
-		lc.httpRouteQueue = workqueue.NewRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		lc.httpRouteQueue = workqueue.NewTypedRateLimitingQueue[types.NamespacedName](workqueue.NewTypedMaxOfRateLimiter[types.NamespacedName](
+			workqueue.NewTypedItemExponentialFailureRateLimiter[types.NamespacedName](5*time.Millisecond, 30*time.Second),
+			&workqueue.TypedBucketRateLimiter[types.NamespacedName]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 		))
 
 		lc.gatewayInformers = gatewayinformers.NewSharedInformerFactoryWithOptions(
@@ -2599,7 +2601,7 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 	}
 
 	// Add Secret to queue so that we can create it if missing.
-	lc.secretQueue.Add(lc.lbc.nghttpxSecret.String())
+	lc.secretQueue.Add(lc.lbc.nghttpxSecret)
 
 	wg.Add(1)
 
@@ -2856,7 +2858,7 @@ func (lc *LeaderController) deleteIngressClassNotification(ctx context.Context, 
 }
 
 func (lc *LeaderController) enqueueIngress(ing *networkingv1.Ingress) {
-	lc.ingQueue.Add(namespacedName(ing).String())
+	lc.ingQueue.Add(namespacedName(ing))
 }
 
 func (lc *LeaderController) enqueueIngressWithIngressClass(ctx context.Context, ingClass *networkingv1.IngressClass) {
@@ -2911,7 +2913,7 @@ func (lc *LeaderController) validateIngressClass(ctx context.Context, ing *netwo
 }
 
 func (lc *LeaderController) enqueueSecret(s *corev1.Secret) {
-	lc.secretQueue.Add(namespacedName(s).String())
+	lc.secretQueue.Add(namespacedName(s))
 }
 
 func (lc *LeaderController) secretWorker(ctx context.Context) {
@@ -2930,7 +2932,7 @@ func (lc *LeaderController) secretWorker(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(klog.NewContext(ctx, log), lc.lbc.reconcileTimeout)
 		defer cancel()
 
-		if err := lc.syncSecret(ctx, key.(string), time.Now()); err != nil {
+		if err := lc.syncSecret(ctx, key, time.Now()); err != nil {
 			log.Error(err, "Unable to sync QUIC keying materials")
 			lc.secretQueue.AddRateLimited(key)
 		} else {
@@ -2947,23 +2949,16 @@ func (lc *LeaderController) secretWorker(ctx context.Context) {
 	}
 }
 
-func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time.Time) error {
+func (lc *LeaderController) syncSecret(ctx context.Context, key types.NamespacedName, now time.Time) error {
 	log := klog.FromContext(ctx)
 
 	log.V(2).Info("Syncing Secret")
-
-	ns, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		log.Error(err, "Unable to split namespace and name from key", "key", key)
-		// Since key is broken, we do not retry.
-		return nil
-	}
 
 	tstamp := now.Format(time.RFC3339)
 
 	requeueAfter := 12 * time.Hour
 
-	secret, err := lc.secretLister.Secrets(ns).Get(name)
+	secret, err := lc.secretLister.Secrets(key.Namespace).Get(key.Name)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "Unable to get Secret")
@@ -2972,8 +2967,8 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key string, now time
 
 		secret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: ns,
+				Name:      key.Name,
+				Namespace: key.Namespace,
 			},
 		}
 
@@ -3221,7 +3216,7 @@ func (lc *LeaderController) ingressWorker(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(klog.NewContext(ctx, log), lc.lbc.reconcileTimeout)
 		defer cancel()
 
-		if err := lc.syncIngress(ctx, key.(string)); err != nil {
+		if err := lc.syncIngress(ctx, key); err != nil {
 			log.Error(err, "Unable to sync Ingress")
 			lc.ingQueue.AddRateLimited(key)
 		} else {
@@ -3239,19 +3234,12 @@ func (lc *LeaderController) ingressWorker(ctx context.Context) {
 }
 
 // syncIngress updates Ingress resource status.
-func (lc *LeaderController) syncIngress(ctx context.Context, key string) error {
+func (lc *LeaderController) syncIngress(ctx context.Context, key types.NamespacedName) error {
 	log := klog.FromContext(ctx)
 
 	log.V(2).Info("Syncing Ingress")
 
-	ns, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		log.Error(err, "Unable to split namespace and name from key", "key", key)
-		// Since key is broken, we do not retry.
-		return nil
-	}
-
-	ing, err := lc.ingLister.Ingresses(ns).Get(name)
+	ing, err := lc.ingLister.Ingresses(key.Namespace).Get(key.Name)
 	if err != nil {
 		log.Error(err, "Unable to get Ingress")
 		return err

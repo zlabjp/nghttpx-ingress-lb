@@ -1761,9 +1761,7 @@ func TestSyncIngress(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			key := types.NamespacedName{Name: tt.ingress.Name, Namespace: tt.ingress.Namespace}.String()
-
-			err := f.lc.syncIngress(context.Background(), key)
+			err := f.lc.syncIngress(context.Background(), namespacedName(tt.ingress))
 			if err != nil {
 				t.Fatalf("f.lc.syncIngress(...): %v", err)
 			}
@@ -2081,7 +2079,7 @@ func TestSyncSecretQUIC(t *testing.T) {
 
 			f.lbc.nghttpxSecret = defaultNghttpxSecret
 
-			err := f.lc.syncSecret(context.Background(), defaultNghttpxSecret.String(), now)
+			err := f.lc.syncSecret(context.Background(), defaultNghttpxSecret, now)
 			if err != nil {
 				t.Fatalf("f.lc.syncSecret(...): %v", err)
 			}
@@ -2207,7 +2205,7 @@ func TestSyncSecretTLSTicketKey(t *testing.T) {
 
 			f.lbc.nghttpxSecret = defaultNghttpxSecret
 
-			err := f.lc.syncSecret(context.Background(), defaultNghttpxSecret.String(), now)
+			err := f.lc.syncSecret(context.Background(), defaultNghttpxSecret, now)
 			if err != nil {
 				t.Fatalf("f.lc.syncSecret(...): %v", err)
 			}
