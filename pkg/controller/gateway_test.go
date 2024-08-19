@@ -125,7 +125,7 @@ func TestSyncGatewayClass(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			err := f.lc.syncGatewayClass(context.Background(), tt.gatewayClass.Name)
+			err := f.lc.syncGatewayClass(context.Background(), namespacedName(&tt.gatewayClass))
 			if err != nil {
 				t.Fatalf("f.lc.syncGatewayClass: %v", err)
 			}
@@ -539,9 +539,7 @@ func TestSyncGateway(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			key := types.NamespacedName{Name: tt.gateway.Name, Namespace: tt.gateway.Namespace}.String()
-
-			err := f.lc.syncGateway(context.Background(), key)
+			err := f.lc.syncGateway(context.Background(), namespacedName(&tt.gateway))
 			if err != nil {
 				t.Fatalf("f.lc.syncGateway: %v", err)
 			}
@@ -1420,9 +1418,7 @@ func TestSyncHTTPRoute(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			key := types.NamespacedName{Name: tt.httpRoute.Name, Namespace: tt.httpRoute.Namespace}.String()
-
-			err := f.lc.syncHTTPRoute(context.Background(), key)
+			err := f.lc.syncHTTPRoute(context.Background(), namespacedName(&tt.httpRoute))
 			if err != nil {
 				t.Fatalf("f.lc.syncHTTPRoute: %v", err)
 			}
