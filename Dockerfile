@@ -17,7 +17,7 @@
 # For the full copyright and license information, please view the LICENSE
 # file that was distributed with this source code.
 
-FROM debian:12 as build
+FROM debian:12 AS build
 
 COPY --link patches/extra-mrbgem.patch /
 
