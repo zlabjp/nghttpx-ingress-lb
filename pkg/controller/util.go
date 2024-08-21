@@ -84,18 +84,21 @@ func podFindPort(pod *corev1.Pod, svcPort *corev1.ServicePort) (int32, error) {
 	switch portName.Type {
 	case intstr.String:
 		name := portName.StrVal
-	loop:
+
 		for i := range pod.Spec.Containers {
 			container := &pod.Spec.Containers[i]
-			for i := range container.Ports {
-				port := &container.Ports[i]
+			i := slicesutil.IndexPtrFunc(container.Ports, func(port *corev1.ContainerPort) bool {
 				// port.Name must be unique inside Pod.
-				if port.Name == name {
-					if port.Protocol == svcPort.Protocol {
-						return port.ContainerPort, nil
-					}
-					break loop
+				return port.Name == name
+			})
+
+			if i != -1 {
+				port := &container.Ports[i]
+				if port.Protocol == svcPort.Protocol {
+					return port.ContainerPort, nil
 				}
+
+				break
 			}
 		}
 	case intstr.Int:

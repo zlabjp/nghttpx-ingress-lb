@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -573,6 +574,142 @@ func TestHostnameMatch(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			if got, want := hostnameMatch(tt.pattern, tt.hostname), tt.want; got != want {
 				t.Errorf("hostnameMatch(%q, %q) = %v, want %v", tt.pattern, tt.hostname, got, want)
+			}
+		})
+	}
+}
+
+func TestPodFindPort(t *testing.T) {
+	tests := []struct {
+		desc        string
+		containers  []corev1.Container
+		servicePort corev1.ServicePort
+		wantPort    int32
+		wantErr     bool
+	}{
+		{
+			desc: "Numeric port",
+			servicePort: corev1.ServicePort{
+				TargetPort: intstr.FromInt32(8080),
+			},
+			wantPort: 8080,
+		},
+		{
+			desc: "Numeric port (string)",
+			containers: []corev1.Container{
+				{
+					Ports: []corev1.ContainerPort{
+						{
+							ContainerPort: 8080,
+						},
+					},
+				},
+			},
+			servicePort: corev1.ServicePort{
+				TargetPort: intstr.FromString("8080"),
+			},
+			wantErr: true,
+		},
+		{
+			desc: "Named port and empty containers",
+			servicePort: corev1.ServicePort{
+				TargetPort: intstr.FromString("https"),
+			},
+			wantErr: true,
+		},
+		{
+			desc: "Named port and non-empty containers; port not found",
+			containers: []corev1.Container{
+				{
+					Ports: []corev1.ContainerPort{
+						{
+							Name: "http",
+						},
+						{
+							Name: "ftp",
+						},
+					},
+				},
+			},
+			servicePort: corev1.ServicePort{
+				TargetPort: intstr.FromString("https"),
+			},
+			wantErr: true,
+		},
+		{
+			desc: "Named port",
+			containers: []corev1.Container{
+				{},
+				{
+					Ports: []corev1.ContainerPort{
+						{
+							Name:          "http",
+							ContainerPort: 80,
+							Protocol:      corev1.ProtocolTCP,
+						},
+						{
+							Name:          "https",
+							ContainerPort: 443,
+							Protocol:      corev1.ProtocolTCP,
+						},
+					},
+				},
+			},
+			servicePort: corev1.ServicePort{
+				TargetPort: intstr.FromString("https"),
+				Protocol:   corev1.ProtocolTCP,
+			},
+			wantPort: 443,
+		},
+		{
+			desc: "Protocols do not match",
+			containers: []corev1.Container{
+				{
+					Ports: []corev1.ContainerPort{
+						{
+							Name:          "http",
+							ContainerPort: 80,
+							Protocol:      corev1.ProtocolTCP,
+						},
+						{
+							Name:          "https",
+							ContainerPort: 443,
+							Protocol:      corev1.ProtocolTCP,
+						},
+					},
+				},
+			},
+			servicePort: corev1.ServicePort{
+				TargetPort: intstr.FromString("https"),
+				Protocol:   corev1.ProtocolUDP,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			po := &corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: tt.containers,
+				},
+			}
+
+			port, err := podFindPort(po, &tt.servicePort)
+			if err != nil {
+				if tt.wantErr {
+					return
+				}
+
+				t.Fatalf("podFindPort: %v", err)
+			}
+
+			if tt.wantErr {
+				t.Fatal("podFindPort should fail")
+			}
+
+			if got, want := port, tt.wantPort; got != want {
+				t.Errorf("port = %v, want %v", got, want)
 			}
 		})
 	}
