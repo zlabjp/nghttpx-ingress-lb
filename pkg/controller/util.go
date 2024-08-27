@@ -58,11 +58,10 @@ func loadBalancerIngressesIPEqual(a, b []networkingv1.IngressLoadBalancerIngress
 // sortLoadBalancerIngress sorts a by IP and Hostname in the ascending order.
 func sortLoadBalancerIngress(lbIngs []networkingv1.IngressLoadBalancerIngress) {
 	slices.SortFunc(lbIngs, func(a, b networkingv1.IngressLoadBalancerIngress) int {
-		if c := cmp.Compare(a.IP, b.IP); c != 0 {
-			return c
-		}
-
-		return cmp.Compare(a.Hostname, b.Hostname)
+		return cmp.Or(
+			cmp.Compare(a.IP, b.IP),
+			cmp.Compare(a.Hostname, b.Hostname),
+		)
 	})
 }
 
