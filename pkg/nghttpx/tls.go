@@ -146,15 +146,11 @@ func TLSCredShareSamePaths(a, b *TLSCred) bool {
 }
 
 func TLSCredCompare(a, b *TLSCred) int {
-	if c := cmp.Compare(a.Key.Path, b.Key.Path); c != 0 {
-		return c
-	}
-
-	if c := cmp.Compare(a.Cert.Path, b.Cert.Path); c != 0 {
-		return c
-	}
-
-	return cmp.Compare(a.OCSPResp.GetPath(), b.OCSPResp.GetPath())
+	return cmp.Or(
+		cmp.Compare(a.Key.Path, b.Key.Path),
+		cmp.Compare(a.Cert.Path, b.Cert.Path),
+		cmp.Compare(a.OCSPResp.GetPath(), b.OCSPResp.GetPath()),
+	)
 }
 
 // SortTLSCred sorts creds in ascending order of Key.Path, Cert.Path, and OCSPResp.Path.

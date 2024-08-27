@@ -1274,11 +1274,10 @@ func (lbc *LoadBalancerController) createConfig(ctx context.Context) (*nghttpx.I
 	}
 
 	slices.SortFunc(upstreams, func(a, b *nghttpx.Upstream) int {
-		if c := cmp.Compare(a.Host, b.Host); c != 0 {
-			return c
-		}
-
-		return cmp.Compare(a.Path, b.Path)
+		return cmp.Or(
+			cmp.Compare(a.Host, b.Host),
+			cmp.Compare(a.Path, b.Path),
+		)
 	})
 
 	upstreams = removeUpstreamsWithInconsistentBackendParams(ctx, upstreams)
@@ -1286,11 +1285,10 @@ func (lbc *LoadBalancerController) createConfig(ctx context.Context) (*nghttpx.I
 	for _, value := range upstreams {
 		backends := value.Backends
 		slices.SortFunc(backends, func(a, b nghttpx.Backend) int {
-			if c := cmp.Compare(a.Address, b.Address); c != 0 {
-				return c
-			}
-
-			return cmp.Compare(a.Port, b.Port)
+			return cmp.Or(
+				cmp.Compare(a.Address, b.Address),
+				cmp.Compare(a.Port, b.Port),
+			)
 		})
 
 		// remove duplicate Backend
