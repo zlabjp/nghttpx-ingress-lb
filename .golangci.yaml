@@ -18,8 +18,15 @@ linters:
   - mirror
   - wsl
   - copyloopvar
+  - gci
 linters-settings:
   govet:
     enable:
     - nilness
     - unusedwrite
+  gci:
+    sections:
+      - standard
+      - default
+      - localmodule
+    custom-order: true
