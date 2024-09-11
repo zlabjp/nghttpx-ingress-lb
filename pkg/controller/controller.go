@@ -185,7 +185,7 @@ type LoadBalancerController struct {
 
 	// certCacheMu protects certCache from the concurrent read/write.
 	certCacheMu sync.Mutex
-	certCache   map[string]*certificateCacheEntry
+	certCache   map[types.NamespacedName]*certificateCacheEntry
 }
 
 type Config struct {
@@ -314,7 +314,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		eventRecorder:                           config.EventRecorder,
 		syncQueue:                               workqueue.NewTyped[struct{}](),
 		reloadRateLimiter:                       flowcontrol.NewTokenBucketRateLimiter(float32(config.ReloadRate), config.ReloadBurst),
-		certCache:                               make(map[string]*certificateCacheEntry),
+		certCache:                               make(map[types.NamespacedName]*certificateCacheEntry),
 	}
 
 	{
@@ -1819,7 +1819,7 @@ type certificateCacheEntry struct {
 	key []byte
 }
 
-func (lbc *LoadBalancerController) getCertificateFromCache(key string) (*certificateCacheEntry, bool) {
+func (lbc *LoadBalancerController) getCertificateFromCache(key types.NamespacedName) (*certificateCacheEntry, bool) {
 	lbc.certCacheMu.Lock()
 	ent, ok := lbc.certCache[key]
 	lbc.certCacheMu.Unlock()
@@ -1827,7 +1827,7 @@ func (lbc *LoadBalancerController) getCertificateFromCache(key string) (*certifi
 	return ent, ok
 }
 
-func (lbc *LoadBalancerController) cacheCertificate(key string, entry *certificateCacheEntry) {
+func (lbc *LoadBalancerController) cacheCertificate(key types.NamespacedName, entry *certificateCacheEntry) {
 	lbc.certCacheMu.Lock()
 	lbc.certCache[key] = entry
 	lbc.certCacheMu.Unlock()
@@ -1844,12 +1844,7 @@ func (lbc *LoadBalancerController) garbageCollectCertificate(ctx context.Context
 		lbc.certCacheMu.Lock()
 
 		for key := range lbc.certCache {
-			ns, name, err := cache.SplitMetaNamespaceKey(key)
-			if err != nil {
-				continue
-			}
-
-			if _, err := lbc.secretLister.Secrets(ns).Get(name); err != nil {
+			if _, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name); err != nil {
 				if apierrors.IsNotFound(err) {
 					delete(lbc.certCache, key)
 				}

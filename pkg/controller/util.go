@@ -37,6 +37,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	listersnetworkingv1 "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/klog/v2"
@@ -273,8 +274,8 @@ func ingressPortStatusFromPortStatus(ports []corev1.PortStatus) []networkingv1.I
 	return ingPorts
 }
 
-func createCertCacheKey(s *corev1.Secret) string {
-	return s.Namespace + "/" + s.Name
+func createCertCacheKey(s *corev1.Secret) types.NamespacedName {
+	return namespacedName(s)
 }
 
 func calculateCertificateHash(cert, key []byte) []byte {
