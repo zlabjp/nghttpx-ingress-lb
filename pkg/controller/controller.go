@@ -2979,9 +2979,7 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key types.Namespaced
 			secret.Annotations[tlsTicketKeyUpdateTimestampKey] = tstamp
 			secret.Data[nghttpxTLSTicketKeySecretKey] = key
 
-			if requeueAfter > lc.lbc.tlsTicketKeyPeriod {
-				requeueAfter = lc.lbc.tlsTicketKeyPeriod
-			}
+			requeueAfter = min(requeueAfter, lc.lbc.tlsTicketKeyPeriod)
 		}
 
 		if lc.lbc.http3 {
@@ -2993,9 +2991,7 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key types.Namespaced
 			secret.Annotations[quicKeyingMaterialsUpdateTimestampKey] = tstamp
 			secret.Data[nghttpxQUICKeyingMaterialsSecretKey] = key
 
-			if requeueAfter > lc.lbc.quicSecretPeriod {
-				requeueAfter = lc.lbc.quicSecretPeriod
-			}
+			requeueAfter = min(requeueAfter, lc.lbc.quicSecretPeriod)
 		}
 
 		if _, err := lc.lbc.clientset.CoreV1().Secrets(secret.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
@@ -3021,8 +3017,8 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key types.Namespaced
 
 		ticketKey, ticketKeyUpdate, ticketKeyAddAfter = lc.getTLSTicketKeyFromSecret(ctx, secret, now)
 
-		if ticketKeyAddAfter != 0 && requeueAfter > ticketKeyAddAfter {
-			requeueAfter = ticketKeyAddAfter
+		if ticketKeyAddAfter != 0 {
+			requeueAfter = min(requeueAfter, ticketKeyAddAfter)
 		}
 	}
 
@@ -3036,8 +3032,8 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key types.Namespaced
 
 		quicKM, quicKMUpdate, quicKMAddAfter = lc.getQUICKeyingMaterialsFromSecret(ctx, secret, now)
 
-		if quicKMAddAfter != 0 && requeueAfter > quicKMAddAfter {
-			requeueAfter = quicKMAddAfter
+		if quicKMAddAfter != 0 {
+			requeueAfter = min(requeueAfter, quicKMAddAfter)
 		}
 	}
 
@@ -3079,9 +3075,7 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key types.Namespaced
 
 		log.Info("TLS ticket keys were updated")
 
-		if requeueAfter > lc.lbc.tlsTicketKeyPeriod {
-			requeueAfter = lc.lbc.tlsTicketKeyPeriod
-		}
+		requeueAfter = min(requeueAfter, lc.lbc.tlsTicketKeyPeriod)
 	}
 
 	if quicKMUpdate {
@@ -3105,9 +3099,7 @@ func (lc *LeaderController) syncSecret(ctx context.Context, key types.Namespaced
 
 		log.Info("QUIC keying materials were updated")
 
-		if requeueAfter > lc.lbc.quicSecretPeriod {
-			requeueAfter = lc.lbc.quicSecretPeriod
-		}
+		requeueAfter = min(requeueAfter, lc.lbc.quicSecretPeriod)
 	}
 
 	if _, err := lc.lbc.clientset.CoreV1().Secrets(updatedSecret.Namespace).Update(ctx, updatedSecret, metav1.UpdateOptions{}); err != nil {
