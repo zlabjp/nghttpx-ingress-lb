@@ -549,19 +549,10 @@ func (lbc *LoadBalancerController) updateIngressNotification(ctx context.Context
 func (lbc *LoadBalancerController) deleteIngressNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	ing, ok := obj.(*networkingv1.Ingress)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		ing, ok = tombstone.Obj.(*networkingv1.Ingress)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not an Ingress", "object", obj)
-			return
-		}
+	ing, err := deletedObjectAs[*networkingv1.Ingress](obj)
+	if err != nil {
+		log.Error(err, "Unable to get Ingress")
+		return
 	}
 
 	if !lbc.validateIngressClass(ctx, ing) {
@@ -591,19 +582,10 @@ func (lbc *LoadBalancerController) updateIngressClassNotification(ctx context.Co
 func (lbc *LoadBalancerController) deleteIngressClassNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	ingClass, ok := obj.(*networkingv1.IngressClass)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		ingClass, ok = tombstone.Obj.(*networkingv1.IngressClass)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not IngressClass", "object", obj)
-			return
-		}
+	ingClass, err := deletedObjectAs[*networkingv1.IngressClass](obj)
+	if err != nil {
+		log.Error(err, "Unable to get IngressClass")
+		return
 	}
 
 	log.V(4).Info("IngressClass deleted", "ingressClass", klog.KObj(ingClass))
@@ -640,19 +622,10 @@ func (lbc *LoadBalancerController) updateEndpointSliceNotification(ctx context.C
 func (lbc *LoadBalancerController) deleteEndpointSliceNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	es, ok := obj.(*discoveryv1.EndpointSlice)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		es, ok = tombstone.Obj.(*discoveryv1.EndpointSlice)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not EndpointSlice", "object", obj)
-			return
-		}
+	es, err := deletedObjectAs[*discoveryv1.EndpointSlice](obj)
+	if err != nil {
+		log.Error(err, "Unable to get EndpointSlice")
+		return
 	}
 
 	if !lbc.endpointSliceReferenced(ctx, es) {
@@ -702,19 +675,10 @@ func (lbc *LoadBalancerController) updateServiceNotification(ctx context.Context
 func (lbc *LoadBalancerController) deleteServiceNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	svc, ok := obj.(*corev1.Service)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		svc, ok = tombstone.Obj.(*corev1.Service)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not Service", "object", obj)
-			return
-		}
+	svc, err := deletedObjectAs[*corev1.Service](obj)
+	if err != nil {
+		log.Error(err, "Unable to get Service")
+		return
 	}
 
 	if !lbc.serviceReferenced(ctx, namespacedName(svc)) {
@@ -806,19 +770,10 @@ func (lbc *LoadBalancerController) updateSecretNotification(ctx context.Context,
 func (lbc *LoadBalancerController) deleteSecretNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	s, ok := obj.(*corev1.Secret)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		s, ok = tombstone.Obj.(*corev1.Secret)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not a Secret", "object", obj)
-			return
-		}
+	s, err := deletedObjectAs[*corev1.Secret](obj)
+	if err != nil {
+		log.Error(err, "Unable to get Secret")
+		return
 	}
 
 	if !lbc.secretReferenced(ctx, s) {
@@ -849,19 +804,10 @@ func (lbc *LoadBalancerController) updateConfigMapNotification(ctx context.Conte
 func (lbc *LoadBalancerController) deleteConfigMapNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	c, ok := obj.(*corev1.ConfigMap)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		c, ok = tombstone.Obj.(*corev1.ConfigMap)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not a ConfigMap", "object", obj)
-			return
-		}
+	c, err := deletedObjectAs[*corev1.ConfigMap](obj)
+	if err != nil {
+		log.Error(err, "Unable to get ConfigMap")
+		return
 	}
 
 	log.V(4).Info("ConfigMap deleted", "configMap", klog.KObj(c))
@@ -900,19 +846,10 @@ func (lbc *LoadBalancerController) updatePodNotification(ctx context.Context, ol
 func (lbc *LoadBalancerController) deletePodNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		pod, ok = tombstone.Obj.(*corev1.Pod)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not Pod", "object", obj)
-			return
-		}
+	pod, err := deletedObjectAs[*corev1.Pod](obj)
+	if err != nil {
+		log.Error(err, "Unable to get Pod")
+		return
 	}
 
 	if !lbc.podReferenced(ctx, pod) {
@@ -2709,19 +2646,10 @@ func (lc *LeaderController) updatePodNotification(ctx context.Context, _, cur an
 func (lc *LeaderController) deletePodNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		pod, ok = tombstone.Obj.(*corev1.Pod)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not Pod", "object", obj)
-			return
-		}
+	pod, err := deletedObjectAs[*corev1.Pod](obj)
+	if err != nil {
+		log.Error(err, "Unable to get Pod")
+		return
 	}
 
 	log.V(4).Info("Pod deleted", "pod", klog.KObj(pod))
@@ -2752,19 +2680,10 @@ func (lc *LeaderController) updateServiceNotification(ctx context.Context, _, cu
 func (lc *LeaderController) deleteServiceNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	svc, ok := obj.(*corev1.Service)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		svc, ok = tombstone.Obj.(*corev1.Service)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not Service", "object", obj)
-			return
-		}
+	svc, err := deletedObjectAs[*corev1.Service](obj)
+	if err != nil {
+		log.Error(err, "Unable to get Service")
+		return
 	}
 
 	log.V(4).Info("Service deleted", "service", klog.KObj(svc))
@@ -2793,19 +2712,10 @@ func (lc *LeaderController) updateSecretNotification(ctx context.Context, _, cur
 func (lc *LeaderController) deleteSecretNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	s, ok := obj.(*corev1.Secret)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		s, ok = tombstone.Obj.(*corev1.Secret)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not a Secret", "object", obj)
-			return
-		}
+	s, err := deletedObjectAs[*corev1.Secret](obj)
+	if err != nil {
+		log.Error(err, "Unable to get Secret")
+		return
 	}
 
 	log.V(4).Info("Secret deleted", "secret", klog.KObj(s))
@@ -2831,19 +2741,10 @@ func (lc *LeaderController) updateIngressClassNotification(ctx context.Context, 
 func (lc *LeaderController) deleteIngressClassNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	ingClass, ok := obj.(*networkingv1.IngressClass)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		ingClass, ok = tombstone.Obj.(*networkingv1.IngressClass)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not IngressClass", "object", obj)
-			return
-		}
+	ingClass, err := deletedObjectAs[*networkingv1.IngressClass](obj)
+	if err != nil {
+		log.Error(err, "Unable to get IngressClass")
+		return
 	}
 
 	log.V(4).Info("IngressClass deleted", "ingressClass", klog.KObj(ingClass))

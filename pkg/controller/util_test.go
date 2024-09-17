@@ -17,6 +17,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -713,4 +714,64 @@ func TestPodFindPort(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeletedObjectAs(t *testing.T) {
+	t.Run("Direct conversion", func(t *testing.T) {
+		s := &corev1.Pod{}
+
+		po, err := deletedObjectAs[*corev1.Pod](s)
+		if err != nil {
+			t.Fatalf("deletedObjectAs: %v", err)
+		}
+
+		if got, want := po, s; po != s {
+			t.Errorf("po = %T, want %T", got, want)
+		}
+	})
+
+	t.Run("Via cache.DeletedFinalStateUnknown", func(t *testing.T) {
+		s := &corev1.Pod{}
+		d := cache.DeletedFinalStateUnknown{
+			Obj: s,
+		}
+
+		po, err := deletedObjectAs[*corev1.Pod](d)
+		if err != nil {
+			t.Fatalf("deletedObjectAs: %v", err)
+		}
+
+		if got, want := po, s; po != s {
+			t.Errorf("po = %T, want %T", got, want)
+		}
+	})
+
+	t.Run("Failed conversion", func(t *testing.T) {
+		s := &corev1.ConfigMap{}
+
+		po, err := deletedObjectAs[*corev1.Pod](s)
+		if err == nil {
+			t.Fatal("deletedObjectAs should fail")
+		}
+
+		if po != nil {
+			t.Errorf("po must be nil")
+		}
+	})
+
+	t.Run("Failed conversion via cache.DeletedFinalStateUnknown", func(t *testing.T) {
+		s := &corev1.ConfigMap{}
+		d := cache.DeletedFinalStateUnknown{
+			Obj: s,
+		}
+
+		po, err := deletedObjectAs[*corev1.Pod](d)
+		if err == nil {
+			t.Fatal("deletedObjectAs should fail")
+		}
+
+		if po != nil {
+			t.Errorf("po must be nil")
+		}
+	})
 }
