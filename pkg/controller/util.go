@@ -40,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	listersnetworkingv1 "k8s.io/client-go/listers/networking/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -333,4 +334,25 @@ func hostnameMatch(pattern, hostname gatewayv1.Hostname) bool {
 	}
 
 	return pattern == hostname
+}
+
+// deletedObjectAs converts obj to T.  If the direct type conversion fails, it tries to get object of type T via
+// cache.DeletedFinalStateUnknown.
+func deletedObjectAs[T any](obj any) (T, error) {
+	var t T
+
+	o, ok := obj.(T)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return t, fmt.Errorf("unable to get object from tombstone: %T", obj)
+		}
+
+		o, ok = tombstone.Obj.(T)
+		if !ok {
+			return t, fmt.Errorf("tombstone contained object %T but %T is expected", tombstone.Obj, t)
+		}
+	}
+
+	return o, nil
 }
