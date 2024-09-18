@@ -1650,12 +1650,7 @@ func (lbc *LoadBalancerController) getTLSCredFromSecret(ctx context.Context, key
 		return nil, fmt.Errorf("unable to get TLS secret %v: %w", key, err)
 	}
 
-	tlsCred, err := lbc.createTLSCredFromSecret(ctx, secret)
-	if err != nil {
-		return nil, err
-	}
-
-	return tlsCred, nil
+	return lbc.createTLSCredFromSecret(ctx, secret)
 }
 
 // getTLSCredFromIngress returns list of nghttpx.TLSCred obtained from Ingress resource.
@@ -1781,12 +1776,8 @@ func (lbc *LoadBalancerController) garbageCollectCertificate(ctx context.Context
 		lbc.certCacheMu.Lock()
 
 		for key := range lbc.certCache {
-			if _, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name); err != nil {
-				if apierrors.IsNotFound(err) {
-					delete(lbc.certCache, key)
-				}
-
-				continue
+			if _, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name); err != nil && apierrors.IsNotFound(err) {
+				delete(lbc.certCache, key)
 			}
 		}
 
@@ -3257,7 +3248,7 @@ func (lc *LeaderController) getPodNodeAddress(pod *corev1.Pod) (string, error) {
 			break
 		}
 
-		if externalIP == "" && (lc.lbc.allowInternalIP && address.Type == corev1.NodeInternalIP) {
+		if externalIP == "" && lc.lbc.allowInternalIP && address.Type == corev1.NodeInternalIP {
 			// Continue to the next iteration because we may encounter v1.NodeExternalIP later.
 			externalIP = address.Address
 		}
