@@ -1598,12 +1598,15 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 
 	log.V(3).Info("Obtaining port information", "service", svcKey)
 
+	var (
+		key         string
+		servicePort *corev1.ServicePort
+	)
+
 	for i := range svc.Spec.Ports {
-		servicePort := &svc.Spec.Ports[i]
+		servicePort = &svc.Spec.Ports[i]
 		// According to the documentation, servicePort.TargetPort is optional.  If it is omitted, use servicePort.Port.
 		// servicePort.TargetPort could be a string.  This is really messy.
-
-		var key string
 
 		switch {
 		case isb.Port.Name != "":
@@ -1618,27 +1621,25 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 			continue
 		}
 
-		backendConfig := bcm.ConfigFor(ctx, isb.Name, key)
-
-		eps, err := lbc.getEndpoints(ctx, svc, servicePort, backendConfig)
-		if err != nil {
-			log.Error(err, "Unable to get endpoints", "service", svcKey)
-			break
-		}
-
-		if len(eps) == 0 {
-			log.Error(nil, "No active endpoints found", "service", svcKey)
-			break
-		}
-
-		ups.Backends = append(ups.Backends, eps...)
-
 		break
 	}
 
-	if len(ups.Backends) == 0 {
+	if key == "" {
 		return nil, fmt.Errorf("no backend service port found for Service %v", svcKey)
 	}
+
+	backendConfig := bcm.ConfigFor(ctx, isb.Name, key)
+
+	eps, err := lbc.getEndpoints(ctx, svc, servicePort, backendConfig)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get endpoints for Service %v: %w", svcKey, err)
+	}
+
+	if len(eps) == 0 {
+		return nil, fmt.Errorf("no active endpoints found for Service %v", svcKey)
+	}
+
+	ups.Backends = append(ups.Backends, eps...)
 
 	return ups, nil
 }
