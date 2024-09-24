@@ -197,12 +197,14 @@ func NewBackendConfigMapper(defaultBackendConfig *BackendConfig, backendConfigMa
 // number.
 func (bcm *BackendConfigMapper) ConfigFor(ctx context.Context, svc, port string) *BackendConfig {
 	c := bcm.BackendConfigMapping[svc][port]
-	if c == nil {
-		c = new(BackendConfig)
+	if c != nil {
+		return c
+	}
 
-		if bcm.DefaultBackendConfig != nil {
-			ApplyDefaultBackendConfig(ctx, c, bcm.DefaultBackendConfig)
-		}
+	c = new(BackendConfig)
+
+	if bcm.DefaultBackendConfig != nil {
+		ApplyDefaultBackendConfig(ctx, c, bcm.DefaultBackendConfig)
 	}
 
 	return c
