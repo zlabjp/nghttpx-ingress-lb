@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -52,19 +51,10 @@ func (lbc *LoadBalancerController) updateGatewayClassNotification(ctx context.Co
 func (lbc *LoadBalancerController) deleteGatewayClassNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	gc, ok := obj.(*gatewayv1.GatewayClass)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		gc, ok = tombstone.Obj.(*gatewayv1.GatewayClass)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not GatewayClass", "object", obj)
-			return
-		}
+	gc, err := deletedObjectAs[*gatewayv1.GatewayClass](obj)
+	if err != nil {
+		log.Error(err, "Unable to get GatewayClass")
+		return
 	}
 
 	if gc.Spec.ControllerName != lbc.gatewayClassController {
@@ -108,19 +98,10 @@ func (lbc *LoadBalancerController) updateGatewayNotification(ctx context.Context
 func (lbc *LoadBalancerController) deleteGatewayNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	gtw, ok := obj.(*gatewayv1.Gateway)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		gtw, ok = tombstone.Obj.(*gatewayv1.Gateway)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not Gateway", "object", obj)
-			return
-		}
+	gtw, err := deletedObjectAs[*gatewayv1.Gateway](obj)
+	if err != nil {
+		log.Error(err, "Unable to get Gateway")
+		return
 	}
 
 	if !lbc.validateGatewayGatewayClass(ctx, gtw) {
@@ -164,19 +145,10 @@ func (lbc *LoadBalancerController) updateHTTPRouteNotification(ctx context.Conte
 func (lbc *LoadBalancerController) deleteHTTPRouteNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	httpRoute, ok := obj.(*gatewayv1.HTTPRoute)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		httpRoute, ok = tombstone.Obj.(*gatewayv1.HTTPRoute)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not HTTPRoute", "object", obj)
-			return
-		}
+	httpRoute, err := deletedObjectAs[*gatewayv1.HTTPRoute](obj)
+	if err != nil {
+		log.Error(err, "Unable to get HTTPRoute")
+		return
 	}
 
 	if !lbc.validateHTTPRouteGatewayClass(ctx, httpRoute) {
@@ -495,19 +467,10 @@ func (lc *LeaderController) updateGatewayClassNotification(ctx context.Context, 
 func (lc *LeaderController) deleteGatewayClassNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	gc, ok := obj.(*gatewayv1.GatewayClass)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		gc, ok = tombstone.Obj.(*gatewayv1.GatewayClass)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not GatewayClass", "object", obj)
-			return
-		}
+	gc, err := deletedObjectAs[*gatewayv1.GatewayClass](obj)
+	if err != nil {
+		log.Error(err, "Unable to get GatewayClass")
+		return
 	}
 
 	if gc.Spec.ControllerName != lc.lbc.gatewayClassController {
@@ -553,19 +516,10 @@ func (lc *LeaderController) updateGatewayNotification(ctx context.Context, old, 
 func (lc *LeaderController) deleteGatewayNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	gtw, ok := obj.(*gatewayv1.Gateway)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		gtw, ok = tombstone.Obj.(*gatewayv1.Gateway)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not Gateway", "object", obj)
-			return
-		}
+	gtw, err := deletedObjectAs[*gatewayv1.Gateway](obj)
+	if err != nil {
+		log.Error(err, "Unable to get Gateway")
+		return
 	}
 
 	if !lc.validateGatewayGatewayClass(ctx, gtw) {
@@ -610,19 +564,10 @@ func (lc *LeaderController) updateHTTPRouteNotification(ctx context.Context, old
 func (lc *LeaderController) deleteHTTPRouteNotification(ctx context.Context, obj any) {
 	log := klog.FromContext(ctx)
 
-	httpRoute, ok := obj.(*gatewayv1.HTTPRoute)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			log.Error(nil, "Unable to get object from tombstone", "object", obj)
-			return
-		}
-
-		httpRoute, ok = tombstone.Obj.(*gatewayv1.HTTPRoute)
-		if !ok {
-			log.Error(nil, "Tombstone contained object that is not HTTPRoute", "object", obj)
-			return
-		}
+	httpRoute, err := deletedObjectAs[*gatewayv1.HTTPRoute](obj)
+	if err != nil {
+		log.Error(err, "Unable to get HTTPRoute")
+		return
 	}
 
 	if !lc.validateHTTPRouteGatewayClass(ctx, httpRoute) {
