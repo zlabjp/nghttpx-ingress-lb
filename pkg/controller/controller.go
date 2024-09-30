@@ -3239,19 +3239,16 @@ func (lc *LeaderController) getPodNodeAddress(pod *corev1.Pod) (string, error) {
 
 	for i := range node.Status.Addresses {
 		address := &node.Status.Addresses[i]
-		if address.Type == corev1.NodeExternalIP {
-			if address.Address == "" {
-				continue
+		switch address.Type {
+		case corev1.NodeExternalIP:
+			if address.Address != "" {
+				return address.Address, nil
 			}
-
-			externalIP = address.Address
-
-			break
-		}
-
-		if externalIP == "" && lc.lbc.allowInternalIP && address.Type == corev1.NodeInternalIP {
-			// Continue to the next iteration because we may encounter v1.NodeExternalIP later.
-			externalIP = address.Address
+		case corev1.NodeInternalIP:
+			if externalIP == "" && lc.lbc.allowInternalIP {
+				// Continue to the next iteration because we may encounter v1.NodeExternalIP later.
+				externalIP = address.Address
+			}
 		}
 	}
 
