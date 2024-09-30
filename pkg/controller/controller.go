@@ -1305,7 +1305,7 @@ func (lbc *LoadBalancerController) createIngressUpstreams(ctx context.Context, i
 					reqPath = reqPath[:idx]
 				}
 
-				if lbc.noDefaultBackendOverride && (rule.Host == "" && (reqPath == "" || reqPath == "/")) {
+				if lbc.noDefaultBackendOverride && rule.Host == "" && (reqPath == "" || reqPath == "/") {
 					log.Error(nil, "Ignore rule which overrides default backend")
 					continue
 				}
