@@ -42,6 +42,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/server/healthz"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -51,6 +52,9 @@ import (
 	"k8s.io/client-go/tools/events"
 	"k8s.io/component-base/cli"
 	componentbaseconfig "k8s.io/component-base/config"
+	"k8s.io/component-base/featuregate"
+	logsapiv1 "k8s.io/component-base/logs/api/v1"
+	_ "k8s.io/component-base/logs/json/register"
 	"k8s.io/klog/v2"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
@@ -116,11 +120,17 @@ var (
 )
 
 func main() {
+	featureGate := featuregate.NewFeatureGate()
+	utilruntime.Must(logsapiv1.AddFeatureGates(featureGate))
+	loggingConf := logsapiv1.NewLoggingConfiguration()
+
 	rootCmd := &cobra.Command{
 		Use: "nghttpx-ingress-controller",
 		Run: func(cmd *cobra.Command, args []string) {
-			// Contextual logging is enabled by default, but cli.Run disables it.  Enable it again.
-			klog.EnableContextualLogging(true)
+			if err := logsapiv1.ValidateAndApply(loggingConf, featureGate); err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				os.Exit(1)
+			}
 
 			run(context.Background(), cmd, args)
 		},
@@ -246,6 +256,9 @@ func main() {
 
 	rootCmd.Flags().StringVar(&gatewayClassController, "gateway-class-controller", gatewayClassController,
 		`The name of GatewayClass controller for this controller.  This is the value specified in GatewayClass.spec.controllerName.`)
+
+	featureGate.AddFlag(rootCmd.Flags())
+	logsapiv1.AddFlags(loggingConf, rootCmd.Flags())
 
 	code := cli.Run(rootCmd)
 	os.Exit(code)
