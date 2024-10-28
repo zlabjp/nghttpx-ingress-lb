@@ -29,6 +29,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -355,4 +356,69 @@ func deletedObjectAs[T any](obj any) (T, error) {
 	}
 
 	return o, nil
+}
+
+// resourceEvent is a resource handler event.
+type resourceEvent string
+
+const (
+	resourceEventAdd    resourceEvent = "add"
+	resourceEventUpdate resourceEvent = "update"
+	resourceEventDelete resourceEvent = "delete"
+)
+
+// resourceEventHandlerBuilder creates cache.ResourceEventHandlerFuncs for T.
+type resourceEventHandlerBuilder[T metav1.Object] struct {
+	// validate validates obj on event.  If this field is specified, and this function returns true, handler is invoked.  If event ==
+	// resourceEventUpdate, validate function is called for both old and current objects, and if at least one invocation returns true,
+	// handler is invoked.
+	validate func(ctx context.Context, obj T, event resourceEvent) bool
+	// handler processes obj.  If validate is specified, handler is called when validate returns true.
+	handler func(ctx context.Context, obj T)
+}
+
+func (b resourceEventHandlerBuilder[T]) Build(ctx context.Context) cache.ResourceEventHandlerFuncs {
+	log := klog.LoggerWithName(klog.FromContext(ctx), "resourceEventHandler")
+	ctx = klog.NewContext(ctx, log)
+
+	return cache.ResourceEventHandlerFuncs{
+		AddFunc: func(o any) {
+			obj := o.(T)
+
+			if b.validate != nil && !b.validate(ctx, obj, resourceEventAdd) {
+				return
+			}
+
+			log.V(4).Info("Add", "type", reflect.TypeOf(obj), "object", klog.KObj(obj))
+
+			b.handler(ctx, obj)
+		},
+		UpdateFunc: func(old, cur any) {
+			oldObj := old.(T)
+			curObj := cur.(T)
+
+			if b.validate != nil && !b.validate(ctx, oldObj, resourceEventUpdate) && !b.validate(ctx, curObj, resourceEventUpdate) {
+				return
+			}
+
+			log.V(4).Info("Update", "type", reflect.TypeOf(curObj), "object", klog.KObj(curObj))
+
+			b.handler(ctx, curObj)
+		},
+		DeleteFunc: func(o any) {
+			obj, err := deletedObjectAs[T](o)
+			if err != nil {
+				log.Error(err, "Unable to get object")
+				return
+			}
+
+			if b.validate != nil && !b.validate(ctx, obj, resourceEventDelete) {
+				return
+			}
+
+			log.V(4).Info("Delete", "type", reflect.TypeOf(obj), "object", klog.KObj(obj))
+
+			b.handler(ctx, obj)
+		},
+	}
 }
