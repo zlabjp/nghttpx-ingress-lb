@@ -205,6 +205,10 @@ func deleteAssetFiles(ctx context.Context, dir string, t time.Time, staleAssetsT
 
 	files, err := os.ReadDir(dir)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+
 		return err
 	}
 
