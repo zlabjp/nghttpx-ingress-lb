@@ -322,11 +322,14 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		lbc.ingLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lbc.addIngressNotification),
-			UpdateFunc: updateFuncContext(ctx, lbc.updateIngressNotification),
-			DeleteFunc: deleteFuncContext(ctx, lbc.deleteIngressNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*networkingv1.Ingress]{
+			validate: func(ctx context.Context, ing *networkingv1.Ingress, _ resourceEvent) bool {
+				return lbc.validateIngressClass(ctx, ing)
+			},
+			handler: func(context.Context, *networkingv1.Ingress) {
+				lbc.enqueue()
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add Ingress event handler")
 			return nil, err
 		}
@@ -339,11 +342,14 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		lbc.epSliceLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lbc.addEndpointSliceNotification),
-			UpdateFunc: updateFuncContext(ctx, lbc.updateEndpointSliceNotification),
-			DeleteFunc: deleteFuncContext(ctx, lbc.deleteEndpointSliceNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*discoveryv1.EndpointSlice]{
+			validate: func(ctx context.Context, es *discoveryv1.EndpointSlice, _ resourceEvent) bool {
+				return lbc.endpointSliceReferenced(ctx, es)
+			},
+			handler: func(context.Context, *discoveryv1.EndpointSlice) {
+				lbc.enqueue()
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add EndpointSlice event handler")
 			return nil, err
 		}
@@ -356,11 +362,14 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		lbc.svcLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lbc.addServiceNotification),
-			UpdateFunc: updateFuncContext(ctx, lbc.updateServiceNotification),
-			DeleteFunc: deleteFuncContext(ctx, lbc.deleteServiceNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*corev1.Service]{
+			validate: func(ctx context.Context, svc *corev1.Service, _ resourceEvent) bool {
+				return lbc.serviceReferenced(ctx, namespacedName(svc))
+			},
+			handler: func(context.Context, *corev1.Service) {
+				lbc.enqueue()
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add Service event handler")
 			return nil, err
 		}
@@ -373,11 +382,14 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		lbc.secretLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lbc.addSecretNotification),
-			UpdateFunc: updateFuncContext(ctx, lbc.updateSecretNotification),
-			DeleteFunc: deleteFuncContext(ctx, lbc.deleteSecretNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*corev1.Secret]{
+			validate: func(ctx context.Context, secret *corev1.Secret, _ resourceEvent) bool {
+				return lbc.secretReferenced(ctx, secret)
+			},
+			handler: func(context.Context, *corev1.Secret) {
+				lbc.enqueue()
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add Secret event handler")
 			return nil, err
 		}
@@ -390,11 +402,14 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		lbc.podLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lbc.addPodNotification),
-			UpdateFunc: updateFuncContext(ctx, lbc.updatePodNotification),
-			DeleteFunc: deleteFuncContext(ctx, lbc.deletePodNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*corev1.Pod]{
+			validate: func(ctx context.Context, po *corev1.Pod, _ resourceEvent) bool {
+				return lbc.podReferenced(ctx, po)
+			},
+			handler: func(context.Context, *corev1.Pod) {
+				lbc.enqueue()
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add Pod event handler")
 			return nil, err
 		}
@@ -407,11 +422,11 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		lbc.ingClassLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lbc.addIngressClassNotification),
-			UpdateFunc: updateFuncContext(ctx, lbc.updateIngressClassNotification),
-			DeleteFunc: deleteFuncContext(ctx, lbc.deleteIngressClassNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*networkingv1.IngressClass]{
+			handler: func(context.Context, *networkingv1.IngressClass) {
+				lbc.enqueue()
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add IngressClass event handler")
 			return nil, err
 		}
@@ -430,11 +445,11 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		lbc.cmLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lbc.addConfigMapNotification),
-			UpdateFunc: updateFuncContext(ctx, lbc.updateConfigMapNotification),
-			DeleteFunc: deleteFuncContext(ctx, lbc.deleteConfigMapNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*corev1.ConfigMap]{
+			handler: func(context.Context, *corev1.ConfigMap) {
+				lbc.enqueue()
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add ConfigMap event handler")
 			return nil, err
 		}
@@ -451,11 +466,14 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			lbc.gatewayClassLister = f.Lister()
 			inf := f.Informer()
 
-			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-				AddFunc:    addFuncContext(ctx, lbc.addGatewayClassNotification),
-				UpdateFunc: updateFuncContext(ctx, lbc.updateGatewayClassNotification),
-				DeleteFunc: deleteFuncContext(ctx, lbc.deleteGatewayClassNotification),
-			}); err != nil {
+			if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*gatewayv1.GatewayClass]{
+				validate: func(_ context.Context, gc *gatewayv1.GatewayClass, _ resourceEvent) bool {
+					return gc.Spec.ControllerName == lbc.gatewayClassController
+				},
+				handler: func(context.Context, *gatewayv1.GatewayClass) {
+					lbc.enqueue()
+				},
+			}.Build(ctx)); err != nil {
 				log.Error(err, "Unable to add GatewayClass event handler")
 				return nil, err
 			}
@@ -468,11 +486,14 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			lbc.gatewayLister = f.Lister()
 			inf := f.Informer()
 
-			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-				AddFunc:    addFuncContext(ctx, lbc.addGatewayNotification),
-				UpdateFunc: updateFuncContext(ctx, lbc.updateGatewayNotification),
-				DeleteFunc: deleteFuncContext(ctx, lbc.deleteGatewayNotification),
-			}); err != nil {
+			if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*gatewayv1.Gateway]{
+				validate: func(ctx context.Context, gtw *gatewayv1.Gateway, _ resourceEvent) bool {
+					return lbc.validateGatewayGatewayClass(ctx, gtw)
+				},
+				handler: func(context.Context, *gatewayv1.Gateway) {
+					lbc.enqueue()
+				},
+			}.Build(ctx)); err != nil {
 				log.Error(err, "Unable to add Gateway event handler")
 				return nil, err
 			}
@@ -485,11 +506,14 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			lbc.httpRouteLister = f.Lister()
 			inf := f.Informer()
 
-			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-				AddFunc:    addFuncContext(ctx, lbc.addHTTPRouteNotification),
-				UpdateFunc: updateFuncContext(ctx, lbc.updateHTTPRouteNotification),
-				DeleteFunc: deleteFuncContext(ctx, lbc.deleteHTTPRouteNotification),
-			}); err != nil {
+			if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*gatewayv1.HTTPRoute]{
+				validate: func(ctx context.Context, httpRoute *gatewayv1.HTTPRoute, _ resourceEvent) bool {
+					return lbc.validateHTTPRouteGatewayClass(ctx, httpRoute)
+				},
+				handler: func(context.Context, *gatewayv1.HTTPRoute) {
+					lbc.enqueue()
+				},
+			}.Build(ctx)); err != nil {
 				log.Error(err, "Unable to add HTTPRoute event handler")
 				return nil, err
 			}
@@ -501,192 +525,11 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 	return &lbc, nil
 }
 
-func addFuncContext(ctx context.Context, f func(ctx context.Context, obj any)) func(obj any) {
-	return func(obj any) {
-		f(ctx, obj)
-	}
-}
-
-func updateFuncContext(ctx context.Context, f func(ctx context.Context, old, cur any)) func(old, cur any) {
-	return func(old, cur any) {
-		f(ctx, old, cur)
-	}
-}
-
-func deleteFuncContext(ctx context.Context, f func(ctx context.Context, obj any)) func(obj any) {
-	return func(obj any) {
-		f(ctx, obj)
-	}
-}
-
-func (lbc *LoadBalancerController) addIngressNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	ing := obj.(*networkingv1.Ingress)
-
-	if !lbc.validateIngressClass(ctx, ing) {
-		return
-	}
-
-	log.V(4).Info("Ingress added", "ingress", klog.KObj(ing))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) updateIngressNotification(ctx context.Context, old, cur any) {
-	log := klog.FromContext(ctx)
-
-	oldIng := old.(*networkingv1.Ingress)
-	curIng := cur.(*networkingv1.Ingress)
-
-	if !lbc.validateIngressClass(ctx, oldIng) && !lbc.validateIngressClass(ctx, curIng) {
-		return
-	}
-
-	log.V(4).Info("Ingress updated", "ingress", klog.KObj(curIng))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) deleteIngressNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	ing, err := deletedObjectAs[*networkingv1.Ingress](obj)
-	if err != nil {
-		log.Error(err, "Unable to get Ingress")
-		return
-	}
-
-	if !lbc.validateIngressClass(ctx, ing) {
-		return
-	}
-
-	log.V(4).Info("Ingress deleted", "ingress", klog.KObj(ing))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) addIngressClassNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	ingClass := obj.(*networkingv1.IngressClass)
-	log.V(4).Info("IngressClass added", "ingressClass", klog.KObj(ingClass))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) updateIngressClassNotification(ctx context.Context, _, cur any) {
-	log := klog.FromContext(ctx)
-
-	ingClass := cur.(*networkingv1.IngressClass)
-	log.V(4).Info("IngressClass updated", "ingressClass", klog.KObj(ingClass))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) deleteIngressClassNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	ingClass, err := deletedObjectAs[*networkingv1.IngressClass](obj)
-	if err != nil {
-		log.Error(err, "Unable to get IngressClass")
-		return
-	}
-
-	log.V(4).Info("IngressClass deleted", "ingressClass", klog.KObj(ingClass))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) addEndpointSliceNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	es := obj.(*discoveryv1.EndpointSlice)
-
-	if !lbc.endpointSliceReferenced(ctx, es) {
-		return
-	}
-
-	log.V(4).Info("EndpointSlice added", "endpointSlice", klog.KObj(es))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) updateEndpointSliceNotification(ctx context.Context, old, cur any) {
-	log := klog.FromContext(ctx)
-
-	oldES := old.(*discoveryv1.EndpointSlice)
-	curES := cur.(*discoveryv1.EndpointSlice)
-
-	if !lbc.endpointSliceReferenced(ctx, oldES) && !lbc.endpointSliceReferenced(ctx, curES) {
-		return
-	}
-
-	log.V(4).Info("EndpointSlice updated", "endpointSlice", klog.KObj(curES))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) deleteEndpointSliceNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	es, err := deletedObjectAs[*discoveryv1.EndpointSlice](obj)
-	if err != nil {
-		log.Error(err, "Unable to get EndpointSlice")
-		return
-	}
-
-	if !lbc.endpointSliceReferenced(ctx, es) {
-		return
-	}
-
-	log.V(4).Info("EndpointSlice deleted", "endpointSlice", klog.KObj(es))
-	lbc.enqueue()
-}
-
 // endpointSliceReferenced returns true if we are interested in es.
 func (lbc *LoadBalancerController) endpointSliceReferenced(ctx context.Context, es *discoveryv1.EndpointSlice) bool {
 	svcName := es.Labels[discoveryv1.LabelServiceName]
 
 	return svcName != "" && lbc.serviceReferenced(ctx, types.NamespacedName{Name: svcName, Namespace: es.Namespace})
-}
-
-func (lbc *LoadBalancerController) addServiceNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	svc := obj.(*corev1.Service)
-
-	if !lbc.serviceReferenced(ctx, namespacedName(svc)) {
-		return
-	}
-
-	log.V(4).Info("Service added", "service", klog.KObj(svc))
-
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) updateServiceNotification(ctx context.Context, old, cur any) {
-	log := klog.FromContext(ctx)
-
-	oldSvc := old.(*corev1.Service)
-	curSvc := cur.(*corev1.Service)
-
-	if !lbc.serviceReferenced(ctx, namespacedName(oldSvc)) && !lbc.serviceReferenced(ctx, namespacedName(curSvc)) {
-		return
-	}
-
-	log.V(4).Info("Service updated", "service", klog.KObj(curSvc))
-
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) deleteServiceNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	svc, err := deletedObjectAs[*corev1.Service](obj)
-	if err != nil {
-		log.Error(err, "Unable to get Service")
-		return
-	}
-
-	if !lbc.serviceReferenced(ctx, namespacedName(svc)) {
-		return
-	}
-
-	log.V(4).Info("Service deleted", "service", klog.KObj(svc))
-	lbc.enqueue()
 }
 
 func namespacedName(obj metav1.Object) types.NamespacedName {
@@ -739,125 +582,6 @@ func getDefaultBackendService(ing *networkingv1.Ingress) *networkingv1.IngressSe
 	}
 
 	return ing.Spec.DefaultBackend.Service
-}
-
-func (lbc *LoadBalancerController) addSecretNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	s := obj.(*corev1.Secret)
-	if !lbc.secretReferenced(ctx, s) {
-		return
-	}
-
-	log.V(4).Info("Secret added", "secret", klog.KObj(s))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) updateSecretNotification(ctx context.Context, old, cur any) {
-	log := klog.FromContext(ctx)
-
-	oldS := old.(*corev1.Secret)
-	curS := cur.(*corev1.Secret)
-
-	if !lbc.secretReferenced(ctx, oldS) && !lbc.secretReferenced(ctx, curS) {
-		return
-	}
-
-	log.V(4).Info("Secret updated", "secret", klog.KObj(curS))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) deleteSecretNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	s, err := deletedObjectAs[*corev1.Secret](obj)
-	if err != nil {
-		log.Error(err, "Unable to get Secret")
-		return
-	}
-
-	if !lbc.secretReferenced(ctx, s) {
-		return
-	}
-
-	log.V(4).Info("Secret deleted", "secret", klog.KObj(s))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) addConfigMapNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	c := obj.(*corev1.ConfigMap)
-	log.V(4).Info("ConfigMap added", "configMap", klog.KObj(c))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) updateConfigMapNotification(ctx context.Context, _, cur any) {
-	log := klog.FromContext(ctx)
-
-	curC := cur.(*corev1.ConfigMap)
-	// updates to configuration configmaps can trigger an update
-	log.V(4).Info("ConfigMap updated", "configMap", klog.KObj(curC))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) deleteConfigMapNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	c, err := deletedObjectAs[*corev1.ConfigMap](obj)
-	if err != nil {
-		log.Error(err, "Unable to get ConfigMap")
-		return
-	}
-
-	log.V(4).Info("ConfigMap deleted", "configMap", klog.KObj(c))
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) addPodNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	pod := obj.(*corev1.Pod)
-
-	if !lbc.podReferenced(ctx, pod) {
-		return
-	}
-
-	log.V(4).Info("Pod added", "pod", klog.KObj(pod))
-
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) updatePodNotification(ctx context.Context, old, cur any) {
-	log := klog.FromContext(ctx)
-
-	oldPod := old.(*corev1.Pod)
-	curPod := cur.(*corev1.Pod)
-
-	if !lbc.podReferenced(ctx, oldPod) && !lbc.podReferenced(ctx, curPod) {
-		return
-	}
-
-	log.V(4).Info("Pod updated", "pod", klog.KObj(curPod))
-
-	lbc.enqueue()
-}
-
-func (lbc *LoadBalancerController) deletePodNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	pod, err := deletedObjectAs[*corev1.Pod](obj)
-	if err != nil {
-		log.Error(err, "Unable to get Pod")
-		return
-	}
-
-	if !lbc.podReferenced(ctx, pod) {
-		return
-	}
-
-	log.V(4).Info("Pod deleted", "pod", klog.KObj(pod))
-	lbc.enqueue()
 }
 
 // podReferenced returns true if we are interested in pod.
@@ -2312,10 +2036,14 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		lc.ingLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lc.addIngressNotification),
-			UpdateFunc: updateFuncContext(ctx, lc.updateIngressNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*networkingv1.Ingress]{
+			validate: func(ctx context.Context, ing *networkingv1.Ingress, event resourceEvent) bool {
+				return event != resourceEventDelete && lc.validateIngressClass(ctx, ing)
+			},
+			handler: func(_ context.Context, ing *networkingv1.Ingress) {
+				lc.enqueueIngress(ing)
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add Ingress event handler")
 			return nil, err
 		}
@@ -2328,11 +2056,11 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		lc.podLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lc.addPodNotification),
-			UpdateFunc: updateFuncContext(ctx, lc.updatePodNotification),
-			DeleteFunc: deleteFuncContext(ctx, lc.deletePodNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*corev1.Pod]{
+			handler: func(ctx context.Context, _ *corev1.Pod) {
+				lc.enqueueIngressAll(ctx)
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add Pod event handler")
 			return nil, err
 		}
@@ -2345,11 +2073,11 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		lc.secretLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lc.addSecretNotification),
-			UpdateFunc: updateFuncContext(ctx, lc.updateSecretNotification),
-			DeleteFunc: deleteFuncContext(ctx, lc.deleteSecretNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*corev1.Secret]{
+			handler: func(_ context.Context, secret *corev1.Secret) {
+				lc.enqueueSecret(secret)
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add Secret event handler")
 			return nil, err
 		}
@@ -2369,11 +2097,11 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		lc.svcLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lc.addServiceNotification),
-			UpdateFunc: updateFuncContext(ctx, lc.updateServiceNotification),
-			DeleteFunc: deleteFuncContext(ctx, lc.deleteServiceNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*corev1.Service]{
+			handler: func(ctx context.Context, _ *corev1.Service) {
+				lc.enqueueIngressAll(ctx)
+			},
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add Service event handler")
 			return nil, err
 		}
@@ -2386,11 +2114,9 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 		lc.ingClassLister = f.Lister()
 		inf := f.Informer()
 
-		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    addFuncContext(ctx, lc.addIngressClassNotification),
-			UpdateFunc: updateFuncContext(ctx, lc.updateIngressClassNotification),
-			DeleteFunc: deleteFuncContext(ctx, lc.deleteIngressClassNotification),
-		}); err != nil {
+		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*networkingv1.IngressClass]{
+			handler: lc.enqueueIngressWithIngressClass,
+		}.Build(ctx)); err != nil {
 			log.Error(err, "Unable to add IngressClass event handler")
 		}
 
@@ -2427,11 +2153,14 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			lc.gatewayClassLister = f.Lister()
 			inf := f.Informer()
 
-			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-				AddFunc:    addFuncContext(ctx, lc.addGatewayClassNotification),
-				UpdateFunc: updateFuncContext(ctx, lc.updateGatewayClassNotification),
-				DeleteFunc: deleteFuncContext(ctx, lc.deleteGatewayClassNotification),
-			}); err != nil {
+			if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*gatewayv1.GatewayClass]{
+				validate: func(_ context.Context, gc *gatewayv1.GatewayClass, _ resourceEvent) bool {
+					return gc.Spec.ControllerName == lc.lbc.gatewayClassController
+				},
+				handler: func(_ context.Context, gc *gatewayv1.GatewayClass) {
+					lc.enqueueGatewayClass(gc)
+				},
+			}.Build(ctx)); err != nil {
 				log.Error(err, "Unable to add GatewayClass event handler")
 				return nil, err
 			}
@@ -2444,11 +2173,15 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			lc.gatewayLister = f.Lister()
 			inf := f.Informer()
 
-			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-				AddFunc:    addFuncContext(ctx, lc.addGatewayNotification),
-				UpdateFunc: updateFuncContext(ctx, lc.updateGatewayNotification),
-				DeleteFunc: deleteFuncContext(ctx, lc.deleteGatewayNotification),
-			}); err != nil {
+			if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*gatewayv1.Gateway]{
+				validate: func(ctx context.Context, gtw *gatewayv1.Gateway, _ resourceEvent) bool {
+					return lc.validateGatewayGatewayClass(ctx, gtw)
+				},
+				handler: func(ctx context.Context, gtw *gatewayv1.Gateway) {
+					lc.enqueueGateway(gtw)
+					lc.enqueueHTTPRouteFromGateway(ctx, gtw)
+				},
+			}.Build(ctx)); err != nil {
 				log.Error(err, "Unable to add Gateway event handler")
 				return nil, err
 			}
@@ -2461,11 +2194,14 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			lc.httpRouteLister = f.Lister()
 			inf := f.Informer()
 
-			if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-				AddFunc:    addFuncContext(ctx, lc.addHTTPRouteNotification),
-				UpdateFunc: updateFuncContext(ctx, lc.updateHTTPRouteNotification),
-				DeleteFunc: deleteFuncContext(ctx, lc.deleteHTTPRouteNotification),
-			}); err != nil {
+			if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*gatewayv1.HTTPRoute]{
+				validate: func(ctx context.Context, httpRoute *gatewayv1.HTTPRoute, _ resourceEvent) bool {
+					return lc.validateHTTPRouteGatewayClass(ctx, httpRoute)
+				},
+				handler: func(_ context.Context, httpRoute *gatewayv1.HTTPRoute) {
+					lc.enqueueHTTPRoute(httpRoute)
+				},
+			}.Build(ctx)); err != nil {
 				log.Error(err, "Unable to add HTTPRoute event handler")
 				return nil, err
 			}
@@ -2586,161 +2322,6 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 	wg.Wait()
 
 	return ctx.Err()
-}
-
-func (lc *LeaderController) addIngressNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	ing := obj.(*networkingv1.Ingress)
-
-	if !lc.validateIngressClass(ctx, ing) {
-		return
-	}
-
-	log.V(4).Info("Ingress added", "ingress", klog.KObj(ing))
-	lc.enqueueIngress(ing)
-}
-
-func (lc *LeaderController) updateIngressNotification(ctx context.Context, old, cur any) {
-	log := klog.FromContext(ctx)
-
-	oldIng := old.(*networkingv1.Ingress)
-	curIng := cur.(*networkingv1.Ingress)
-
-	if !lc.validateIngressClass(ctx, oldIng) && !lc.validateIngressClass(ctx, curIng) {
-		return
-	}
-
-	log.V(4).Info("Ingress updated", "ingress", klog.KObj(curIng))
-	lc.enqueueIngress(curIng)
-}
-
-func (lc *LeaderController) addPodNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	pod := obj.(*corev1.Pod)
-
-	log.V(4).Info("Pod added", "pod", klog.KObj(pod))
-
-	lc.enqueueIngressAll(ctx)
-}
-
-func (lc *LeaderController) updatePodNotification(ctx context.Context, _, cur any) {
-	log := klog.FromContext(ctx)
-
-	curPod := cur.(*corev1.Pod)
-
-	log.V(4).Info("Pod updated", "pod", klog.KObj(curPod))
-
-	lc.enqueueIngressAll(ctx)
-}
-
-func (lc *LeaderController) deletePodNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	pod, err := deletedObjectAs[*corev1.Pod](obj)
-	if err != nil {
-		log.Error(err, "Unable to get Pod")
-		return
-	}
-
-	log.V(4).Info("Pod deleted", "pod", klog.KObj(pod))
-
-	lc.enqueueIngressAll(ctx)
-}
-
-func (lc *LeaderController) addServiceNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	svc := obj.(*corev1.Service)
-
-	log.V(4).Info("Service added", "service", klog.KObj(svc))
-
-	lc.enqueueIngressAll(ctx)
-}
-
-func (lc *LeaderController) updateServiceNotification(ctx context.Context, _, cur any) {
-	log := klog.FromContext(ctx)
-
-	curSvc := cur.(*corev1.Service)
-
-	log.V(4).Info("Service updated", "service", klog.KObj(curSvc))
-
-	lc.enqueueIngressAll(ctx)
-}
-
-func (lc *LeaderController) deleteServiceNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	svc, err := deletedObjectAs[*corev1.Service](obj)
-	if err != nil {
-		log.Error(err, "Unable to get Service")
-		return
-	}
-
-	log.V(4).Info("Service deleted", "service", klog.KObj(svc))
-
-	lc.enqueueIngressAll(ctx)
-}
-
-func (lc *LeaderController) addSecretNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	s := obj.(*corev1.Secret)
-
-	log.V(4).Info("Secret added", "secret", klog.KObj(s))
-	lc.enqueueSecret(s)
-}
-
-func (lc *LeaderController) updateSecretNotification(ctx context.Context, _, cur any) {
-	log := klog.FromContext(ctx)
-
-	curS := cur.(*corev1.Secret)
-
-	log.V(4).Info("Secret updated", "secret", klog.KObj(curS))
-	lc.enqueueSecret(curS)
-}
-
-func (lc *LeaderController) deleteSecretNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	s, err := deletedObjectAs[*corev1.Secret](obj)
-	if err != nil {
-		log.Error(err, "Unable to get Secret")
-		return
-	}
-
-	log.V(4).Info("Secret deleted", "secret", klog.KObj(s))
-	lc.enqueueSecret(s)
-}
-
-func (lc *LeaderController) addIngressClassNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	ingClass := obj.(*networkingv1.IngressClass)
-	log.V(4).Info("IngressClass added", "ingressClass", klog.KObj(ingClass))
-	lc.enqueueIngressWithIngressClass(ctx, ingClass)
-}
-
-func (lc *LeaderController) updateIngressClassNotification(ctx context.Context, _, cur any) {
-	log := klog.FromContext(ctx)
-
-	ingClass := cur.(*networkingv1.IngressClass)
-	log.V(4).Info("IngressClass updated", "ingressClass", klog.KObj(ingClass))
-	lc.enqueueIngressWithIngressClass(ctx, ingClass)
-}
-
-func (lc *LeaderController) deleteIngressClassNotification(ctx context.Context, obj any) {
-	log := klog.FromContext(ctx)
-
-	ingClass, err := deletedObjectAs[*networkingv1.IngressClass](obj)
-	if err != nil {
-		log.Error(err, "Unable to get IngressClass")
-		return
-	}
-
-	log.V(4).Info("IngressClass deleted", "ingressClass", klog.KObj(ingClass))
-	lc.enqueueIngressWithIngressClass(ctx, ingClass)
 }
 
 func (lc *LeaderController) enqueueIngress(ing *networkingv1.Ingress) {
