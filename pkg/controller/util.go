@@ -377,7 +377,7 @@ type resourceEventHandlerBuilder[T metav1.Object] struct {
 	handler func(ctx context.Context, obj T)
 }
 
-func (b resourceEventHandlerBuilder[T]) Build(ctx context.Context) cache.ResourceEventHandlerFuncs {
+func (b resourceEventHandlerBuilder[T]) build(ctx context.Context) cache.ResourceEventHandlerFuncs {
 	log := klog.LoggerWithName(klog.FromContext(ctx), "resourceEventHandler")
 	ctx = klog.NewContext(ctx, log)
 
