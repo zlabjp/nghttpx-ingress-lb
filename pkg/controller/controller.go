@@ -329,7 +329,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			handler: func(context.Context, *networkingv1.Ingress) {
 				lbc.enqueue()
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add Ingress event handler")
 			return nil, err
 		}
@@ -349,7 +349,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			handler: func(context.Context, *discoveryv1.EndpointSlice) {
 				lbc.enqueue()
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add EndpointSlice event handler")
 			return nil, err
 		}
@@ -369,7 +369,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			handler: func(context.Context, *corev1.Service) {
 				lbc.enqueue()
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add Service event handler")
 			return nil, err
 		}
@@ -389,7 +389,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			handler: func(context.Context, *corev1.Secret) {
 				lbc.enqueue()
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add Secret event handler")
 			return nil, err
 		}
@@ -409,7 +409,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			handler: func(context.Context, *corev1.Pod) {
 				lbc.enqueue()
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add Pod event handler")
 			return nil, err
 		}
@@ -426,7 +426,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			handler: func(context.Context, *networkingv1.IngressClass) {
 				lbc.enqueue()
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add IngressClass event handler")
 			return nil, err
 		}
@@ -449,7 +449,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 			handler: func(context.Context, *corev1.ConfigMap) {
 				lbc.enqueue()
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add ConfigMap event handler")
 			return nil, err
 		}
@@ -473,7 +473,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 				handler: func(context.Context, *gatewayv1.GatewayClass) {
 					lbc.enqueue()
 				},
-			}.Build(ctx)); err != nil {
+			}.build(ctx)); err != nil {
 				log.Error(err, "Unable to add GatewayClass event handler")
 				return nil, err
 			}
@@ -493,7 +493,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 				handler: func(context.Context, *gatewayv1.Gateway) {
 					lbc.enqueue()
 				},
-			}.Build(ctx)); err != nil {
+			}.build(ctx)); err != nil {
 				log.Error(err, "Unable to add Gateway event handler")
 				return nil, err
 			}
@@ -513,7 +513,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 				handler: func(context.Context, *gatewayv1.HTTPRoute) {
 					lbc.enqueue()
 				},
-			}.Build(ctx)); err != nil {
+			}.build(ctx)); err != nil {
 				log.Error(err, "Unable to add HTTPRoute event handler")
 				return nil, err
 			}
@@ -2043,7 +2043,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			handler: func(_ context.Context, ing *networkingv1.Ingress) {
 				lc.enqueueIngress(ing)
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add Ingress event handler")
 			return nil, err
 		}
@@ -2060,7 +2060,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			handler: func(ctx context.Context, _ *corev1.Pod) {
 				lc.enqueueIngressAll(ctx)
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add Pod event handler")
 			return nil, err
 		}
@@ -2077,7 +2077,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			handler: func(_ context.Context, secret *corev1.Secret) {
 				lc.enqueueSecret(secret)
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add Secret event handler")
 			return nil, err
 		}
@@ -2101,7 +2101,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 			handler: func(ctx context.Context, _ *corev1.Service) {
 				lc.enqueueIngressAll(ctx)
 			},
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add Service event handler")
 			return nil, err
 		}
@@ -2116,7 +2116,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 
 		if _, err := inf.AddEventHandler(resourceEventHandlerBuilder[*networkingv1.IngressClass]{
 			handler: lc.enqueueIngressWithIngressClass,
-		}.Build(ctx)); err != nil {
+		}.build(ctx)); err != nil {
 			log.Error(err, "Unable to add IngressClass event handler")
 		}
 
@@ -2160,7 +2160,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 				handler: func(_ context.Context, gc *gatewayv1.GatewayClass) {
 					lc.enqueueGatewayClass(gc)
 				},
-			}.Build(ctx)); err != nil {
+			}.build(ctx)); err != nil {
 				log.Error(err, "Unable to add GatewayClass event handler")
 				return nil, err
 			}
@@ -2181,7 +2181,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 					lc.enqueueGateway(gtw)
 					lc.enqueueHTTPRouteFromGateway(ctx, gtw)
 				},
-			}.Build(ctx)); err != nil {
+			}.build(ctx)); err != nil {
 				log.Error(err, "Unable to add Gateway event handler")
 				return nil, err
 			}
@@ -2201,7 +2201,7 @@ func NewLeaderController(ctx context.Context, lbc *LoadBalancerController) (*Lea
 				handler: func(_ context.Context, httpRoute *gatewayv1.HTTPRoute) {
 					lc.enqueueHTTPRoute(httpRoute)
 				},
-			}.Build(ctx)); err != nil {
+			}.build(ctx)); err != nil {
 				log.Error(err, "Unable to add HTTPRoute event handler")
 				return nil, err
 			}
