@@ -1663,8 +1663,8 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(ctx context.Con
 
 				targetPort, err := lbc.resolveTargetPort(svcPort, epPort, ref)
 				if err != nil {
-					log.Error(err, "Unable to get target port", "pod", klog.KRef(ref.Namespace, ref.Name),
-						"servicePort", klog.Format(svcPort), "endpointPort", klog.Format(epPort))
+					log.V(4).Info("Unable to get target port", "pod", klog.KRef(ref.Namespace, ref.Name),
+						"servicePort", klog.Format(svcPort), "endpointPort", klog.Format(epPort), "error", err)
 					continue
 				}
 
