@@ -2,8 +2,6 @@ module github.com/zlabjp/nghttpx-ingress-lb
 
 go 1.22.0
 
-toolchain go1.22.2
-
 require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 	github.com/spf13/cobra v1.8.1
