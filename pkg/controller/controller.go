@@ -827,7 +827,7 @@ App.new
 	}
 
 	if len(svc.Spec.Ports) == 0 {
-		log.Error(nil, "Service has no ports", "service", svcKey)
+		log.Error(nil, "Service has no ports", "service", klog.KObj(svc))
 
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
 
@@ -836,11 +836,11 @@ App.new
 
 	eps, err := lbc.getEndpoints(ctx, svc, &svc.Spec.Ports[0], &nghttpx.BackendConfig{})
 	if err != nil {
-		log.Error(err, "Unable to get endpoints for Service", "service", svcKey)
+		log.Error(err, "Unable to get endpoints for Service", "service", klog.KObj(svc))
 
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
 	} else if len(eps) == 0 {
-		log.Error(nil, "Service does not have any active endpoints", "service", svcKey)
+		log.Error(nil, "Service does not have any active endpoints", "service", klog.KObj(svc))
 
 		upstream.Backends = append(upstream.Backends, nghttpx.NewDefaultBackend())
 	} else {
@@ -1321,7 +1321,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 		return nil, fmt.Errorf("error getting Service %v from the cache: %w", svcKey, err)
 	}
 
-	log.V(3).Info("Obtaining port information", "service", svcKey)
+	log.V(3).Info("Obtaining port information", "service", klog.KObj(svc))
 
 	var (
 		key         string
@@ -1665,7 +1665,7 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(ctx context.Con
 				targetPort, err := lbc.resolveTargetPort(svcPort, epPort, ref)
 				if err != nil {
 					log.V(4).Info("Unable to get target port", "pod", klog.KRef(ref.Namespace, ref.Name),
-						"servicePort", klog.Format(svcPort), "endpointPort", klog.Format(epPort), "error", err)
+						"servicePort", klog.Format(svcPort), "endpointPort", klog.Format(epPort), "err", err)
 					continue
 				}
 
@@ -1926,7 +1926,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context, kubeconfig *rest.Con
 		lbc.startShutdown(ctrlCtx)
 
 		if lbc.deferredShutdownPeriod != 0 {
-			log.Info("Deferred shutdown", "period", lbc.deferredShutdownPeriod)
+			log.Info("Deferred shutdown", "duration", lbc.deferredShutdownPeriod)
 
 			lbc.enqueue()
 

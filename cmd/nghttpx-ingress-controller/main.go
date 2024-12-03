@@ -374,12 +374,12 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 	podInfo := types.NamespacedName{Name: os.Getenv("POD_NAME"), Namespace: os.Getenv("POD_NAMESPACE")}
 
 	if podInfo.Name == "" {
-		log.Error(nil, "POD_NAME environment variable cannot be empty.")
+		log.Error(nil, "POD_NAME environment variable cannot be empty")
 		os.Exit(1)
 	}
 
 	if podInfo.Namespace == "" {
-		log.Error(nil, "POD_NAMESPACE environment variable cannot be empty.")
+		log.Error(nil, "POD_NAMESPACE environment variable cannot be empty")
 		os.Exit(1)
 	}
 
