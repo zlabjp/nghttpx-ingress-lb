@@ -55,6 +55,7 @@ import (
 	listerscorev1 "k8s.io/client-go/listers/core/v1"
 	listersdiscoveryv1 "k8s.io/client-go/listers/discovery/v1"
 	listersnetworkingv1 "k8s.io/client-go/listers/networking/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/leaderelection"
@@ -1788,7 +1789,7 @@ func (r legacyEventRecorderEventf) Eventf(object runtime.Object, eventtype, reas
 }
 
 // Run starts the loadbalancer controller.
-func (lbc *LoadBalancerController) Run(ctx context.Context) {
+func (lbc *LoadBalancerController) Run(ctx context.Context, kubeconfig *rest.Config) {
 	log := klog.LoggerWithName(klog.FromContext(ctx), "loadBalancerController")
 
 	log.Info("Starting nghttpx loadbalancer controller")
@@ -1847,8 +1848,8 @@ func (lbc *LoadBalancerController) Run(ctx context.Context) {
 		EventRecorder: legacyEventRecorderEventf(lbc.eventRecorder.Eventf),
 	}
 
-	rl, err := resourcelock.New(resourcelock.LeasesResourceLock, lbc.pod.Namespace, lbc.leaderElectionConfig.ResourceName,
-		lbc.clientset.CoreV1(), lbc.clientset.CoordinationV1(), rlc)
+	rl, err := resourcelock.NewFromKubeconfig(resourcelock.LeasesResourceLock, lbc.pod.Namespace,
+		lbc.leaderElectionConfig.ResourceName, rlc, kubeconfig, lbc.leaderElectionConfig.RenewDeadline.Duration)
 	if err != nil {
 		log.Error(err, "Unable to create resource lock")
 		return

@@ -464,7 +464,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 	go registerHandlers(ctx, cancel)
 	go handleSigterm(ctx, cancel)
 
-	lbc.Run(ctx)
+	lbc.Run(ctx, config)
 
 	eventBroadcaster.Shutdown()
 }
