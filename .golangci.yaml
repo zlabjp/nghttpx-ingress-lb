@@ -19,6 +19,10 @@ linters:
   - wsl
   - copyloopvar
   - gci
+  - iface
+  - nilnesserr
+  - recvcheck
+  - usetesting
 linters-settings:
   govet:
     enable:
@@ -30,3 +34,6 @@ linters-settings:
       - default
       - localmodule
     custom-order: true
+  loggercheck:
+    require-string-key: true
+    no-printf-like: true
