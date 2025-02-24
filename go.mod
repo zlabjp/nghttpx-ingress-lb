@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 	github.com/spf13/cobra v1.9.1
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.35.0
 	golang.org/x/time v0.10.0
 	k8s.io/api v0.32.2
 	k8s.io/apimachinery v0.32.2
