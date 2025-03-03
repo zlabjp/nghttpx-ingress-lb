@@ -1,4 +1,3 @@
-# 0.0 shouldn't clobber any release builds
 PREFIX="zlabjp/nghttpx-ingress-controller"
 TAG=latest
 
