@@ -22,8 +22,9 @@ controller:
 		github.com/zlabjp/nghttpx-ingress-lb/cmd/cat-ocsp-resp/...
 
 .PHONY: container
+container: export GOARCH = amd64
 container: controller
-	docker build -t "${PREFIX}:${TAG}" .
+	docker buildx build --platform=linux/amd64 -t "${PREFIX}:${TAG}" .
 
 .PHONY: push
 push: container
