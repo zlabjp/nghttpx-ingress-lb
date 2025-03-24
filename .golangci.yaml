@@ -23,6 +23,7 @@ linters:
   - nilnesserr
   - recvcheck
   - usetesting
+  - gofumpt
 linters-settings:
   govet:
     enable:

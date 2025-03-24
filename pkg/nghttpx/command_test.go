@@ -16,7 +16,7 @@ func TestDeleteAssetFiles(t *testing.T) {
 
 	files := []string{"alpha", "bravo", "charlie"}
 	for _, n := range files {
-		if err := os.WriteFile(filepath.Join(tempDir, n), []byte(n), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(tempDir, n), []byte(n), 0o600); err != nil {
 			t.Fatalf("Unable to write file: %v", err)
 		}
 	}

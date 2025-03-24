@@ -16,9 +16,7 @@ import (
 	"golang.org/x/crypto/ocsp"
 )
 
-var (
-	timeout = time.Minute
-)
+var timeout = time.Minute
 
 func main() {
 	rootCmd := &cobra.Command{
