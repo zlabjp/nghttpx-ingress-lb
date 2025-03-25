@@ -305,11 +305,11 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 				t.Errorf("a.GetAffinityCookieStickiness() = %v, want %v", got, want)
 			}
 
-			if got, want := a.GetReadTimeout(), tt.defaultConf.GetReadTimeout(); !((got != nil && want != nil && *got == *want) || (got == nil && want == nil)) {
+			if got, want := a.GetReadTimeout(), tt.defaultConf.GetReadTimeout(); (got == nil || want == nil || *got != *want) && (got != nil || want != nil) {
 				t.Errorf("a.GetReadTimeout() = %v, want %v", got, want)
 			}
 
-			if got, want := a.GetWriteTimeout(), tt.defaultConf.GetWriteTimeout(); !((got != nil && want != nil && *got == *want) || (got == nil && want == nil)) {
+			if got, want := a.GetWriteTimeout(), tt.defaultConf.GetWriteTimeout(); (got == nil || want == nil || *got != *want) && (got != nil || want != nil) {
 				t.Errorf("a.GetWriteTimeout() = %v, want %v", got, want)
 			}
 
