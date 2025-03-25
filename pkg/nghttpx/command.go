@@ -264,7 +264,6 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 	req.Header.Add("Content-Type", "text/plain")
 
 	resp, err := lb.httpClient.Do(req)
-
 	if err != nil {
 		return fmt.Errorf("unable to issue API request: %w", err)
 	}

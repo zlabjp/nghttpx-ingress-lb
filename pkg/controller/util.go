@@ -130,7 +130,8 @@ func podLabelSelector(labelSet map[string]string) labels.Selector {
 
 // validateIngressClass checks whether this controller should process ing or not.
 func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingressClassController string, ingClassLister listersnetworkingv1.IngressClassLister,
-	requireIngressClass bool) bool {
+	requireIngressClass bool,
+) bool {
 	log := klog.FromContext(ctx)
 
 	if ing.Spec.IngressClassName != nil {
@@ -181,7 +182,8 @@ func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingres
 }
 
 func validateGatewayGatewayClass(ctx context.Context, gtw *gatewayv1.Gateway, gatewayClassController gatewayv1.GatewayController,
-	gatewayClassLister gatewaylistersv1.GatewayClassLister) bool {
+	gatewayClassLister gatewaylistersv1.GatewayClassLister,
+) bool {
 	log := klog.FromContext(ctx)
 
 	log = klog.LoggerWithValues(log, "gateway", klog.KObj(gtw))
@@ -204,7 +206,8 @@ func parentGateway(paRef *gatewayv1.ParentReference, namespace string) bool {
 }
 
 func validateHTTPRouteGatewayClass(ctx context.Context, httpRoute *gatewayv1.HTTPRoute, gatewayClassController gatewayv1.GatewayController,
-	gatewayClassLister gatewaylistersv1.GatewayClassLister, gatewayLister gatewaylistersv1.GatewayLister) bool {
+	gatewayClassLister gatewaylistersv1.GatewayClassLister, gatewayLister gatewaylistersv1.GatewayLister,
+) bool {
 	log := klog.FromContext(ctx)
 
 	log = klog.LoggerWithValues(log, "httpRoute", klog.KObj(httpRoute))

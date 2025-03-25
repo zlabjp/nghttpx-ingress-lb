@@ -1889,7 +1889,8 @@ func TestSyncDoNotForward(t *testing.T) {
 			pathConfigKey: `alpha-ing.default.test/:
   doNotForward: true
   mruby: foo
-`}).
+`,
+		}).
 		Complete()
 
 	nghttpxSecret := newNghttpxSecret()
@@ -2731,7 +2732,8 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 		WithAnnotations(map[string]string{
 			pathConfigKey: `alpha1.default.test/:
   mruby: foo
-`}).
+`,
+		}).
 		Complete()
 
 	bs2, bes2 := newBackend("alpha2", []string{"192.168.10.2"})
@@ -2740,7 +2742,8 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 		WithAnnotations(map[string]string{
 			pathConfigKey: `alpha1.default.test/:
   mruby: bar
-`}).
+`,
+		}).
 		Complete()
 
 	bs3, bes3 := newBackend("alpha3", []string{"192.168.10.3"})
@@ -2749,7 +2752,8 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 		WithAnnotations(map[string]string{
 			pathConfigKey: `alpha3.default.test/examples:
   mruby: foo
-`}).
+`,
+		}).
 		Complete()
 	nghttpxSecret := newNghttpxSecret()
 
@@ -2792,7 +2796,8 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 		WithAnnotations(map[string]string{
 			pathConfigKey: `alpha1.default.test/:
   affinity: cookie
-`}).
+`,
+		}).
 		Complete()
 
 	bs2, bes2 := newBackend("alpha2", []string{"192.168.10.2"})
@@ -2802,7 +2807,8 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 			pathConfigKey: `alpha2.default.test/:
   affinity: cookie
   affinityCookieName: ""
-`}).
+`,
+		}).
 		Complete()
 
 	bs3, bes3 := newBackend("alpha3", []string{"192.168.10.3"})
@@ -2812,7 +2818,8 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 			pathConfigKey: `alpha3.default.test/:
   affinity: cookie
   affinityCookieName: "foo"
-`}).
+`,
+		}).
 		Complete()
 	nghttpxSecret := newNghttpxSecret()
 

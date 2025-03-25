@@ -36,16 +36,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var (
-	funcMap = template.FuncMap{
-		"duration": func(d time.Duration) string {
-			return nghttpxDuration(d)
-		},
-		"encodeHex": func(b []byte) string {
-			return hex.EncodeToString(b)
-		},
-	}
-)
+var funcMap = template.FuncMap{
+	"duration": func(d time.Duration) string {
+		return nghttpxDuration(d)
+	},
+	"encodeHex": func(b []byte) string {
+		return hex.EncodeToString(b)
+	},
+}
 
 var (
 	//go:embed nghttpx.tmpl

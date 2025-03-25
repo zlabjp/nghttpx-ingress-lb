@@ -92,11 +92,9 @@ const (
 	certificateGarbageCollectionPeriod = time.Hour
 )
 
-var (
-	// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
-	// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
-	syncKey = struct{}{}
-)
+// syncKey is a key to put into the queue.  Since we create load balancer configuration using all available information, it is
+// suffice to queue only one item.  Further, queue is somewhat overkill here, but we just keep using it for simplicity.
+var syncKey = struct{}{}
 
 // serverReloader is the API to update underlying load balancer.
 type serverReloader interface {
@@ -267,7 +265,8 @@ type Config struct {
 
 // NewLoadBalancerController creates a controller for nghttpx loadbalancer
 func NewLoadBalancerController(ctx context.Context, clientset clientset.Interface, gatewayClientset gatewayclientset.Interface,
-	nghttpx serverReloader, config Config) (*LoadBalancerController, error) {
+	nghttpx serverReloader, config Config,
+) (*LoadBalancerController, error) {
 	log := klog.LoggerWithName(klog.FromContext(ctx), "loadBalancerController")
 
 	ctx = klog.NewContext(ctx, log)
@@ -1253,7 +1252,8 @@ App.new
 
 // createUpstream creates new nghttpx.Upstream for ing, host, path and isb.
 func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schema.GroupVersionKind, obj metav1.Object, host, path string, isb *networkingv1.IngressServiceBackend,
-	requireTLS bool, pcm *nghttpx.PathConfigMapper, bcm *nghttpx.BackendConfigMapper) (*nghttpx.Upstream, error) {
+	requireTLS bool, pcm *nghttpx.PathConfigMapper, bcm *nghttpx.BackendConfigMapper,
+) (*nghttpx.Upstream, error) {
 	log := klog.FromContext(ctx)
 
 	var normalizedPath string
@@ -1536,7 +1536,8 @@ func (lbc *LoadBalancerController) secretReferenced(ctx context.Context, s *core
 // getEndpoints returns a list of Backend for a given service.  backendConfig is additional per-port configuration for backend, which must
 // not be nil.
 func (lbc *LoadBalancerController) getEndpoints(ctx context.Context, svc *corev1.Service, svcPort *corev1.ServicePort,
-	backendConfig *nghttpx.BackendConfig) ([]nghttpx.Backend, error) {
+	backendConfig *nghttpx.BackendConfig,
+) ([]nghttpx.Backend, error) {
 	log := klog.FromContext(ctx)
 
 	if svcPort.Protocol != "" && svcPort.Protocol != corev1.ProtocolTCP {
@@ -1554,7 +1555,8 @@ func (lbc *LoadBalancerController) getEndpoints(ctx context.Context, svc *corev1
 }
 
 func (lbc *LoadBalancerController) getEndpointsFromEndpointSliceWithoutServiceSelectors(
-	ctx context.Context, svc *corev1.Service, svcPort *corev1.ServicePort, backendConfig *nghttpx.BackendConfig) ([]nghttpx.Backend, error) {
+	ctx context.Context, svc *corev1.Service, svcPort *corev1.ServicePort, backendConfig *nghttpx.BackendConfig,
+) ([]nghttpx.Backend, error) {
 	log := klog.FromContext(ctx)
 
 	var targetPort int32
@@ -1620,7 +1622,8 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSliceWithoutServiceSe
 }
 
 func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(ctx context.Context, svc *corev1.Service, svcPort *corev1.ServicePort,
-	backendConfig *nghttpx.BackendConfig) ([]nghttpx.Backend, error) {
+	backendConfig *nghttpx.BackendConfig,
+) ([]nghttpx.Backend, error) {
 	log := klog.FromContext(ctx)
 
 	ess, err := lbc.epSliceLister.EndpointSlices(svc.Namespace).List(newEndpointSliceSelector(svc))

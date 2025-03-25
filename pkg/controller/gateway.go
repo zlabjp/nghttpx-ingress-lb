@@ -209,7 +209,8 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 }
 
 func (lbc *LoadBalancerController) createHTTPRouteBackends(httpRoute *gatewayv1.HTTPRoute,
-	backendRefs []gatewayv1.HTTPBackendRef) ([]networkingv1.IngressServiceBackend, error) {
+	backendRefs []gatewayv1.HTTPBackendRef,
+) ([]networkingv1.IngressServiceBackend, error) {
 	isbs := make([]networkingv1.IngressServiceBackend, len(backendRefs))
 
 	for i := range backendRefs {
@@ -716,7 +717,8 @@ func (lc *LeaderController) syncHTTPRoute(ctx context.Context, key types.Namespa
 }
 
 func (lc *LeaderController) updateHTTPRouteParentRefStatus(httpRoute *gatewayv1.HTTPRoute, paRef *gatewayv1.ParentReference,
-	reason string, status metav1.ConditionStatus, t metav1.Time) {
+	reason string, status metav1.ConditionStatus, t metav1.Time,
+) {
 	paStatus := findHTTPRouteParentStatus(httpRoute, paRef)
 	if paStatus == nil {
 		httpRoute.Status.Parents = append(httpRoute.Status.Parents, gatewayv1.RouteParentStatus{
