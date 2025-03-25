@@ -1195,7 +1195,7 @@ func validateUpstreamBackendParamsMruby(upstream *nghttpx.Upstream, opts backend
 		return nil
 	}
 
-	return fmt.Errorf("Inconsistent mruby path %v: previously it is set to %v", upstream.Mruby.Path, opts.mruby.Path)
+	return fmt.Errorf("inconsistent mruby path %v: previously it is set to %v", upstream.Mruby.Path, opts.mruby.Path)
 }
 
 func validateUpstreamBackendParamsAffinity(upstream *nghttpx.Upstream, opts backendOpts) error {
@@ -1208,7 +1208,7 @@ func validateUpstreamBackendParamsAffinity(upstream *nghttpx.Upstream, opts back
 		return nil
 	}
 
-	return fmt.Errorf("Inconsistent affinity type=%v cookieName=%v cookiePath=%v cookieSecure=%v cookieStickiness=%v: previously they are set to type=%v cookieName=%v cookiePath=%v cookieSecure=%v cookieStickiness=%v",
+	return fmt.Errorf("inconsistent affinity type=%v cookieName=%v cookiePath=%v cookieSecure=%v cookieStickiness=%v: previously they are set to type=%v cookieName=%v cookiePath=%v cookieSecure=%v cookieStickiness=%v",
 		upstream.Affinity, upstream.AffinityCookieName, upstream.AffinityCookiePath, upstream.AffinityCookieSecure, upstream.AffinityCookieStickiness,
 		opts.affinity, opts.affinityCookieName, opts.affinityCookiePath, opts.affinityCookieSecure, opts.affinityCookieStickiness)
 }
@@ -1218,7 +1218,7 @@ func validateUpstreamBackendParamsReadTimeout(upstream *nghttpx.Upstream, opts b
 		return nil
 	}
 
-	return fmt.Errorf("Inconsistent readTimeout %v: previously it is set to %v", *upstream.ReadTimeout, *opts.readTimeout)
+	return fmt.Errorf("inconsistent readTimeout %v: previously it is set to %v", *upstream.ReadTimeout, *opts.readTimeout)
 }
 
 func validateUpstreamBackendParamsWriteTimeout(upstream *nghttpx.Upstream, opts backendOpts) error {
@@ -1226,7 +1226,7 @@ func validateUpstreamBackendParamsWriteTimeout(upstream *nghttpx.Upstream, opts 
 		return nil
 	}
 
-	return fmt.Errorf("Inconsistent writeTimeout %v: previously it is set to %v", *upstream.WriteTimeout, *opts.writeTimeout)
+	return fmt.Errorf("inconsistent writeTimeout %v: previously it is set to %v", *upstream.WriteTimeout, *opts.writeTimeout)
 }
 
 func (lbc *LoadBalancerController) createHealthzMruby() []byte {
@@ -1410,12 +1410,12 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ctx context.Context, in
 func (lbc *LoadBalancerController) createTLSCredFromSecret(ctx context.Context, secret *corev1.Secret) (*nghttpx.TLSCred, error) {
 	cert, ok := secret.Data[corev1.TLSCertKey]
 	if !ok {
-		return nil, fmt.Errorf("Secret %v/%v has no certificate", secret.Namespace, secret.Name)
+		return nil, fmt.Errorf("secret %v/%v has no certificate", secret.Namespace, secret.Name)
 	}
 
 	key, ok := secret.Data[corev1.TLSPrivateKeyKey]
 	if !ok {
-		return nil, fmt.Errorf("Secret %v/%v has no private key", secret.Namespace, secret.Name)
+		return nil, fmt.Errorf("secret %v/%v has no private key", secret.Namespace, secret.Name)
 	}
 
 	cacheKey := createCertCacheKey(secret)
@@ -1541,7 +1541,7 @@ func (lbc *LoadBalancerController) getEndpoints(ctx context.Context, svc *corev1
 	log := klog.FromContext(ctx)
 
 	if svcPort.Protocol != "" && svcPort.Protocol != corev1.ProtocolTCP {
-		return nil, fmt.Errorf("Service %v/%v has unsupported protocol %v", svc.Namespace, svc.Name, svcPort.Protocol)
+		return nil, fmt.Errorf("service %v/%v has unsupported protocol %v", svc.Namespace, svc.Name, svcPort.Protocol)
 	}
 
 	log.V(3).Info("Getting endpoints",
@@ -1567,7 +1567,7 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSliceWithoutServiceSe
 	case svcPort.TargetPort.StrVal == "":
 		targetPort = svcPort.Port
 	default:
-		return nil, fmt.Errorf("Service %v/%v must have integer target port if specified: %v", svc.Namespace, svc.Name, svcPort.TargetPort)
+		return nil, fmt.Errorf("service %v/%v must have integer target port if specified: %v", svc.Namespace, svc.Name, svcPort.TargetPort)
 	}
 
 	ess, err := lbc.epSliceLister.EndpointSlices(svc.Namespace).List(newEndpointSliceSelector(svc))
@@ -2249,7 +2249,7 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 	for _, f := range allInformers {
 		for v, ok := range f.WaitForCacheSync(ctx.Done()) {
 			if !ok {
-				return fmt.Errorf("Unable to sync cache %v", v)
+				return fmt.Errorf("unable to sync cache %v", v)
 			}
 		}
 	}
@@ -2257,7 +2257,7 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 	if lc.gatewayInformers != nil {
 		for v, ok := range lc.gatewayInformers.WaitForCacheSync(ctx.Done()) {
 			if !ok {
-				return fmt.Errorf("Unable to sync cache: %v", v)
+				return fmt.Errorf("unable to sync cache: %v", v)
 			}
 		}
 	}
@@ -2838,7 +2838,7 @@ func (lc *LeaderController) getPodNodeAddress(pod *corev1.Pod) (string, error) {
 	}
 
 	if externalIP == "" {
-		return "", fmt.Errorf("Node %v has no external IP", node.Name)
+		return "", fmt.Errorf("node %v has no external IP", node.Name)
 	}
 
 	return externalIP, nil

@@ -1,40 +1,59 @@
-run:
-  timeout: 5m
+version: "2"
 linters:
   enable:
-  - bodyclose
-  - gofmt
-  - importas
-  - loggercheck
-  - noctx
-  - prealloc
-  - revive
-  - unparam
-  - usestdlibvars
-  - errorlint
-  - misspell
-  - unconvert
-  - perfsprint
-  - mirror
-  - wsl
-  - copyloopvar
-  - gci
-  - iface
-  - nilnesserr
-  - recvcheck
-  - usetesting
-  - gofumpt
-linters-settings:
-  govet:
-    enable:
-    - nilness
-    - unusedwrite
-  gci:
-    sections:
-      - standard
-      - default
-      - localmodule
-    custom-order: true
-  loggercheck:
-    require-string-key: true
-    no-printf-like: true
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - iface
+    - importas
+    - loggercheck
+    - mirror
+    - misspell
+    - nilnesserr
+    - noctx
+    - perfsprint
+    - prealloc
+    - recvcheck
+    - revive
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - usetesting
+    - wsl
+  settings:
+    govet:
+      enable:
+        - nilness
+        - unusedwrite
+    loggercheck:
+      require-string-key: true
+      no-printf-like: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule
+      custom-order: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

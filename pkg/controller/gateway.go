@@ -219,11 +219,11 @@ func (lbc *LoadBalancerController) createHTTPRouteBackends(httpRoute *gatewayv1.
 		if ptr.Deref(bkRef.Group, "") != "" ||
 			ptr.Deref(bkRef.Kind, "Service") != "Service" ||
 			ptr.Deref(bkRef.Namespace, gatewayv1.Namespace(httpRoute.Namespace)) != gatewayv1.Namespace(httpRoute.Namespace) {
-			return nil, errors.New("Backend is not Service")
+			return nil, errors.New("backend is not Service")
 		}
 
 		if bkRef.Port == nil {
-			return nil, errors.New("Service port is omitted")
+			return nil, errors.New("service port is omitted")
 		}
 
 		isbs[i] = networkingv1.IngressServiceBackend{
