@@ -2,11 +2,12 @@ package nghttpx
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDeleteAssetFiles(t *testing.T) {
@@ -16,9 +17,7 @@ func TestDeleteAssetFiles(t *testing.T) {
 
 	files := []string{"alpha", "bravo", "charlie"}
 	for _, n := range files {
-		if err := os.WriteFile(filepath.Join(tempDir, n), []byte(n), 0o600); err != nil {
-			t.Fatalf("Unable to write file: %v", err)
-		}
+		require.NoError(t, os.WriteFile(filepath.Join(tempDir, n), []byte(n), 0o600))
 	}
 
 	tests := []struct {
@@ -42,23 +41,19 @@ func TestDeleteAssetFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if err := deleteAssetFiles(context.Background(), tempDir, tt.t, tt.threshold); err != nil {
-				t.Fatalf("deleteAssetFiles: %v", err)
-			}
+			require.NoError(t, deleteAssetFiles(context.Background(), tempDir, tt.t, tt.threshold))
 
 			if tt.wantDelete {
 				for _, n := range files {
 					fileName := filepath.Join(tempDir, n)
-					if _, err := os.Stat(fileName); !errors.Is(err, os.ErrNotExist) {
-						t.Errorf("File %v must be deleted", fileName)
-					}
+					_, err := os.Stat(fileName)
+					require.ErrorIs(t, err, os.ErrNotExist)
 				}
 			} else {
 				for _, n := range files {
 					fileName := filepath.Join(tempDir, n)
-					if _, err := os.Stat(fileName); err != nil {
-						t.Errorf("os.Stat(%q): %v", fileName, err)
-					}
+					_, err := os.Stat(fileName)
+					require.NoError(t, err)
 				}
 			}
 		})

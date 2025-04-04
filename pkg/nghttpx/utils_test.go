@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -53,13 +54,8 @@ func TestFixupBackendConfig(t *testing.T) {
 			c.SetWeight(tt.inWeight)
 			FixupBackendConfig(context.Background(), c)
 
-			if got, want := c.GetProto(), tt.outProto; got != want {
-				t.Errorf("c.GetProto() = %q, want %q", got, want)
-			}
-
-			if got, want := c.GetWeight(), tt.outWeight; got != want {
-				t.Errorf("c.GetWeight() = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.outProto, c.GetProto())
+			assert.Equal(t, tt.outWeight, c.GetWeight())
 		})
 	}
 }
@@ -109,21 +105,10 @@ func TestApplyDefaultBackendConfig(t *testing.T) {
 			a := &BackendConfig{}
 			ApplyDefaultBackendConfig(context.Background(), a, tt.defaultConf)
 
-			if got, want := a.GetProto(), tt.defaultConf.GetProto(); got != want {
-				t.Errorf("a.GetProto() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetTLS(), tt.defaultConf.GetTLS(); got != want {
-				t.Errorf("a.GetTLS() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetSNI(), tt.defaultConf.GetSNI(); got != want {
-				t.Errorf("a.GetSNI() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetDNS(), tt.defaultConf.GetDNS(); got != want {
-				t.Errorf("a.GetDNS() = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.defaultConf.GetProto(), a.GetProto())
+			assert.Equal(t, tt.defaultConf.GetTLS(), a.GetTLS())
+			assert.Equal(t, tt.defaultConf.GetSNI(), a.GetSNI())
+			assert.Equal(t, tt.defaultConf.GetDNS(), a.GetDNS())
 		})
 	}
 }
@@ -173,17 +158,9 @@ func TestFixupPathConfig(t *testing.T) {
 			c.SetAffinityCookieStickiness(tt.inAffinityCookieStickiness)
 			FixupPathConfig(context.Background(), c)
 
-			if got, want := c.GetAffinity(), tt.outAffinity; got != want {
-				t.Errorf("c.GetAffinity() = %q, want %q", got, want)
-			}
-
-			if got, want := c.GetAffinityCookieSecure(), tt.outAffinityCookieSecure; got != want {
-				t.Errorf("c.GetAffinityCookieSecure() = %q, want %q", got, want)
-			}
-
-			if got, want := c.GetAffinityCookieStickiness(), tt.outAffinityCookieStickiness; got != want {
-				t.Errorf("c.GetAffinityCookieStickiness() = %q, want %q", got, want)
-			}
+			assert.Equal(t, tt.outAffinity, c.GetAffinity())
+			assert.Equal(t, tt.outAffinityCookieSecure, c.GetAffinityCookieSecure())
+			assert.Equal(t, tt.outAffinityCookieStickiness, c.GetAffinityCookieStickiness())
 		})
 	}
 }
@@ -281,45 +258,16 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			a := &PathConfig{}
 			ApplyDefaultPathConfig(context.Background(), a, tt.defaultConf)
 
-			if got, want := a.GetMruby(), tt.defaultConf.GetMruby(); got != want {
-				t.Errorf("a.GetMruby() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetAffinity(), tt.defaultConf.GetAffinity(); got != want {
-				t.Errorf("a.GetAffinity() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetAffinityCookieName(), tt.defaultConf.GetAffinityCookieName(); got != want {
-				t.Errorf("a.GetAffinityCookieName() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetAffinityCookiePath(), tt.defaultConf.GetAffinityCookiePath(); got != want {
-				t.Errorf("a.GetAffinityCookiePath() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetAffinityCookieSecure(), tt.defaultConf.GetAffinityCookieSecure(); got != want {
-				t.Errorf("a.GetAffinityCookieSecure() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetAffinityCookieStickiness(), tt.defaultConf.GetAffinityCookieStickiness(); got != want {
-				t.Errorf("a.GetAffinityCookieStickiness() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetReadTimeout(), tt.defaultConf.GetReadTimeout(); (got == nil || want == nil || *got != *want) && (got != nil || want != nil) {
-				t.Errorf("a.GetReadTimeout() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetWriteTimeout(), tt.defaultConf.GetWriteTimeout(); (got == nil || want == nil || *got != *want) && (got != nil || want != nil) {
-				t.Errorf("a.GetWriteTimeout() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetRedirectIfNotTLS(), tt.defaultConf.GetRedirectIfNotTLS(); got != want {
-				t.Errorf("a.GetRedirectIfNotTLS() = %v, want %v", got, want)
-			}
-
-			if got, want := a.GetDoNotForward(), tt.defaultConf.GetDoNotForward(); got != want {
-				t.Errorf("a.GetDoNotForward() = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.defaultConf.GetMruby(), a.GetMruby())
+			assert.Equal(t, tt.defaultConf.GetAffinity(), a.GetAffinity())
+			assert.Equal(t, tt.defaultConf.GetAffinityCookieName(), a.GetAffinityCookieName())
+			assert.Equal(t, tt.defaultConf.GetAffinityCookiePath(), a.GetAffinityCookiePath())
+			assert.Equal(t, tt.defaultConf.GetAffinityCookieSecure(), a.GetAffinityCookieSecure())
+			assert.Equal(t, tt.defaultConf.GetAffinityCookieStickiness(), a.GetAffinityCookieStickiness())
+			assert.Equal(t, tt.defaultConf.GetReadTimeout(), a.GetReadTimeout())
+			assert.Equal(t, tt.defaultConf.GetWriteTimeout(), a.GetWriteTimeout())
+			assert.Equal(t, tt.defaultConf.GetRedirectIfNotTLS(), a.GetRedirectIfNotTLS())
+			assert.Equal(t, tt.defaultConf.GetDoNotForward(), a.GetDoNotForward())
 		})
 	}
 }
@@ -355,9 +303,7 @@ func TestNghttpxDuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := nghttpxDuration(tt.d), tt.want; got != want {
-				t.Errorf("nghttpxDuration(%v) = %v, want %v", tt.d, got, want)
-			}
+			assert.Equal(t, tt.want, nghttpxDuration(tt.d))
 		})
 	}
 }

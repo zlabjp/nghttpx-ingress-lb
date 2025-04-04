@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -816,17 +818,10 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 			lb.loadTemplate()
 
 			mainConfig, backendConfig, err := lb.generateCfg(context.Background(), tt.ingConfig)
-			if err != nil {
-				t.Fatalf("lb.generateCfg: %v", err)
-			}
+			require.NoError(t, err)
 
-			if got, want := string(mainConfig), tt.wantMainConfig; got != want {
-				t.Errorf("mainConfig =\n%v, want\n%v", got, want)
-			}
-
-			if got, want := string(backendConfig), tt.wantBackendConfig; got != want {
-				t.Errorf("backendConfig =\n%v, want\n%v", got, want)
-			}
+			assert.Equal(t, tt.wantMainConfig, string(mainConfig))
+			assert.Equal(t, tt.wantBackendConfig, string(backendConfig))
 		})
 	}
 }

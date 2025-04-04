@@ -25,17 +25,18 @@ limitations under the License.
 package nghttpx
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -49,37 +50,20 @@ func TestCreateTLSCred(t *testing.T) {
 	tlsOCSPResp := "sample-ocsp-response"
 
 	dCrt, err := base64.StdEncoding.DecodeString(tlsCrt)
-	if err != nil {
-		t.Fatalf("Unexpected error: %+v", err)
-		return
-	}
+	require.NoError(t, err)
 
 	dKey, err := base64.StdEncoding.DecodeString(tlsKey)
-	if err != nil {
-		t.Fatalf("Unexpected error: %+v", err)
-	}
+	require.NoError(t, err)
 
 	tlsCred := CreateTLSCred(defaultConfDir, "tls", dCrt, dKey, []byte(tlsOCSPResp))
 
-	if got, want := tlsCred.Name, "tls"; got != want {
-		t.Errorf("tlsCred.Name = %v, want %v", got, want)
-	}
+	assert.Equal(t, "tls", tlsCred.Name)
+	assert.Equal(t, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dKey))+".key"), tlsCred.Key.Path)
+	assert.Equal(t, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dCrt))+".crt"), tlsCred.Cert.Path)
+	assert.Equal(t, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum([]byte(tlsOCSPResp)))+".ocsp-resp"), tlsCred.OCSPResp.Path)
 
-	if got, want := tlsCred.Key.Path, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dKey))+".key"); got != want {
-		t.Errorf("tlsCred.Key.Path = %v, want %v", got, want)
-	}
-
-	if got, want := tlsCred.Cert.Path, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dCrt))+".crt"); got != want {
-		t.Errorf("tlsCred.Cert.Path = %v, want %v", got, want)
-	}
-
-	if got, want := tlsCred.OCSPResp.Path, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum([]byte(tlsOCSPResp)))+".ocsp-resp"); got != want {
-		t.Errorf("tlsCred.OCSPResp.Path = %v, want %v", got, want)
-	}
-
-	if _, err := tls.X509KeyPair(dCrt, dKey); err != nil {
-		t.Fatalf("unexpected error parsing TLS key pair: %v", err)
-	}
+	_, err = tls.X509KeyPair(dCrt, dKey)
+	require.NoError(t, err)
 }
 
 // TestSortTLSCred tests SortTLSCred.
@@ -129,9 +113,7 @@ func TestSortTLSCred(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			SortTLSCred(tt.in)
 
-			if got, want := tt.in, tt.out; !reflect.DeepEqual(got, want) {
-				t.Errorf("tt.in = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.out, tt.in)
 		})
 	}
 }
@@ -210,9 +192,7 @@ func TestRemoveDuplicateTLSCred(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := RemoveDuplicateTLSCred(tt.in), tt.out; !reflect.DeepEqual(got, want) {
-				t.Errorf("RemoveDuplicateTLSCred(%v) = %v, want %v", tt.in, got, want)
-			}
+			assert.Equal(t, tt.out, RemoveDuplicateTLSCred(tt.in))
 		})
 	}
 }
@@ -246,23 +226,17 @@ func TestVerifyCertificate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			certPEM, err := base64.StdEncoding.DecodeString(tt.crt)
-			if err != nil {
-				panic(err)
-			}
+			require.NoError(t, err)
 
 			cert, err := ReadLeafCertificate(certPEM)
-			if err != nil {
-				panic(err)
-			}
+			require.NoError(t, err)
 
 			var errMsg string
 			if err := VerifyCertificate(context.Background(), cert, time.Now()); err != nil {
 				errMsg = err.Error()
 			}
 
-			if got, want := errMsg, tt.wantErr; got != want {
-				t.Errorf("errMsg = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.wantErr, errMsg)
 		})
 	}
 }
@@ -384,26 +358,16 @@ r1K7N2unJBaH84CjJpejcuLfzCvLCthdsu3CqXbwMNesL82+niOAyJETd2m5IlgW
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			p, err := NormalizePEM([]byte(tt.pem))
-			if err != nil {
-				t.Fatalf("NormalizePEM(...): %v", err)
-			}
-
-			if got, want := string(p), tt.want; got != want {
-				t.Errorf("p = %v, want %v", got, want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, string(p))
 		})
 	}
 }
 
 func TestNewTLSTicketKey(t *testing.T) {
 	ticketKey, err := NewTLSTicketKey()
-	if err != nil {
-		t.Fatalf("NewTLSTicketKey: %v", err)
-	}
-
-	if got, want := len(ticketKey), TLSTicketKeySize; got != want {
-		t.Errorf("len(ticketKey) = %v, want %v", got, want)
-	}
+	require.NoError(t, err)
+	assert.Len(t, ticketKey, TLSTicketKeySize)
 }
 
 func TestVerifyTLSTicketKey(t *testing.T) {
@@ -441,16 +405,10 @@ func TestVerifyTLSTicketKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			err := VerifyTLSTicketKey(tt.ticketKey)
-			if err != nil {
-				if tt.wantErr {
-					return
-				}
-
-				t.Fatalf("VerifyTLSTicketKey: %v", err)
-			}
-
 			if tt.wantErr {
-				t.Fatal("VerifyTLSTicketKey should fail")
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -523,13 +481,8 @@ func TestUpdateTLSTicketKeyFunc(t *testing.T) {
 			var g tlsKeyGenerator
 
 			newTicketKey, err := UpdateTLSTicketKeyFunc(tt.ticketKey, g.generateKey)
-			if err != nil {
-				t.Fatalf("UpdateTLSTicketKeyFunc: %v", err)
-			}
-
-			if got, want := newTicketKey, tt.want; !bytes.Equal(got, want) {
-				t.Errorf("newTicketKey = %s, want %s", got, want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, newTicketKey)
 		})
 	}
 }
@@ -542,10 +495,6 @@ func TestCreateTLSTicketKeyFiles(t *testing.T) {
 	)
 
 	files := CreateTLSTicketKeyFiles("/foo/bar", ticketKey)
-
-	if got, want := len(files), len(ticketKey)/TLSTicketKeySize; got != want {
-		t.Fatalf("len(files) = %v, want %v", got, want)
-	}
 
 	wantFiles := []*PrivateChecksumFile{
 		{
@@ -565,9 +514,5 @@ func TestCreateTLSTicketKeyFiles(t *testing.T) {
 		},
 	}
 
-	for i, f := range files {
-		if got, want := f, wantFiles[i]; !reflect.DeepEqual(got, want) {
-			t.Errorf("files[%v] = %q, want %q", i, got, want)
-		}
-	}
+	assert.Equal(t, wantFiles, files)
 }

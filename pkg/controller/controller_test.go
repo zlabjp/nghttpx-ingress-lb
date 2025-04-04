@@ -25,18 +25,19 @@ limitations under the License.
 package controller
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"reflect"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -172,14 +173,11 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 	}
 
 	config := Config{
-		DefaultBackendService: &types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
-		WatchNamespace:        defaultIngNamespace,
-		NghttpxConfigMap:      &types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
-		NghttpxConfDir:        defaultConfDir,
-		NghttpxSecret: types.NamespacedName{
-			Name:      defaultNghttpxSecret.Name,
-			Namespace: defaultNghttpxSecret.Namespace,
-		},
+		DefaultBackendService:  &types.NamespacedName{Namespace: defaultBackendNamespace, Name: defaultBackendName},
+		WatchNamespace:         defaultIngNamespace,
+		NghttpxConfigMap:       &types.NamespacedName{Namespace: defaultConfigMapNamespace, Name: defaultConfigMapName},
+		NghttpxConfDir:         defaultConfDir,
+		NghttpxSecret:          defaultNghttpxSecret,
 		IngressClassController: defaultIngressClassController,
 		GatewayClassController: defaultGatewayClassController,
 		ReloadRate:             1.0,
@@ -196,14 +194,10 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 	}
 
 	lbc, err := NewLoadBalancerController(context.Background(), f.clientset, f.gatewayClientset, newFakeLoadBalancer(), config)
-	if err != nil {
-		f.t.Fatalf("NewLoadBalancerController: %v", err)
-	}
+	require.NoError(f.t, err)
 
 	lc, err := NewLeaderController(context.Background(), lbc)
-	if err != nil {
-		f.t.Fatalf("NewLeaderController: %v", err)
-	}
+	require.NoError(f.t, err)
 
 	if !f.currentTime.IsZero() {
 		lc.timeNow = func() metav1.Time {
@@ -218,9 +212,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 func (f *fixture) run() {
 	f.setupStore()
 
-	if err := f.lbc.sync(context.Background(), syncKey); err != nil {
-		f.t.Errorf("Unable to sync: %v", err)
-	}
+	require.NoError(f.t, f.lbc.sync(context.Background(), syncKey))
 
 	f.verifyActions()
 }
@@ -228,153 +220,95 @@ func (f *fixture) run() {
 func (f *fixture) runShouldFail() {
 	f.setupStore()
 
-	if err := f.lbc.sync(context.Background(), syncKey); err == nil {
-		f.t.Errorf("sync should fail")
-	}
+	require.Error(f.t, f.lbc.sync(context.Background(), syncKey))
 
 	f.verifyActions()
 }
 
 func (f *fixture) setupStore() {
 	for _, ing := range f.ingStore {
-		if err := f.lbc.ingIndexer.Add(ing); err != nil {
-			panic(err)
-		}
-
-		if err := f.lc.ingIndexer.Add(ing); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lbc.ingIndexer.Add(ing))
+		require.NoError(f.t, f.lc.ingIndexer.Add(ing))
 	}
 
 	for _, ingClass := range f.ingClassStore {
-		if err := f.lbc.ingClassIndexer.Add(ingClass); err != nil {
-			panic(err)
-		}
-
-		if err := f.lc.ingClassIndexer.Add(ingClass); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lbc.ingClassIndexer.Add(ingClass))
+		require.NoError(f.t, f.lc.ingClassIndexer.Add(ingClass))
 	}
 
 	for _, es := range f.epSliceStore {
-		if err := f.lbc.epSliceIndexer.Add(es); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lbc.epSliceIndexer.Add(es))
 	}
 
 	for _, svc := range f.svcStore {
-		if err := f.lbc.svcIndexer.Add(svc); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lbc.svcIndexer.Add(svc))
 
 		if f.lc.svcIndexer != nil {
-			if err := f.lc.svcIndexer.Add(svc); err != nil {
-				panic(err)
-			}
+			require.NoError(f.t, f.lc.svcIndexer.Add(svc))
 		}
 	}
 
 	for _, secret := range f.secretStore {
-		if err := f.lbc.secretIndexer.Add(secret); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lbc.secretIndexer.Add(secret))
 
 		if f.lc.secretIndexer != nil {
-			if err := f.lc.secretIndexer.Add(secret); err != nil {
-				panic(err)
-			}
+			require.NoError(f.t, f.lc.secretIndexer.Add(secret))
 		}
 	}
 
 	if f.lbc.cmIndexer != nil {
 		for _, cm := range f.cmStore {
-			if err := f.lbc.cmIndexer.Add(cm); err != nil {
-				panic(err)
-			}
+			require.NoError(f.t, f.lbc.cmIndexer.Add(cm))
 		}
 	}
 
 	for _, pod := range f.podStore {
-		if err := f.lbc.podIndexer.Add(pod); err != nil {
-			panic(err)
-		}
-
-		if err := f.lc.podIndexer.Add(pod); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lbc.podIndexer.Add(pod))
+		require.NoError(f.t, f.lc.podIndexer.Add(pod))
 	}
 
 	for _, node := range f.nodeStore {
-		if err := f.lc.nodeIndexer.Add(node); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lc.nodeIndexer.Add(node))
 	}
 
 	for _, gc := range f.gatewayClassStore {
-		if err := f.lbc.gatewayClassIndexer.Add(gc); err != nil {
-			panic(err)
-		}
-
-		if err := f.lc.gatewayClassIndexer.Add(gc); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lbc.gatewayClassIndexer.Add(gc))
+		require.NoError(f.t, f.lc.gatewayClassIndexer.Add(gc))
 	}
 
 	for _, gtw := range f.gatewayStore {
-		if err := f.lbc.gatewayIndexer.Add(gtw); err != nil {
-			panic(err)
-		}
-
-		if err := f.lc.gatewayIndexer.Add(gtw); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lbc.gatewayIndexer.Add(gtw))
+		require.NoError(f.t, f.lc.gatewayIndexer.Add(gtw))
 	}
 
 	for _, httpRoute := range f.httpRouteStore {
-		if err := f.lbc.httpRouteIndexer.Add(httpRoute); err != nil {
-			panic(err)
-		}
-
-		if err := f.lc.httpRouteIndexer.Add(httpRoute); err != nil {
-			panic(err)
-		}
+		require.NoError(f.t, f.lbc.httpRouteIndexer.Add(httpRoute))
+		require.NoError(f.t, f.lc.httpRouteIndexer.Add(httpRoute))
 	}
 }
 
 func (f *fixture) verifyActions() {
 	actions := f.clientset.Actions()
 	for i, action := range actions {
-		if len(f.actions) < i+1 {
-			f.t.Errorf("%v unexpected action: %+v", len(actions)-len(f.actions), actions[i:])
-			break
-		}
+		require.GreaterOrEqualf(f.t, len(f.actions), i+1, "unexpected action: %+v", actions[i:])
 
 		expectedAction := f.actions[i]
-		if !expectedAction.Matches(action.GetVerb(), action.GetResource().Resource) {
-			f.t.Errorf("Expected\n\t%+v\ngot\n\t%+v", expectedAction, action)
-		}
+		assert.True(f.t, expectedAction.Matches(action.GetVerb(), action.GetResource().Resource),
+			"Expected\n\t%+v\ngot\n\t%+v", expectedAction, action)
 	}
 
-	if len(f.actions) > len(actions) {
-		f.t.Errorf("%v additional expected actions: %+v", len(f.actions)-len(actions), f.actions[len(actions):])
-	}
+	assert.Len(f.t, actions, len(f.actions), "additional expected actions: %+v", f.actions[len(actions):])
 
 	actions = f.gatewayClientset.Actions()
 	for i, action := range actions {
-		if len(f.gatewayActions) < i+1 {
-			f.t.Errorf("%v unexpected action: %+v", len(actions)-len(f.gatewayActions), actions[i:])
-			break
-		}
+		require.GreaterOrEqualf(f.t, len(f.gatewayActions), i+1, "unexpected action: %+v", actions[i:])
 
 		expectedAction := f.gatewayActions[i]
-		if !expectedAction.Matches(action.GetVerb(), action.GetResource().Resource) {
-			f.t.Errorf("Expected\n\t%+v\ngot\n\t%+v", expectedAction, action)
-		}
+		assert.True(f.t, expectedAction.Matches(action.GetVerb(), action.GetResource().Resource),
+			"Expected\n\t%+v\ngot\n\t%+v", expectedAction, action)
 	}
 
-	if len(f.gatewayActions) > len(actions) {
-		f.t.Errorf("%v additional expected actions: %+v", len(f.gatewayActions)-len(actions), f.gatewayActions[len(actions):])
-	}
+	assert.Len(f.t, actions, len(f.gatewayActions), "additional expected actions: %+v", f.gatewayActions[len(actions):])
 }
 
 // expectUpdateIngAction adds an expectation that update for ing should occur.
@@ -945,48 +879,25 @@ func TestSyncDefaultBackend(t *testing.T) {
 			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 			ingConfig := flb.ingConfig
 
-			if got, want := ingConfig.TLS, false; got != want {
-				t.Errorf("ingConfig.TLS = %v, want %v", got, want)
-			}
+			assert.False(t, ingConfig.TLS)
+			require.Len(t, ingConfig.Upstreams, 1)
 
-			if got, want := len(ingConfig.Upstreams), 1; got != want {
-				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-			} else {
-				upstream := ingConfig.Upstreams[0]
-				if got, want := upstream.Path, ""; got != want {
-					t.Errorf("upstream.Path = %v, want %v", got, want)
-				}
+			upstream := ingConfig.Upstreams[0]
+			assert.Empty(t, upstream.Path)
 
-				backends := upstream.Backends
-				if got, want := len(backends), 2; got != want {
-					t.Errorf("len(backends) = %v, want %v", got, want)
-				}
+			backends := upstream.Backends
+			require.Len(t, backends, 2)
 
-				us := backends[0]
-				if got, want := us.Address, "192.168.100.1"; got != want {
-					t.Errorf("0: us.Address = %v, want %v", got, want)
-				}
-
-				if got, want := us.Port, "8080"; got != want {
-					t.Errorf("0: us.Port = %v, want %v", got, want)
-				}
-			}
-
-			if got, want := flb.ingConfig.ExtraConfig, cm.Data[nghttpx.NghttpxExtraConfigKey]; got != want {
-				t.Errorf("flb.cfg.ExtraConfig = %v, want %v", got, want)
-			}
-
-			if got, want := flb.ingConfig.MrubyFile, (&nghttpx.ChecksumFile{
+			us := backends[0]
+			assert.Equal(t, "192.168.100.1", us.Address)
+			assert.Equal(t, "8080", us.Port)
+			assert.Equal(t, cm.Data[nghttpx.NghttpxExtraConfigKey], flb.ingConfig.ExtraConfig)
+			assert.Equal(t, &nghttpx.ChecksumFile{
 				Path:     nghttpx.MrubyRbPath(defaultConfDir),
 				Content:  []byte(mrubyContent),
 				Checksum: nghttpx.Checksum([]byte(mrubyContent)),
-			}); !reflect.DeepEqual(got, want) {
-				t.Errorf("flb.ingConfig.MrubyFile = %q, want %q", got, want)
-			}
-
-			if got, want := len(flb.ingConfig.TLSTicketKeyFiles), 0; got != want {
-				t.Errorf("len(flb.ingConfig.TLSTicketKeyFiles) = %v, want %v", got, want)
-			}
+			}, flb.ingConfig.MrubyFile)
+			assert.Empty(t, flb.ingConfig.TLSTicketKeyFiles)
 		})
 	}
 }
@@ -1032,32 +943,16 @@ func TestSyncDefaultSecret(t *testing.T) {
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if got, want := ingConfig.TLS, true; got != want {
-		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
-	}
+	assert.True(t, ingConfig.TLS)
 
 	dKeyChecksum := nghttpx.Checksum(dKey)
 	dCrtChecksum := nghttpx.Checksum(dCrt)
 
-	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(dKeyChecksum)); got != want {
-		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
-	}
-
-	if got, want := ingConfig.DefaultTLSCred.Cert.Path, nghttpx.CreateTLSCertPath(defaultConfDir, hex.EncodeToString(dCrtChecksum)); got != want {
-		t.Errorf("ingConfig.DefaultTLSCred.Cert.Path = %v, want %v", got, want)
-	}
-
-	if got, want := ingConfig.DefaultTLSCred.Key.Checksum, dKeyChecksum; !bytes.Equal(got, want) {
-		t.Errorf("ingConfig.DefaultTLSCred.Key.Checksum = %x, want %x", got, want)
-	}
-
-	if got, want := ingConfig.DefaultTLSCred.Cert.Checksum, dCrtChecksum; !bytes.Equal(got, want) {
-		t.Errorf("ingConfig.DefaultTLSCred.Cert.Checksum = %v, want %x", got, want)
-	}
-
-	if got, want := ingConfig.Upstreams[0].RedirectIfNotTLS, true; got != want {
-		t.Errorf("ingConfig.RedirectIfNotTLS = %v, want %v", got, want)
-	}
+	assert.Equal(t, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(dKeyChecksum)), ingConfig.DefaultTLSCred.Key.Path)
+	assert.Equal(t, nghttpx.CreateTLSCertPath(defaultConfDir, hex.EncodeToString(dCrtChecksum)), ingConfig.DefaultTLSCred.Cert.Path)
+	assert.Equal(t, dKeyChecksum, ingConfig.DefaultTLSCred.Key.Checksum)
+	assert.Equal(t, dCrtChecksum, ingConfig.DefaultTLSCred.Cert.Checksum)
+	assert.True(t, ingConfig.Upstreams[0].RedirectIfNotTLS)
 }
 
 // TestSyncDupDefaultSecret verifies that duplicated default TLS secret is removed.
@@ -1092,22 +987,12 @@ func TestSyncDupDefaultSecret(t *testing.T) {
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if got, want := ingConfig.TLS, true; got != want {
-		t.Errorf("ingConfig.TLS = %v, want %v", got, want)
-	}
-
-	if got, want := ingConfig.DefaultTLSCred.Key.Path, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(nghttpx.Checksum(dKey))); got != want {
-		t.Errorf("ingConfig.DefaultTLSCred.Key.Path = %v, want %v", got, want)
-	}
-
-	if got, want := len(ingConfig.SubTLSCred), 0; got != want {
-		t.Errorf("len(ingConfig.SubTLSCred) = %v, want %v", got, want)
-	}
+	assert.True(t, ingConfig.TLS)
+	assert.Equal(t, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(nghttpx.Checksum(dKey))), ingConfig.DefaultTLSCred.Key.Path)
+	assert.Empty(t, ingConfig.SubTLSCred)
 
 	for i := range ingConfig.Upstreams {
-		if got, want := ingConfig.Upstreams[i].RedirectIfNotTLS, true; got != want {
-			t.Errorf("ingConfig.Upstreams[%v].RedirectIfNotTLS = %v, want %v", i, got, want)
-		}
+		assert.True(t, ingConfig.Upstreams[i].RedirectIfNotTLS)
 	}
 }
 
@@ -1165,35 +1050,17 @@ Qu6PQqBCMaMh3xbmq1M9OwKwW/NwU0GW7w==
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if ingConfig.DefaultTLSCred == nil {
-		t.Fatal("ingConfig.DefaultTLSCred should not be nil")
-	}
+	require.NotNil(t, ingConfig.DefaultTLSCred)
 
 	tlsCred := ingConfig.DefaultTLSCred
-	if got, want := string(tlsCred.Cert.Content), tlsCrt; got != want {
-		t.Errorf("tlsCred.Cert.Content = %v, want %v", got, want)
-	}
-
-	if got, want := string(tlsCred.Key.Content), tlsKey; got != want {
-		t.Errorf("tlsCred.Key.Content = %v, want %v", got, want)
-	}
-
-	if got, want := len(ingConfig.SubTLSCred), 0; got != want {
-		t.Errorf("len(ingConfig.SubTLSCred) = %v, want %v", got, want)
-	}
-
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	}
+	assert.Equal(t, tlsCrt, string(tlsCred.Cert.Content))
+	assert.Equal(t, tlsKey, string(tlsCred.Key.Content))
+	assert.Empty(t, ingConfig.SubTLSCred)
+	require.Len(t, ingConfig.Upstreams, 2)
 
 	upstream := ingConfig.Upstreams[1]
-	if got, want := upstream.Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-		t.Errorf("upstream.Source = %v, want %v", got, want)
-	}
-
-	if got, want := upstream.RedirectIfNotTLS, true; got != want {
-		t.Errorf("upstream.RedirectIfNotTLS = %v, want %v", got, want)
-	}
+	assert.Equal(t, namespacedName(ing1), upstream.Source)
+	assert.True(t, upstream.RedirectIfNotTLS)
 }
 
 // TestSyncStringNamedPort verifies that if service target port is a named port, it is looked up from Pod spec.
@@ -1279,23 +1146,13 @@ func TestSyncStringNamedPort(t *testing.T) {
 			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 			ingConfig := flb.ingConfig
 
-			if got, want := len(ingConfig.Upstreams), 2; got != want {
-				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-			}
+			require.Len(t, ingConfig.Upstreams, 2)
+			assert.Equal(t, namespacedName(ing1), ingConfig.Upstreams[1].Source)
+			require.Len(t, ingConfig.Upstreams[1].Backends, 2)
 
-			if got, want := ingConfig.Upstreams[1].Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-				t.Errorf("ingConfig.Upstreams[1].Source = %v, want %v", got, want)
-			}
-
-			if got, want := len(ingConfig.Upstreams[1].Backends), 2; got != want {
-				t.Errorf("len(ingConfig.Upstreams[0].Backends) = %v, want %v", got, want)
-			} else {
-				for i, port := range []string{"80", "81"} {
-					backend := ingConfig.Upstreams[1].Backends[i]
-					if got, want := backend.Port, port; got != want {
-						t.Errorf("backends[i].Port = %v, want %v", got, want)
-					}
-				}
+			for i, port := range []string{"80", "81"} {
+				backend := ingConfig.Upstreams[1].Backends[i]
+				assert.Equal(t, port, backend.Port)
 			}
 		})
 	}
@@ -1330,18 +1187,11 @@ func TestSyncEmptyTargetPort(t *testing.T) {
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	}
-
-	if got, want := ingConfig.Upstreams[1].Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-		t.Errorf("ingConfig.Upstreams[1].Source = %v, want %v", got, want)
-	}
+	require.Len(t, ingConfig.Upstreams, 2)
+	assert.Equal(t, namespacedName(ing1), ingConfig.Upstreams[1].Source)
 
 	backend := ingConfig.Upstreams[1].Backends[0]
-	if got, want := backend.Port, "80"; got != want {
-		t.Errorf("backend.Port = %v, want %v", got, want)
-	}
+	assert.Equal(t, "80", backend.Port)
 }
 
 // TestSyncWithoutSelectors verifies that the controller deals with Service without selectors.
@@ -1378,18 +1228,11 @@ func TestSyncWithoutSelectors(t *testing.T) {
 			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 			ingConfig := flb.ingConfig
 
-			if got, want := len(ingConfig.Upstreams), 2; got != want {
-				t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-			}
-
-			if got, want := ingConfig.Upstreams[1].Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-				t.Errorf("ingConfig.Upstreams[1].Source = %v, want %v", got, want)
-			}
+			require.Len(t, ingConfig.Upstreams, 2)
+			assert.Equal(t, namespacedName(ing1), ingConfig.Upstreams[1].Source)
 
 			backend := ingConfig.Upstreams[1].Backends[0]
-			if got, want := backend.Port, "80"; got != want {
-				t.Errorf("backend.Port = %v, want %v", got, want)
-			}
+			assert.Equal(t, "80", backend.Port)
 		})
 	}
 }
@@ -1488,9 +1331,7 @@ func TestValidateIngressClass(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			if got, want := f.lbc.validateIngressClass(context.Background(), tt.ing), tt.want; got != want {
-				t.Errorf("f.lbc.validateIngressClass(...) = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.want, f.lbc.validateIngressClass(context.Background(), tt.ing))
 		})
 	}
 }
@@ -1521,22 +1362,10 @@ func TestSyncIngressDefaultBackend(t *testing.T) {
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	}
-
-	var found bool
-
-	for _, upstream := range ingConfig.Upstreams {
-		if upstream.Name == "networking.k8s.io/v1/Ingress:default/bravo,8281;/" {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("Ingress default backend is not found")
-	}
+	assert.Len(t, ingConfig.Upstreams, 2)
+	assert.True(t, slices.ContainsFunc(ingConfig.Upstreams, func(u *nghttpx.Upstream) bool {
+		return u.Name == "networking.k8s.io/v1/Ingress:default/bravo,8281;/"
+	}))
 }
 
 // TestSyncIngressNoDefaultBackendOverride verifies that any settings or rules which override default backend are ignored.
@@ -1585,17 +1414,9 @@ func TestSyncIngressNoDefaultBackendOverride(t *testing.T) {
 			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 			ingConfig := flb.ingConfig
 
-			if got, want := len(ingConfig.Upstreams), 2; got != want {
-				t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-			}
-
-			if got, want := ingConfig.Upstreams[0].Source, (types.NamespacedName{}); got != want {
-				t.Errorf("ingConfig.Upstreams[0].Source = %v, want %v", got, want)
-			}
-
-			if got, want := ingConfig.Upstreams[0].Name, f.lbc.defaultSvc.String(); got != want {
-				t.Errorf("ingConfig.Upstreams[0].Name = %v, want %v", got, want)
-			}
+			require.Len(t, ingConfig.Upstreams, 2)
+			assert.Empty(t, ingConfig.Upstreams[0].Source)
+			assert.Equal(t, f.lbc.defaultSvc.String(), ingConfig.Upstreams[0].Name)
 		})
 	}
 }
@@ -1685,15 +1506,11 @@ func TestGetLoadBalancerIngressSelector(t *testing.T) {
 
 			lbIngs, err := f.lc.getLoadBalancerIngressSelector(context.Background(), labels.ValidatedSetSelector(defaultIngPodLables))
 
+			require.NoError(t, err)
+
 			f.verifyActions()
 
-			if err != nil {
-				t.Fatalf("f.lc.getLoadBalancerIngressSelector() returned unexpected error %v", err)
-			}
-
-			if got, want := len(lbIngs), 2; got != want {
-				t.Errorf("len(lbIngs) = %v, want %v", got, want)
-			}
+			assert.Len(t, lbIngs, 2)
 
 			sortLoadBalancerIngress(lbIngs)
 
@@ -1701,9 +1518,7 @@ func TestGetLoadBalancerIngressSelector(t *testing.T) {
 				{IP: "192.168.0.1"}, {IP: "192.168.0.2"},
 			}
 
-			if got, want := lbIngs, ans; !reflect.DeepEqual(got, want) {
-				t.Errorf("lbIngs = %+v, want %+v", got, want)
-			}
+			assert.Equal(t, ans, lbIngs)
 		})
 	}
 }
@@ -1761,22 +1576,14 @@ func TestSyncIngress(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			err := f.lc.syncIngress(context.Background(), namespacedName(tt.ingress))
-			if err != nil {
-				t.Fatalf("f.lc.syncIngress(...): %v", err)
-			}
+			require.NoError(t, f.lc.syncIngress(context.Background(), namespacedName(tt.ingress)))
 
 			f.verifyActions()
 
 			updatedIng, err := f.clientset.NetworkingV1().Ingresses(tt.ingress.Namespace).
 				Get(context.Background(), tt.ingress.Name, metav1.GetOptions{})
-			if err != nil {
-				t.Fatalf("Unable to get Ingress %v/%v: %v", tt.ingress.Namespace, tt.ingress.Name, err)
-			}
-
-			if got, want := updatedIng.Status.LoadBalancer.Ingress, tt.wantLoadBalancerIngresses; !reflect.DeepEqual(got, want) {
-				t.Errorf("updatedIng.Status.LoadBalancer.Ingress = %+v, want %+v", got, want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantLoadBalancerIngresses, updatedIng.Status.LoadBalancer.Ingress)
 		})
 	}
 }
@@ -1810,18 +1617,12 @@ func TestSyncNamedServicePort(t *testing.T) {
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	}
+	require.Len(t, ingConfig.Upstreams, 2)
 
-	if got, want := ingConfig.Upstreams[1].Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-		t.Errorf("ingConfig.Upstreams[1].Source = %v, want %v", got, want)
-	}
+	assert.Equal(t, namespacedName(ing1), ingConfig.Upstreams[1].Source)
 
 	backend := ingConfig.Upstreams[1].Backends[0]
-	if got, want := backend.Port, "80"; got != want {
-		t.Errorf("backend.Port = %v, want %v", got, want)
-	}
+	assert.Equal(t, "80", backend.Port)
 }
 
 // TestSyncInternalDefaultBackend verifies that controller creates configuration for the internal default backend.
@@ -1851,28 +1652,17 @@ func TestSyncInternalDefaultBackend(t *testing.T) {
 			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 			ingConfig := flb.ingConfig
 
-			if got, want := len(ingConfig.Upstreams), 1; got != want {
-				t.Fatalf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-			}
+			require.Len(t, ingConfig.Upstreams, 1)
 
 			upstream := ingConfig.Upstreams[0]
-			if got, want := upstream.Path, ""; got != want {
-				t.Errorf("upstream.Path = %v, want %v", got, want)
-			}
+			assert.Empty(t, upstream.Path)
 
 			backends := upstream.Backends
-			if got, want := len(backends), 1; got != want {
-				t.Errorf("len(backends) = %v, want %v", got, want)
-			}
+			require.Len(t, backends, 1)
 
 			us := backends[0]
-			if got, want := us.Address, "127.0.0.1"; got != want {
-				t.Errorf("0: us.Address = %v, want %v", got, want)
-			}
-
-			if got, want := upstream.DoNotForward, true; got != want {
-				t.Errorf("upstream.DoNotForward = %v, want %v", got, want)
-			}
+			assert.Equal(t, "127.0.0.1", us.Address)
+			assert.True(t, upstream.DoNotForward)
 		})
 	}
 }
@@ -1906,24 +1696,15 @@ func TestSyncDoNotForward(t *testing.T) {
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	}
+	require.Len(t, ingConfig.Upstreams, 2)
 
 	upstream := ingConfig.Upstreams[1]
 
-	if got, want := upstream.Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-		t.Errorf("upstream.Source = %v, want %v", got, want)
-	}
-
-	if got, want := upstream.DoNotForward, true; got != want {
-		t.Errorf("upstream.DoNotForward = %v, want %v", got, want)
-	}
+	assert.Equal(t, namespacedName(ing1), upstream.Source)
+	assert.True(t, upstream.DoNotForward)
 
 	backend := upstream.Backends[0]
-	if got, want := backend.Port, "8181"; got != want {
-		t.Errorf("backend.Port = %v, want %v", got, want)
-	}
+	assert.Equal(t, "8181", backend.Port)
 }
 
 // TestSyncNormalizePath verifies that a substring which starts with '#' or '?' is removed from path.
@@ -1979,19 +1760,12 @@ func TestSyncNormalizePath(t *testing.T) {
 			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 			ingConfig := flb.ingConfig
 
-			if got, want := len(ingConfig.Upstreams), 2; got != want {
-				t.Fatalf("len(ingConfig.Upstream) = %v want %v", got, want)
-			}
+			require.Len(t, ingConfig.Upstreams, 2)
 
 			upstream := ingConfig.Upstreams[1]
 
-			if got, want := upstream.Source, (types.NamespacedName{Name: ing1.Name, Namespace: ing1.Namespace}); got != want {
-				t.Errorf("upstream.Source = %v, want %v", got, want)
-			}
-
-			if got, want := upstream.Path, tt.want; got != want {
-				t.Errorf("upstream.Path = %v, want %v", got, want)
-			}
+			assert.Equal(t, namespacedName(ing1), upstream.Source)
+			assert.Equal(t, tt.want, upstream.Path)
 		})
 	}
 }
@@ -2080,44 +1854,28 @@ func TestSyncSecretQUIC(t *testing.T) {
 
 			f.lbc.nghttpxSecret = defaultNghttpxSecret
 
-			err := f.lc.syncSecret(context.Background(), defaultNghttpxSecret, now)
-			if err != nil {
-				t.Fatalf("f.lc.syncSecret(...): %v", err)
-			}
+			require.NoError(t, f.lc.syncSecret(context.Background(), defaultNghttpxSecret, now))
 
 			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultNghttpxSecret.Namespace).Get(context.Background(),
 				defaultNghttpxSecret.Name, metav1.GetOptions{})
-			if err != nil {
-				t.Fatalf("Unable to get Secret %v/%v: %v", defaultNghttpxSecret.Namespace, defaultNghttpxSecret.Name, err)
-			}
+			require.NoError(t, err)
 
 			if tt.wantKeepTimestamp {
-				if got, want := updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey], tt.secret.Annotations[quicKeyingMaterialsUpdateTimestampKey]; got != want {
-					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", quicKeyingMaterialsUpdateTimestampKey, got, want)
-				}
-
-				if got, want := updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey], tt.secret.Data[nghttpxQUICKeyingMaterialsSecretKey]; !bytes.Equal(got, want) {
-					t.Errorf("updatedSecret.Data[%q] = %s, want %s", nghttpxQUICKeyingMaterialsSecretKey, got, want)
-				}
+				assert.Equal(t, tt.secret.Annotations[quicKeyingMaterialsUpdateTimestampKey], updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey])
+				assert.Equal(t, tt.secret.Data[nghttpxQUICKeyingMaterialsSecretKey], updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey])
 			} else {
-				if got, want := updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey], now.Format(time.RFC3339); got != want {
-					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", quicKeyingMaterialsUpdateTimestampKey, got, want)
-				}
+				assert.Equal(t, now.Format(time.RFC3339), updatedSecret.Annotations[quicKeyingMaterialsUpdateTimestampKey])
 
 				km := updatedSecret.Data[nghttpxQUICKeyingMaterialsSecretKey]
 
-				if len(km) < nghttpx.QUICKeyingMaterialsEncodedSize ||
-					len(km) != len(km)/nghttpx.QUICKeyingMaterialsEncodedSize*nghttpx.QUICKeyingMaterialsEncodedSize+(len(km)/nghttpx.QUICKeyingMaterialsEncodedSize-1) {
-					t.Fatalf("updatedSecret does not contain QUIC keying materials: length=%v", len(km))
+				assert.False(t, len(km) < nghttpx.QUICKeyingMaterialsEncodedSize ||
+					len(km) != len(km)/nghttpx.QUICKeyingMaterialsEncodedSize*nghttpx.QUICKeyingMaterialsEncodedSize+(len(km)/nghttpx.QUICKeyingMaterialsEncodedSize-1))
+
+				if tt.secret != nil {
+					assert.NotEqual(t, tt.secret.Data[nghttpxQUICKeyingMaterialsSecretKey], km)
 				}
 
-				if tt.secret != nil && bytes.Equal(km, tt.secret.Data[nghttpxQUICKeyingMaterialsSecretKey]) {
-					t.Fatalf("updatedSecret.Data[%q] must be updated", nghttpxQUICKeyingMaterialsSecretKey)
-				}
-
-				if err := nghttpx.VerifyQUICKeyingMaterials(km); err != nil {
-					t.Fatalf("VerifyQUICKeyingMaterials(...): %v", err)
-				}
+				require.NoError(t, nghttpx.VerifyQUICKeyingMaterials(km))
 			}
 		})
 	}
@@ -2206,38 +1964,24 @@ func TestSyncSecretTLSTicketKey(t *testing.T) {
 
 			f.lbc.nghttpxSecret = defaultNghttpxSecret
 
-			err := f.lc.syncSecret(context.Background(), defaultNghttpxSecret, now)
-			if err != nil {
-				t.Fatalf("f.lc.syncSecret(...): %v", err)
-			}
+			require.NoError(t, f.lc.syncSecret(context.Background(), defaultNghttpxSecret, now))
 
 			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultNghttpxSecret.Namespace).Get(context.Background(),
 				defaultNghttpxSecret.Name, metav1.GetOptions{})
-			if err != nil {
-				t.Fatalf("Unable to get Secret %v/%v: %v", defaultNghttpxSecret.Namespace, defaultNghttpxSecret.Name, err)
-			}
+			require.NoError(t, err)
 
 			if tt.wantKeepTimestamp {
-				if got, want := updatedSecret.Annotations[tlsTicketKeyUpdateTimestampKey], tt.secret.Annotations[tlsTicketKeyUpdateTimestampKey]; got != want {
-					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", tlsTicketKeyUpdateTimestampKey, got, want)
-				}
-
-				if got, want := updatedSecret.Data[nghttpxTLSTicketKeySecretKey], tt.secret.Data[nghttpxTLSTicketKeySecretKey]; !bytes.Equal(got, want) {
-					t.Errorf("updatedSecret.Data[%q] = %q, want %q", nghttpxTLSTicketKeySecretKey, got, want)
-				}
+				assert.Equal(t, tt.secret.Annotations[tlsTicketKeyUpdateTimestampKey], updatedSecret.Annotations[tlsTicketKeyUpdateTimestampKey])
+				assert.Equal(t, tt.secret.Data[nghttpxTLSTicketKeySecretKey], updatedSecret.Data[nghttpxTLSTicketKeySecretKey])
 			} else {
-				if got, want := updatedSecret.Annotations[tlsTicketKeyUpdateTimestampKey], now.Format(time.RFC3339); got != want {
-					t.Errorf("updatedSecret.Annotations[%q] = %v, want %v", tlsTicketKeyUpdateTimestampKey, got, want)
-				}
+				assert.Equal(t, now.Format(time.RFC3339), updatedSecret.Annotations[tlsTicketKeyUpdateTimestampKey])
 
-				if tt.secret != nil && bytes.Equal(updatedSecret.Data[nghttpxTLSTicketKeySecretKey], tt.secret.Data[nghttpxTLSTicketKeySecretKey]) {
-					t.Fatalf("updatedSecret.Data[%q] must be updated", nghttpxTLSTicketKeySecretKey)
+				if tt.secret != nil {
+					assert.NotEqual(t, tt.secret.Data[nghttpxTLSTicketKeySecretKey], updatedSecret.Data[nghttpxTLSTicketKeySecretKey])
 				}
 
 				key := updatedSecret.Data[nghttpxTLSTicketKeySecretKey]
-				if err := nghttpx.VerifyTLSTicketKey(key); err != nil {
-					t.Fatalf("VerifyTLSTicketKey(...): %v", err)
-				}
+				require.NoError(t, nghttpx.VerifyTLSTicketKey(key))
 			}
 		})
 	}
@@ -2713,9 +2457,7 @@ func TestRemoveUpstreamsWithInconsistentBackendParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := removeUpstreamsWithInconsistentBackendParams(context.Background(), tt.upstreams), tt.want; !equality.Semantic.DeepEqual(got, want) {
-				t.Errorf("removeUpstreamsWithInconsistentBackendParams(...) = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.want, removeUpstreamsWithInconsistentBackendParams(context.Background(), tt.upstreams))
 		})
 	}
 }
@@ -2769,19 +2511,12 @@ func TestSyncIgnoreUpstreamsWithInconsistentBackendParams(t *testing.T) {
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	}
-
-	if got, want := ingConfig.Upstreams[0].Name, f.lbc.defaultSvc.String(); got != want {
-		t.Errorf("ingConfig.Upstreams[0].Name = %v, want %v", got, want)
-	}
+	require.Len(t, ingConfig.Upstreams, 2)
+	assert.Equal(t, f.lbc.defaultSvc.String(), ingConfig.Upstreams[0].Name)
 
 	upstream := ingConfig.Upstreams[1]
 
-	if got, want := upstream.Source, (types.NamespacedName{Name: ing3.Name, Namespace: ing3.Namespace}); got != want {
-		t.Errorf("upstream.Source = %v, want %v", got, want)
-	}
+	assert.Equal(t, namespacedName(ing3), upstream.Source)
 }
 
 // TestSyncEmptyAffinityCookieName verifies that an upstream which has empty affinity cookie name should be ignored.
@@ -2835,19 +2570,12 @@ func TestSyncEmptyAffinityCookieName(t *testing.T) {
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if got, want := len(ingConfig.Upstreams), 2; got != want {
-		t.Errorf("len(ingConfig.Upstreams) = %v, want %v", got, want)
-	}
-
-	if got, want := ingConfig.Upstreams[0].Name, f.lbc.defaultSvc.String(); got != want {
-		t.Errorf("ingConfig.Upstreams[0].Name = %v, want %v", got, want)
-	}
+	require.Len(t, ingConfig.Upstreams, 2)
+	assert.Equal(t, f.lbc.defaultSvc.String(), ingConfig.Upstreams[0].Name)
 
 	upstream := ingConfig.Upstreams[1]
 
-	if got, want := upstream.Source, (types.NamespacedName{Name: ing3.Name, Namespace: ing3.Namespace}); got != want {
-		t.Errorf("upstream.Source = %v, want %v", got, want)
-	}
+	assert.Equal(t, namespacedName(ing3), upstream.Source)
 }
 
 func TestCreateTLSCredFromSecret(t *testing.T) {
@@ -2856,39 +2584,24 @@ func TestCreateTLSCredFromSecret(t *testing.T) {
 
 	s := newTLSSecret("ns", "cert", []byte(tlsCrt), []byte(tlsKey))
 
-	if _, err := f.lbc.createTLSCredFromSecret(context.Background(), s); err != nil {
-		t.Fatalf("f.lbc.createTLSCredFromSecret: %v", err)
-	}
+	_, err := f.lbc.createTLSCredFromSecret(context.Background(), s)
+	require.NoError(t, err)
 
 	cacheKey := createCertCacheKey(s)
 
 	ent := f.lbc.certCache[cacheKey]
-	if ent == nil {
-		t.Fatalf("Certificate from Secret %s/%s is not cached", s.Namespace, s.Name)
-	}
+	require.NotNil(t, ent)
 
 	certHash := calculateCertificateHash(s.Data[corev1.TLSCertKey], s.Data[corev1.TLSPrivateKeyKey])
 
-	if got, want := ent.certificateHash, certHash; !bytes.Equal(got, want) {
-		t.Errorf("ent.certificateHash = %s, want %s", got, want)
-	}
-
-	if got, want := ent.certificate, s.Data[corev1.TLSCertKey]; !bytes.Equal(got, want) {
-		t.Errorf("ent.certificate = %s, want %s", got, want)
-	}
-
-	if got, want := ent.key, s.Data[corev1.TLSPrivateKeyKey]; !bytes.Equal(got, want) {
-		t.Errorf("ent.key = %s, want %s", got, want)
-	}
+	assert.Equal(t, certHash, ent.certificateHash)
+	assert.Equal(t, s.Data[corev1.TLSCertKey], ent.certificate)
+	assert.Equal(t, s.Data[corev1.TLSPrivateKeyKey], ent.key)
 
 	// Should use cache.
-	if _, err := f.lbc.createTLSCredFromSecret(context.Background(), s); err != nil {
-		t.Fatalf("f.lbc.createTLSCredFromSecret: %v", err)
-	}
-
-	if got, want := f.lbc.certCache[cacheKey], ent; got != want {
-		t.Errorf("f.lbc.certCache[%q] = %v, want %v", cacheKey, got, want)
-	}
+	_, err = f.lbc.createTLSCredFromSecret(context.Background(), s)
+	require.NoError(t, err)
+	assert.Equal(t, ent, f.lbc.certCache[cacheKey])
 }
 
 func TestSyncWithTLSTicketKey(t *testing.T) {
@@ -2901,9 +2614,7 @@ func TestSyncWithTLSTicketKey(t *testing.T) {
 	nghttpxSecret := newNghttpxSecret()
 
 	ticketKey, err := nghttpx.NewInitialTLSTicketKey()
-	if err != nil {
-		t.Fatalf("nghttpx.NewInitialTLSTicketKey: %v", err)
-	}
+	require.NoError(t, err)
 
 	nghttpxSecret.Data = map[string][]byte{
 		nghttpxTLSTicketKeySecretKey: ticketKey,
@@ -2924,7 +2635,5 @@ func TestSyncWithTLSTicketKey(t *testing.T) {
 	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
 	ingConfig := flb.ingConfig
 
-	if got, want := len(ingConfig.TLSTicketKeyFiles), 2; got != want {
-		t.Errorf("len(ingConfig.TLSTicketKeyFiles) = %v, want %v", got, want)
-	}
+	assert.Len(t, ingConfig.TLSTicketKeyFiles, 2)
 }

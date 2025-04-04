@@ -15,6 +15,7 @@ linters:
     - prealloc
     - recvcheck
     - revive
+    - testifylint
     - unconvert
     - unparam
     - usestdlibvars

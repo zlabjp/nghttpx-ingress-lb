@@ -2,6 +2,8 @@ package slices
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIndexPtrFunc(t *testing.T) {
@@ -37,9 +39,7 @@ func TestIndexPtrFunc(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := IndexPtrFunc(tt.s, func(n *int) bool { return *n == tt.t }), tt.want; got != want {
-				t.Errorf("IndexPtrFunc(...) = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.want, IndexPtrFunc(tt.s, func(n *int) bool { return *n == tt.t }))
 		})
 	}
 }
@@ -69,9 +69,7 @@ func TestContainsPtrFunc(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := ContainsPtrFunc(tt.s, func(n *int) bool { return *n == tt.t }), tt.want; got != want {
-				t.Errorf("ContainsPtrFunc(...) = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.want, ContainsPtrFunc(tt.s, func(n *int) bool { return *n == tt.t }))
 		})
 	}
 }
@@ -128,9 +126,7 @@ func TestEqualPtrFunc(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := EqualPtrFunc(tt.a, tt.b, tt.pred), tt.want; got != want {
-				t.Errorf("EqualPtrFunc(...) = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.want, EqualPtrFunc(tt.a, tt.b, tt.pred))
 		})
 	}
 }
