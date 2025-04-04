@@ -3,6 +3,8 @@ package nghttpx
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
@@ -15,11 +17,6 @@ func TestPrivateChecksumFileMarshalJSON(t *testing.T) {
 	}
 
 	encoded, err := json.Marshal(c)
-	if err != nil {
-		t.Fatalf("json.Marshal: %v", err)
-	}
-
-	if got, want := string(encoded), `{"Path":"/path/to/file","Content":"[redacted]","Checksum":"MDAxMTIyMzM="}`; got != want {
-		t.Errorf("b = %v, want %v", got, want)
-	}
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"Path":"/path/to/file","Content":"[redacted]","Checksum":"MDAxMTIyMzM="}`, string(encoded))
 }

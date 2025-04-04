@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCreateQUICSecretFile verifies CreateQUICSecretFile.
@@ -16,17 +19,9 @@ func TestCreateQUICSecretFile(t *testing.T) {
 
 	f := CreateQUICSecretFile("/foo/bar", content)
 
-	if got, want := f.Path, "/foo/bar/quic-secret.txt"; got != want {
-		t.Errorf("f.Path = %v, want %v", got, want)
-	}
-
-	if got, want := f.Content, content; !bytes.Equal(got, want) {
-		t.Errorf("f.Content = %q, want %q", got, want)
-	}
-
-	if got, want := hex.EncodeToString(f.Checksum), checksum; got != want {
-		t.Errorf("f.Checksum = %v, want %v", got, want)
-	}
+	assert.Equal(t, "/foo/bar/quic-secret.txt", f.Path)
+	assert.Equal(t, content, f.Content)
+	assert.Equal(t, checksum, hex.EncodeToString(f.Checksum))
 }
 
 // TestVerifyQUICKeyingMaterials verifies VerifyQUICKeyingMaterials.
@@ -84,16 +79,10 @@ func TestVerifyQUICKeyingMaterials(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			err := VerifyQUICKeyingMaterials(tt.km)
-			if err != nil {
-				if !tt.wantErr {
-					t.Fatalf("verifyQUICKeyingMaterials: %v", err)
-				}
-
-				return
-			}
-
 			if tt.wantErr {
-				t.Fatal("verifyQUICKeyingMaterials should fail")
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -176,44 +165,28 @@ func TestUpdateQUICKeyingMaterialsFunc(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			km, err := UpdateQUICKeyingMaterialsFunc(tt.km, newKMFunc)
-			if err != nil {
-				if tt.wantError {
-					return
-				}
-
-				t.Fatalf("UpdateQUICKeyingMaterialsFunc: %v", err)
-			}
-
 			if tt.wantError {
-				t.Fatal("UpdateQUICKeyingMaterialsFunc should fail")
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
 
-			if got, want := km, tt.want; !bytes.Equal(got, want) {
-				t.Errorf("UpdateQUICKeyingMaterialsFunc(...) = %s, want %s", got, want)
-			}
+			assert.Equal(t, tt.want, km)
 		})
 	}
 }
 
 func TestNewInitialQUICKeyingMaterials(t *testing.T) {
 	o, err := NewInitialQUICKeyingMaterials()
-	if err != nil {
-		t.Fatalf("NewInitialQUICKeyingMaterials: %v", err)
-	}
+	require.NoError(t, err)
 
 	keys := bytes.SplitN(o, []byte("\n"), 2)
-	if got, want := len(keys), 2; got != want {
-		t.Fatalf("len(keys) = %v, want %v", got, want)
-	}
+	require.Len(t, keys, 2)
 
 	for i, key := range keys {
 		k := make([]byte, 1)
-		if _, err := hex.Decode(k, key[:2]); err != nil {
-			t.Fatalf("hex.DecodeString: %v", err)
-		}
-
-		if got, want := k[0]&idMask, byte(i<<(8-idNBits)); got != want {
-			t.Errorf("id[%v] = %#02x, want %#02x", i, got, want)
-		}
+		_, err := hex.Decode(k, key[:2])
+		require.NoError(t, err)
+		assert.Equal(t, byte(i<<(8-idNBits)), k[0]&idMask)
 	}
 }

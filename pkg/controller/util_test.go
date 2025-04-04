@@ -9,10 +9,10 @@
 package controller
 
 import (
-	"reflect"
-	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,9 +40,7 @@ func TestSortLoadBalancerIngress(t *testing.T) {
 
 	sortLoadBalancerIngress(input)
 
-	if got, want := input, ans; !reflect.DeepEqual(got, want) {
-		t.Errorf("sortLoadBalancerIngress(...) = %+v, want %+v", got, want)
-	}
+	assert.Equal(t, ans, input)
 }
 
 // TestUniqLoadBalancerIngress verifies that uniqLoadBalancerIngress removes duplicated items.
@@ -74,9 +72,7 @@ func TestUniqLoadBalancerIngress(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := uniqLoadBalancerIngress(tt.input), tt.ans; !reflect.DeepEqual(got, want) {
-				t.Errorf("uniqLoadBalancerIngress(...) = %+v, want %+v", got, want)
-			}
+			assert.Equal(t, tt.ans, uniqLoadBalancerIngress(tt.input))
 		})
 	}
 }
@@ -123,9 +119,7 @@ func TestIngressLoadBalancerIngressFromService(t *testing.T) {
 		},
 	}
 
-	if got, want := ingressLoadBalancerIngressFromService(svc), want; !reflect.DeepEqual(got, want) {
-		t.Errorf("ingressLoadBalancerIngressFromService(...) = %#v, want %#v", got, want)
-	}
+	assert.Equal(t, want, ingressLoadBalancerIngressFromService(svc))
 }
 
 func TestParentGateway(t *testing.T) {
@@ -169,9 +163,7 @@ func TestParentGateway(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := parentGateway(&tt.parentRef, tt.namespace), tt.want; got != want {
-				t.Errorf("parentGateway(...) = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.want, parentGateway(&tt.parentRef, tt.namespace))
 		})
 	}
 }
@@ -316,9 +308,7 @@ func TestParentRefEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := parentRefEqual(&tt.a, &tt.b, tt.namespace), tt.want; got != want {
-				t.Errorf("parentRefEqual(...) = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.want, parentRefEqual(&tt.a, &tt.b, tt.namespace))
 		})
 	}
 }
@@ -373,9 +363,7 @@ func TestFindCondition(t *testing.T) {
 				want = &tt.conditions[tt.want]
 			}
 
-			if got != want {
-				t.Errorf("findCondition(...) = %#v, want %#v", got, want)
-			}
+			assert.Equal(t, want, got)
 		})
 	}
 }
@@ -404,13 +392,8 @@ func TestAppendCondition(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			conditions, cond := appendCondition(tt.conditions, tt.cond)
 
-			if got, want := conditions, tt.want; !slices.Equal(got, want) {
-				t.Fatalf("appendCondition = %v, want %v", got, want)
-			}
-
-			if got, want := cond, &conditions[len(conditions)-1]; got != want {
-				t.Errorf("cond = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.want, conditions)
+			assert.Equal(t, &conditions[len(conditions)-1], cond)
 		})
 	}
 }
@@ -501,9 +484,7 @@ func TestFindHTTPRouteParentStatus(t *testing.T) {
 				want = &tt.httpRoute.Status.Parents[tt.want]
 			}
 
-			if got != want {
-				t.Errorf("findHTTPRouteParentStatus(...) = %#v, want %#v", got, want)
-			}
+			assert.Equal(t, want, got)
 		})
 	}
 }
@@ -573,9 +554,7 @@ func TestHostnameMatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got, want := hostnameMatch(tt.pattern, tt.hostname), tt.want; got != want {
-				t.Errorf("hostnameMatch(%q, %q) = %v, want %v", tt.pattern, tt.hostname, got, want)
-			}
+			assert.Equal(t, tt.want, hostnameMatch(tt.pattern, tt.hostname))
 		})
 	}
 }
@@ -697,21 +676,13 @@ func TestPodFindPort(t *testing.T) {
 			}
 
 			port, err := podFindPort(po, &tt.servicePort)
-			if err != nil {
-				if tt.wantErr {
-					return
-				}
-
-				t.Fatalf("podFindPort: %v", err)
-			}
-
 			if tt.wantErr {
-				t.Fatal("podFindPort should fail")
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
 
-			if got, want := port, tt.wantPort; got != want {
-				t.Errorf("port = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.wantPort, port)
 		})
 	}
 }
@@ -721,13 +692,8 @@ func TestDeletedObjectAs(t *testing.T) {
 		s := &corev1.Pod{}
 
 		po, err := deletedObjectAs[*corev1.Pod](s)
-		if err != nil {
-			t.Fatalf("deletedObjectAs: %v", err)
-		}
-
-		if got, want := po, s; po != s {
-			t.Errorf("po = %T, want %T", got, want)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, s, po)
 	})
 
 	t.Run("Via cache.DeletedFinalStateUnknown", func(t *testing.T) {
@@ -737,26 +703,16 @@ func TestDeletedObjectAs(t *testing.T) {
 		}
 
 		po, err := deletedObjectAs[*corev1.Pod](d)
-		if err != nil {
-			t.Fatalf("deletedObjectAs: %v", err)
-		}
-
-		if got, want := po, s; po != s {
-			t.Errorf("po = %T, want %T", got, want)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, s, po)
 	})
 
 	t.Run("Failed conversion", func(t *testing.T) {
 		s := &corev1.ConfigMap{}
 
 		po, err := deletedObjectAs[*corev1.Pod](s)
-		if err == nil {
-			t.Fatal("deletedObjectAs should fail")
-		}
-
-		if po != nil {
-			t.Errorf("po must be nil")
-		}
+		require.Error(t, err)
+		assert.Nil(t, po)
 	})
 
 	t.Run("Failed conversion via cache.DeletedFinalStateUnknown", func(t *testing.T) {
@@ -766,12 +722,7 @@ func TestDeletedObjectAs(t *testing.T) {
 		}
 
 		po, err := deletedObjectAs[*corev1.Pod](d)
-		if err == nil {
-			t.Fatal("deletedObjectAs should fail")
-		}
-
-		if po != nil {
-			t.Errorf("po must be nil")
-		}
+		require.Error(t, err)
+		assert.Nil(t, po)
 	})
 }

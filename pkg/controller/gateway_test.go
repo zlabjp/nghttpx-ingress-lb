@@ -3,14 +3,13 @@ package controller
 import (
 	"context"
 	"encoding/hex"
-	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -125,10 +124,7 @@ func TestSyncGatewayClass(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			err := f.lc.syncGatewayClass(context.Background(), namespacedName(&tt.gatewayClass))
-			if err != nil {
-				t.Fatalf("f.lc.syncGatewayClass: %v", err)
-			}
+			require.NoError(t, f.lc.syncGatewayClass(context.Background(), namespacedName(&tt.gatewayClass)))
 
 			if !tt.noUpdate {
 				f.expectUpdateStatusGatewayClassAction(&tt.gatewayClass)
@@ -139,13 +135,8 @@ func TestSyncGatewayClass(t *testing.T) {
 			if !tt.noUpdate {
 				updatedGC, err := f.gatewayClientset.GatewayV1().GatewayClasses().
 					Get(context.Background(), tt.gatewayClass.Name, metav1.GetOptions{})
-				if err != nil {
-					t.Fatalf("Unable to get GatewayClass: %v", err)
-				}
-
-				if got, want := updatedGC.Status.Conditions, tt.wantConditions; !equality.Semantic.DeepEqual(got, want) {
-					t.Errorf("updatedGC.Status.Conditions = %v, want %v", klog.Format(got), klog.Format(want))
-				}
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantConditions, updatedGC.Status.Conditions)
 			}
 		})
 	}
@@ -539,10 +530,7 @@ func TestSyncGateway(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			err := f.lc.syncGateway(context.Background(), namespacedName(&tt.gateway))
-			if err != nil {
-				t.Fatalf("f.lc.syncGateway: %v", err)
-			}
+			require.NoError(t, f.lc.syncGateway(context.Background(), namespacedName(&tt.gateway)))
 
 			if !tt.noUpdate {
 				f.expectUpdateStatusGatewayAction(&tt.gateway)
@@ -553,13 +541,8 @@ func TestSyncGateway(t *testing.T) {
 			if !tt.noUpdate {
 				updatedGtw, err := f.gatewayClientset.GatewayV1().Gateways(tt.gateway.Namespace).
 					Get(context.Background(), tt.gateway.Name, metav1.GetOptions{})
-				if err != nil {
-					t.Fatalf("Unable to get Gateway: %v", err)
-				}
-
-				if got, want := updatedGtw.Status.Conditions, tt.wantConditions; !equality.Semantic.DeepEqual(got, want) {
-					t.Errorf("updatedGtw.Status.Conditions = %v, want %v", klog.Format(got), klog.Format(want))
-				}
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantConditions, updatedGtw.Status.Conditions)
 			}
 		})
 	}
@@ -1418,10 +1401,7 @@ func TestSyncHTTPRoute(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			err := f.lc.syncHTTPRoute(context.Background(), namespacedName(&tt.httpRoute))
-			if err != nil {
-				t.Fatalf("f.lc.syncHTTPRoute: %v", err)
-			}
+			require.NoError(t, f.lc.syncHTTPRoute(context.Background(), namespacedName(&tt.httpRoute)))
 
 			if !tt.noUpdate {
 				f.expectUpdateStatusHTTPRouteAction(&tt.httpRoute)
@@ -1432,13 +1412,8 @@ func TestSyncHTTPRoute(t *testing.T) {
 			if !tt.noUpdate {
 				updatedHTTPRoute, err := f.gatewayClientset.GatewayV1().HTTPRoutes(tt.httpRoute.Namespace).
 					Get(context.Background(), tt.httpRoute.Name, metav1.GetOptions{})
-				if err != nil {
-					t.Fatalf("Unable to get HTTPRoute: %v", err)
-				}
-
-				if got, want := updatedHTTPRoute.Status.Parents, tt.wantParentStatus; !equality.Semantic.DeepEqual(got, want) {
-					t.Errorf("updatedHTTPRoute.Status.Parents = %v, want %v", klog.Format(got), klog.Format(want))
-				}
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantParentStatus, updatedHTTPRoute.Status.Parents)
 			}
 		})
 	}
@@ -1664,11 +1639,7 @@ func TestCreateGatewayUpstream(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			got := f.lbc.createGatewayUpstreams(context.Background(), tt.httpRoutes)
-
-			if got, want := got, tt.want; !equality.Semantic.DeepEqual(got, want) {
-				t.Errorf("got = %v, want %v", klog.Format(got), klog.Format(want))
-			}
+			assert.Equal(t, tt.want, f.lbc.createGatewayUpstreams(context.Background(), tt.httpRoutes))
 		})
 	}
 }
@@ -3145,17 +3116,9 @@ func TestHTTPRouteAccepted(t *testing.T) {
 
 			accepted, requireTLS, hostnames := f.lbc.httpRouteAccepted(context.Background(), &tt.httpRoute)
 
-			if got, want := accepted, tt.wantAccepted; got != want {
-				t.Errorf("accepted = %v, want %v", got, want)
-			}
-
-			if got, want := requireTLS, tt.wantRequireTLS; got != want {
-				t.Errorf("requireTLS = %v, want %v", got, want)
-			}
-
-			if got, want := hostnames, tt.wantHostnames; !slices.Equal(got, want) {
-				t.Errorf("hostnames = %v, want %v", got, want)
-			}
+			assert.Equal(t, tt.wantAccepted, accepted)
+			assert.Equal(t, tt.wantRequireTLS, requireTLS)
+			assert.Equal(t, tt.wantHostnames, hostnames)
 		})
 	}
 }
@@ -3556,9 +3519,7 @@ func TestCreateGatewayCredentials(t *testing.T) {
 
 			tlsCreds := f.lbc.createGatewayCredentials(context.Background(), tt.gateways)
 
-			if got, want := tlsCreds, tt.want; !equality.Semantic.DeepEqual(got, want) {
-				t.Errorf("tlsCreds = %v, want %v", klog.Format(got), klog.Format(want))
-			}
+			assert.Equal(t, tt.want, tlsCreds)
 		})
 	}
 }

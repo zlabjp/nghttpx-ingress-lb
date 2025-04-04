@@ -1,9 +1,10 @@
 package nghttpx
 
 import (
-	"bytes"
 	"encoding/hex"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestCreatePerPatternMrubyChecksumFile verifies CreatePerPatternMrubyChecksumFile.
@@ -16,15 +17,7 @@ func TestCreatePerPatternMrubyChecksumFile(t *testing.T) {
 
 	f := CreatePerPatternMrubyChecksumFile("/foo/bar", content)
 
-	if got, want := f.Path, "/foo/bar/mruby/"+string(checksum)+".rb"; got != want {
-		t.Errorf("f.path = %v, want %v", got, want)
-	}
-
-	if got, want := f.Content, content; !bytes.Equal(got, want) {
-		t.Errorf("f.Content = %q, want %q", got, want)
-	}
-
-	if got, want := hex.EncodeToString(f.Checksum), checksum; got != want {
-		t.Errorf("f.Checksum = %v, want %v", got, want)
-	}
+	assert.Equal(t, "/foo/bar/mruby/"+string(checksum)+".rb", f.Path)
+	assert.Equal(t, content, f.Content)
+	assert.Equal(t, checksum, hex.EncodeToString(f.Checksum))
 }

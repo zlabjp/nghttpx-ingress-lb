@@ -2,10 +2,10 @@ package controller
 
 import (
 	"context"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
@@ -89,13 +89,8 @@ svc:
 			})
 			bcm := ann.NewBackendConfigMapper(context.Background())
 
-			if !reflect.DeepEqual(bcm.DefaultBackendConfig, tt.wantDefaultConfig) {
-				t.Errorf("bcm.DefaultBackendConfig = %+v, want %+v", bcm.DefaultBackendConfig, tt.wantDefaultConfig)
-			}
-
-			if !reflect.DeepEqual(bcm.BackendConfigMapping, tt.wantConfig) {
-				t.Errorf("bcm.BackendConfigMapping = %+v, want %+v", bcm.BackendConfigMapping, tt.wantConfig)
-			}
+			assert.Equal(t, tt.wantDefaultConfig, bcm.DefaultBackendConfig)
+			assert.Equal(t, tt.wantConfig, bcm.BackendConfigMapping)
 		})
 	}
 }
@@ -165,13 +160,8 @@ example.com/alpha:
 			})
 			pcm := ann.NewPathConfigMapper(context.Background())
 
-			if !reflect.DeepEqual(pcm.DefaultPathConfig, tt.wantDefaultConfig) {
-				t.Errorf("pcm.DefaultPathConfig = %+v, want %+v", pcm.DefaultPathConfig, tt.wantDefaultConfig)
-			}
-
-			if !reflect.DeepEqual(pcm.PathConfigMapping, tt.wantConfig) {
-				t.Errorf("pcm.PathConfigMapping = %+v, want %+v", pcm.PathConfigMapping, tt.wantConfig)
-			}
+			assert.Equal(t, tt.wantDefaultConfig, pcm.DefaultPathConfig)
+			assert.Equal(t, tt.wantConfig, pcm.PathConfigMapping)
 		})
 	}
 }
