@@ -9,7 +9,6 @@
 package nghttpx
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -52,7 +51,7 @@ func TestFixupBackendConfig(t *testing.T) {
 			c := &BackendConfig{}
 			c.SetProto(tt.inProto)
 			c.SetWeight(tt.inWeight)
-			FixupBackendConfig(context.Background(), c)
+			FixupBackendConfig(t.Context(), c)
 
 			assert.Equal(t, tt.outProto, c.GetProto())
 			assert.Equal(t, tt.outWeight, c.GetWeight())
@@ -103,7 +102,7 @@ func TestApplyDefaultBackendConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			a := &BackendConfig{}
-			ApplyDefaultBackendConfig(context.Background(), a, tt.defaultConf)
+			ApplyDefaultBackendConfig(t.Context(), a, tt.defaultConf)
 
 			assert.Equal(t, tt.defaultConf.GetProto(), a.GetProto())
 			assert.Equal(t, tt.defaultConf.GetTLS(), a.GetTLS())
@@ -156,7 +155,7 @@ func TestFixupPathConfig(t *testing.T) {
 			c.SetAffinity(tt.inAffinity)
 			c.SetAffinityCookieSecure(tt.inAffinityCookieSecure)
 			c.SetAffinityCookieStickiness(tt.inAffinityCookieStickiness)
-			FixupPathConfig(context.Background(), c)
+			FixupPathConfig(t.Context(), c)
 
 			assert.Equal(t, tt.outAffinity, c.GetAffinity())
 			assert.Equal(t, tt.outAffinityCookieSecure, c.GetAffinityCookieSecure())
@@ -256,7 +255,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			a := &PathConfig{}
-			ApplyDefaultPathConfig(context.Background(), a, tt.defaultConf)
+			ApplyDefaultPathConfig(t.Context(), a, tt.defaultConf)
 
 			assert.Equal(t, tt.defaultConf.GetMruby(), a.GetMruby())
 			assert.Equal(t, tt.defaultConf.GetAffinity(), a.GetAffinity())

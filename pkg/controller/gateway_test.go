@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"encoding/hex"
 	"testing"
 
@@ -124,7 +123,7 @@ func TestSyncGatewayClass(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			require.NoError(t, f.lc.syncGatewayClass(context.Background(), namespacedName(&tt.gatewayClass)))
+			require.NoError(t, f.lc.syncGatewayClass(t.Context(), namespacedName(&tt.gatewayClass)))
 
 			if !tt.noUpdate {
 				f.expectUpdateStatusGatewayClassAction(&tt.gatewayClass)
@@ -134,7 +133,7 @@ func TestSyncGatewayClass(t *testing.T) {
 
 			if !tt.noUpdate {
 				updatedGC, err := f.gatewayClientset.GatewayV1().GatewayClasses().
-					Get(context.Background(), tt.gatewayClass.Name, metav1.GetOptions{})
+					Get(t.Context(), tt.gatewayClass.Name, metav1.GetOptions{})
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantConditions, updatedGC.Status.Conditions)
 			}
@@ -530,7 +529,7 @@ func TestSyncGateway(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			require.NoError(t, f.lc.syncGateway(context.Background(), namespacedName(&tt.gateway)))
+			require.NoError(t, f.lc.syncGateway(t.Context(), namespacedName(&tt.gateway)))
 
 			if !tt.noUpdate {
 				f.expectUpdateStatusGatewayAction(&tt.gateway)
@@ -540,7 +539,7 @@ func TestSyncGateway(t *testing.T) {
 
 			if !tt.noUpdate {
 				updatedGtw, err := f.gatewayClientset.GatewayV1().Gateways(tt.gateway.Namespace).
-					Get(context.Background(), tt.gateway.Name, metav1.GetOptions{})
+					Get(t.Context(), tt.gateway.Name, metav1.GetOptions{})
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantConditions, updatedGtw.Status.Conditions)
 			}
@@ -1401,7 +1400,7 @@ func TestSyncHTTPRoute(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			require.NoError(t, f.lc.syncHTTPRoute(context.Background(), namespacedName(&tt.httpRoute)))
+			require.NoError(t, f.lc.syncHTTPRoute(t.Context(), namespacedName(&tt.httpRoute)))
 
 			if !tt.noUpdate {
 				f.expectUpdateStatusHTTPRouteAction(&tt.httpRoute)
@@ -1411,7 +1410,7 @@ func TestSyncHTTPRoute(t *testing.T) {
 
 			if !tt.noUpdate {
 				updatedHTTPRoute, err := f.gatewayClientset.GatewayV1().HTTPRoutes(tt.httpRoute.Namespace).
-					Get(context.Background(), tt.httpRoute.Name, metav1.GetOptions{})
+					Get(t.Context(), tt.httpRoute.Name, metav1.GetOptions{})
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantParentStatus, updatedHTTPRoute.Status.Parents)
 			}
@@ -1639,7 +1638,7 @@ func TestCreateGatewayUpstream(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			assert.Equal(t, tt.want, f.lbc.createGatewayUpstreams(context.Background(), tt.httpRoutes))
+			assert.Equal(t, tt.want, f.lbc.createGatewayUpstreams(t.Context(), tt.httpRoutes))
 		})
 	}
 }
@@ -3114,7 +3113,7 @@ func TestHTTPRouteAccepted(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			accepted, requireTLS, hostnames := f.lbc.httpRouteAccepted(context.Background(), &tt.httpRoute)
+			accepted, requireTLS, hostnames := f.lbc.httpRouteAccepted(t.Context(), &tt.httpRoute)
 
 			assert.Equal(t, tt.wantAccepted, accepted)
 			assert.Equal(t, tt.wantRequireTLS, requireTLS)
@@ -3517,7 +3516,7 @@ func TestCreateGatewayCredentials(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			tlsCreds := f.lbc.createGatewayCredentials(context.Background(), tt.gateways)
+			tlsCreds := f.lbc.createGatewayCredentials(t.Context(), tt.gateways)
 
 			assert.Equal(t, tt.want, tlsCreds)
 		})

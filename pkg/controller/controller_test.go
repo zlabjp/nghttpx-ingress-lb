@@ -1331,7 +1331,7 @@ func TestValidateIngressClass(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			assert.Equal(t, tt.want, f.lbc.validateIngressClass(context.Background(), tt.ing))
+			assert.Equal(t, tt.want, f.lbc.validateIngressClass(t.Context(), tt.ing))
 		})
 	}
 }
@@ -1504,7 +1504,7 @@ func TestGetLoadBalancerIngressSelector(t *testing.T) {
 			f.preparePod(po1)
 			f.setupStore()
 
-			lbIngs, err := f.lc.getLoadBalancerIngressSelector(context.Background(), labels.ValidatedSetSelector(defaultIngPodLables))
+			lbIngs, err := f.lc.getLoadBalancerIngressSelector(t.Context(), labels.ValidatedSetSelector(defaultIngPodLables))
 
 			require.NoError(t, err)
 
@@ -1576,12 +1576,12 @@ func TestSyncIngress(t *testing.T) {
 			f.prepare()
 			f.setupStore()
 
-			require.NoError(t, f.lc.syncIngress(context.Background(), namespacedName(tt.ingress)))
+			require.NoError(t, f.lc.syncIngress(t.Context(), namespacedName(tt.ingress)))
 
 			f.verifyActions()
 
 			updatedIng, err := f.clientset.NetworkingV1().Ingresses(tt.ingress.Namespace).
-				Get(context.Background(), tt.ingress.Name, metav1.GetOptions{})
+				Get(t.Context(), tt.ingress.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantLoadBalancerIngresses, updatedIng.Status.LoadBalancer.Ingress)
 		})
@@ -1854,9 +1854,9 @@ func TestSyncSecretQUIC(t *testing.T) {
 
 			f.lbc.nghttpxSecret = defaultNghttpxSecret
 
-			require.NoError(t, f.lc.syncSecret(context.Background(), defaultNghttpxSecret, now))
+			require.NoError(t, f.lc.syncSecret(t.Context(), defaultNghttpxSecret, now))
 
-			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultNghttpxSecret.Namespace).Get(context.Background(),
+			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultNghttpxSecret.Namespace).Get(t.Context(),
 				defaultNghttpxSecret.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 
@@ -1964,9 +1964,9 @@ func TestSyncSecretTLSTicketKey(t *testing.T) {
 
 			f.lbc.nghttpxSecret = defaultNghttpxSecret
 
-			require.NoError(t, f.lc.syncSecret(context.Background(), defaultNghttpxSecret, now))
+			require.NoError(t, f.lc.syncSecret(t.Context(), defaultNghttpxSecret, now))
 
-			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultNghttpxSecret.Namespace).Get(context.Background(),
+			updatedSecret, err := f.clientset.CoreV1().Secrets(defaultNghttpxSecret.Namespace).Get(t.Context(),
 				defaultNghttpxSecret.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 
@@ -2457,7 +2457,7 @@ func TestRemoveUpstreamsWithInconsistentBackendParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			assert.Equal(t, tt.want, removeUpstreamsWithInconsistentBackendParams(context.Background(), tt.upstreams))
+			assert.Equal(t, tt.want, removeUpstreamsWithInconsistentBackendParams(t.Context(), tt.upstreams))
 		})
 	}
 }
@@ -2584,7 +2584,7 @@ func TestCreateTLSCredFromSecret(t *testing.T) {
 
 	s := newTLSSecret("ns", "cert", []byte(tlsCrt), []byte(tlsKey))
 
-	_, err := f.lbc.createTLSCredFromSecret(context.Background(), s)
+	_, err := f.lbc.createTLSCredFromSecret(t.Context(), s)
 	require.NoError(t, err)
 
 	cacheKey := createCertCacheKey(s)
@@ -2599,7 +2599,7 @@ func TestCreateTLSCredFromSecret(t *testing.T) {
 	assert.Equal(t, s.Data[corev1.TLSPrivateKeyKey], ent.key)
 
 	// Should use cache.
-	_, err = f.lbc.createTLSCredFromSecret(context.Background(), s)
+	_, err = f.lbc.createTLSCredFromSecret(t.Context(), s)
 	require.NoError(t, err)
 	assert.Equal(t, ent, f.lbc.certCache[cacheKey])
 }

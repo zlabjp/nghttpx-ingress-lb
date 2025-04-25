@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -87,7 +86,7 @@ svc:
 				defaultBackendConfigKey: tt.annotationDefaultConfig,
 				backendConfigKey:        tt.annotationConfig,
 			})
-			bcm := ann.NewBackendConfigMapper(context.Background())
+			bcm := ann.NewBackendConfigMapper(t.Context())
 
 			assert.Equal(t, tt.wantDefaultConfig, bcm.DefaultBackendConfig)
 			assert.Equal(t, tt.wantConfig, bcm.BackendConfigMapping)
@@ -158,7 +157,7 @@ example.com/alpha:
 				defaultPathConfigKey: tt.annotationDefaultConfig,
 				pathConfigKey:        tt.annotationConfig,
 			})
-			pcm := ann.NewPathConfigMapper(context.Background())
+			pcm := ann.NewPathConfigMapper(t.Context())
 
 			assert.Equal(t, tt.wantDefaultConfig, pcm.DefaultPathConfig)
 			assert.Equal(t, tt.wantConfig, pcm.PathConfigMapping)

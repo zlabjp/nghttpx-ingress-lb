@@ -25,7 +25,6 @@ limitations under the License.
 package nghttpx
 
 import (
-	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
@@ -232,7 +231,7 @@ func TestVerifyCertificate(t *testing.T) {
 			require.NoError(t, err)
 
 			var errMsg string
-			if err := VerifyCertificate(context.Background(), cert, time.Now()); err != nil {
+			if err := VerifyCertificate(t.Context(), cert, time.Now()); err != nil {
 				errMsg = err.Error()
 			}
 
