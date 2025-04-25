@@ -1,7 +1,6 @@
 package nghttpx
 
 import (
-	"context"
 	"encoding/hex"
 	"testing"
 	"time"
@@ -817,7 +816,7 @@ backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
 			lb := &LoadBalancer{}
 			lb.loadTemplate()
 
-			mainConfig, backendConfig, err := lb.generateCfg(context.Background(), tt.ingConfig)
+			mainConfig, backendConfig, err := lb.generateCfg(t.Context(), tt.ingConfig)
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.wantMainConfig, string(mainConfig))

@@ -1,7 +1,6 @@
 package nghttpx
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,7 +40,7 @@ func TestDeleteAssetFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			require.NoError(t, deleteAssetFiles(context.Background(), tempDir, tt.t, tt.threshold))
+			require.NoError(t, deleteAssetFiles(t.Context(), tempDir, tt.t, tt.threshold))
 
 			if tt.wantDelete {
 				for _, n := range files {
