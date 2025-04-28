@@ -139,7 +139,7 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 		log.Info("Change in configuration detected. Reloading")
 
 		if err := lb.cmd.Process.Signal(syscall.SIGHUP); err != nil {
-			return false, fmt.Errorf("unable to to send signal to nghttpx process (PID %v): %w", lb.cmd.Process.Pid, err)
+			return false, fmt.Errorf("unable to send signal to nghttpx process (PID %v): %w", lb.cmd.Process.Pid, err)
 		}
 
 		if err := lb.waitUntilConfigRevisionChanges(ctx, oldConfRev); err != nil {
