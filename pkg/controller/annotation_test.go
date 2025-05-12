@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
 )
@@ -97,7 +98,7 @@ svc:
 // TestIngressAnnotationNewPathConfigMapper verifies ingressAnnotation.NewPathConfigMapper.
 func TestIngresssAnnotationNewPathConfigMapper(t *testing.T) {
 	d120 := metav1.Duration{Duration: 120 * time.Second}
-	rb := "rb"
+
 	tests := []struct {
 		desc                    string
 		annotationDefaultConfig string
@@ -119,12 +120,12 @@ func TestIngresssAnnotationNewPathConfigMapper(t *testing.T) {
 			annotationDefaultConfig: `{"mruby": "rb"}`,
 			annotationConfig:        `{"example.com/alpha": {"readTimeout": "120s"}}`,
 			wantDefaultConfig: &nghttpx.PathConfig{
-				Mruby: &rb,
+				Mruby: ptr.To("rb"),
 			},
 			wantConfig: nghttpx.PathConfigMapping{
 				"example.com/alpha": {
 					ReadTimeout: &d120,
-					Mruby:       &rb,
+					Mruby:       ptr.To("rb"),
 				},
 			},
 		},
