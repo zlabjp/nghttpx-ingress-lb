@@ -47,6 +47,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 
@@ -361,10 +362,6 @@ func (flb *fakeLoadBalancer) defaultCheckAndReload(ingConfig *nghttpx.IngressCon
 	return true, nil
 }
 
-func toPtr[T any](v T) *T {
-	return &v
-}
-
 // newEmptyConfigMap returns empty ConfigMap.
 func newEmptyConfigMap() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
@@ -409,10 +406,10 @@ func newDefaultBackend() (*corev1.Service, []*discoveryv1.EndpointSlice) {
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: toPtr(int32(8081)),
+					Port: ptr.To(int32(8081)),
 				},
 				{
-					Port: toPtr(int32(8080)),
+					Port: ptr.To(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -439,10 +436,10 @@ func newDefaultBackend() (*corev1.Service, []*discoveryv1.EndpointSlice) {
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: toPtr(int32(8081)),
+					Port: ptr.To(int32(8081)),
 				},
 				{
-					Port: toPtr(int32(8080)),
+					Port: ptr.To(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -467,10 +464,10 @@ func newDefaultBackend() (*corev1.Service, []*discoveryv1.EndpointSlice) {
 			AddressType: "FQDN",
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: toPtr(int32(8081)),
+					Port: ptr.To(int32(8081)),
 				},
 				{
-					Port: toPtr(int32(8080)),
+					Port: ptr.To(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -526,10 +523,10 @@ func newDefaultBackendWithoutSelectors() (*corev1.Service, []*discoveryv1.Endpoi
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: toPtr(int32(8081)),
+					Port: ptr.To(int32(8081)),
 				},
 				{
-					Port: toPtr(int32(8080)),
+					Port: ptr.To(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -551,10 +548,10 @@ func newDefaultBackendWithoutSelectors() (*corev1.Service, []*discoveryv1.Endpoi
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: toPtr(int32(8081)),
+					Port: ptr.To(int32(8081)),
 				},
 				{
-					Port: toPtr(int32(8080)),
+					Port: ptr.To(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -592,8 +589,6 @@ func newBackend(name string, addrs []string) (*corev1.Service, *discoveryv1.Endp
 		},
 	}
 
-	proto := corev1.ProtocolTCP
-
 	es := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name + "-aaaa",
@@ -605,12 +600,12 @@ func newBackend(name string, addrs []string) (*corev1.Service, *discoveryv1.Endp
 		AddressType: discoveryv1.AddressTypeIPv4,
 		Ports: []discoveryv1.EndpointPort{
 			{
-				Protocol: &proto,
-				Port:     toPtr(int32(81)),
+				Protocol: ptr.To(corev1.ProtocolTCP),
+				Port:     ptr.To(int32(81)),
 			},
 			{
-				Protocol: &proto,
-				Port:     toPtr(int32(80)),
+				Protocol: ptr.To(corev1.ProtocolTCP),
+				Port:     ptr.To(int32(80)),
 			},
 		},
 	}
@@ -648,8 +643,6 @@ func newBackendWithoutSelectors(name string, addrs []string) (*corev1.Service, *
 		},
 	}
 
-	proto := corev1.ProtocolTCP
-
 	es := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name + "-aaaa",
@@ -661,12 +654,12 @@ func newBackendWithoutSelectors(name string, addrs []string) (*corev1.Service, *
 		AddressType: discoveryv1.AddressTypeIPv4,
 		Ports: []discoveryv1.EndpointPort{
 			{
-				Protocol: &proto,
-				Port:     toPtr(int32(81)),
+				Protocol: ptr.To(corev1.ProtocolTCP),
+				Port:     ptr.To(int32(81)),
 			},
 			{
-				Protocol: &proto,
-				Port:     toPtr(int32(80)),
+				Protocol: ptr.To(corev1.ProtocolTCP),
+				Port:     ptr.To(int32(80)),
 			},
 		},
 	}
@@ -778,7 +771,7 @@ func (b *ingressBuilder) WithTLS(tlsSecret string) *ingressBuilder {
 }
 
 func (b *ingressBuilder) WithIngressClass(ingressClass string) *ingressBuilder {
-	b.Spec.IngressClassName = toPtr(ingressClass)
+	b.Spec.IngressClassName = ptr.To(ingressClass)
 
 	return b
 }
