@@ -37,7 +37,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/pmezard/go-difflib/difflib"
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/crypto/hkdf"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -84,28 +84,10 @@ func needsReload(ctx context.Context, filename string, newCfg []byte) (bool, err
 	}
 
 	if log := log.V(2); log.Enabled() {
-		dData, err := diff(oldCfg, newCfg)
-		if err != nil {
-			log.Error(err, "Error while computing diff")
-			return true, nil
-		}
-
-		log.Info("nghttpx configuration diff", "path", filename, "diff", dData)
+		log.Info("nghttpx configuration diff", "path", filename, "diff", cmp.Diff(oldCfg, newCfg))
 	}
 
 	return true, nil
-}
-
-func diff(b1, b2 []byte) (string, error) {
-	d := difflib.UnifiedDiff{
-		A:        difflib.SplitLines(string(b1)),
-		B:        difflib.SplitLines(string(b2)),
-		FromFile: "current",
-		ToFile:   "new",
-		Context:  3,
-	}
-
-	return difflib.GetUnifiedDiffString(d)
 }
 
 // FixupBackendConfig validates config, and fixes the invalid values inside it.
