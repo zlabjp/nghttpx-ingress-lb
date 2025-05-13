@@ -733,18 +733,7 @@ TBD
 
 Using the `--v` flag it is possible to increase the level of logging.
 In particular:
-- `--v=2` shows details using `diff` about the changes in the configuration in nghttpx
-
-```
-I0323 04:39:16.552830       8 utils.go:90] nghttpx configuration diff /etc/nghttpx/nghttpx.conf
---- current
-+++ new
-@@ -1,7 +1,41 @@
--# A very simple nghttpx configuration file that forces nghttpx to start.
-+accesslog-file=/dev/stdout
-+include=/etc/nghttpx/nghttpx-backend.conf
-```
-
+- `--v=2` shows the differences between the previous and the current nghttpx configuration.
 - `--v=3` shows details about the service, Ingress rule, endpoint changes and it dumps the nghttpx configuration in JSON format
 
 ## Limitations
