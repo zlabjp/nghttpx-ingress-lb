@@ -1785,9 +1785,9 @@ func (lbc *LoadBalancerController) ShutdownCommenced() bool {
 	return lbc.shutdown
 }
 
-type legacyEventRecorderEventf func(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{})
+type legacyEventRecorderEventf func(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...any)
 
-func (r legacyEventRecorderEventf) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
+func (r legacyEventRecorderEventf) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...any) {
 	r(object, nil, eventtype, reason, reason, messageFmt, args...)
 }
 
