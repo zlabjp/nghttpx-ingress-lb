@@ -144,7 +144,7 @@ func (lb *LoadBalancer) writeDefaultNghttpxConfig(nghttpxConfDir string, nghttpx
 
 	t := template.Must(template.New("default.tmpl").Parse(defaultTmpl))
 
-	if err := t.Execute(&buf, map[string]interface{}{
+	if err := t.Execute(&buf, map[string]any{
 		"HealthPort": nghttpxHealthPort,
 		"APIPort":    nghttpxAPIPort,
 	}); err != nil {

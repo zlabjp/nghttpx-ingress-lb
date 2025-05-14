@@ -290,9 +290,9 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 
 // apiResult is an object to store the result of nghttpx API.
 type apiResult struct {
-	Status string                 `json:"status,omitempty"`
-	Code   int32                  `json:"code,omitempty"`
-	Data   map[string]interface{} `json:"data,omitempty"`
+	Status string         `json:"status,omitempty"`
+	Code   int32          `json:"code,omitempty"`
+	Data   map[string]any `json:"data,omitempty"`
 }
 
 // getNghttpxConfigRevision returns the current nghttpx configRevision through configrevision API call.

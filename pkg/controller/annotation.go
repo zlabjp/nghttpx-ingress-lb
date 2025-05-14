@@ -141,7 +141,7 @@ func normalizePathKey(src map[string]*nghttpx.PathConfig) map[string]*nghttpx.Pa
 }
 
 // unmarshal deserializes data into dest.  This function first tries YAML and then JSON.
-func unmarshal(ctx context.Context, data []byte, dest interface{}) error {
+func unmarshal(ctx context.Context, data []byte, dest any) error {
 	log := klog.FromContext(ctx)
 
 	err := yaml.Unmarshal(data, dest)
