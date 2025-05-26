@@ -176,10 +176,12 @@ func main() {
 	rootCmd.Flags().Int32Var(&nghttpxHTTPSPort, "nghttpx-https-port", nghttpxHTTPSPort, `Port to listen to for HTTPS (TLS) requests.  Specifying 0 disables HTTPS port.`)
 
 	rootCmd.Flags().BoolVar(&fetchOCSPRespFromSecret, "fetch-ocsp-resp-from-secret", fetchOCSPRespFromSecret, `Fetch OCSP response from TLS secret.`)
+	utilruntime.Must(rootCmd.Flags().MarkDeprecated("fetch-ocsp-resp-from-secret", "has been deprecated and has no effect"))
 
 	rootCmd.Flags().BoolVar(&proxyProto, "proxy-proto", proxyProto, `Enable proxyproto for all public-facing frontends (api and health frontends are ignored).`)
 
 	rootCmd.Flags().StringVar(&ocspRespKey, "ocsp-resp-key", ocspRespKey, `A key for OCSP response in TLS secret.`)
+	utilruntime.Must(rootCmd.Flags().MarkDeprecated("ocsp-resp-key", "has been deprecated and has no effect"))
 
 	rootCmd.Flags().StringVar(&publishSvc, "publish-service", publishSvc,
 		`Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
@@ -413,8 +415,6 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		DefaultTLSSecret:                        defaultTLSSecretKey,
 		IngressClassController:                  ingressClassController,
 		AllowInternalIP:                         allowInternalIP,
-		OCSPRespKey:                             ocspRespKey,
-		FetchOCSPRespFromSecret:                 fetchOCSPRespFromSecret,
 		ProxyProto:                              proxyProto,
 		PublishService:                          publishSvcKey,
 		ReloadRate:                              reloadRate,

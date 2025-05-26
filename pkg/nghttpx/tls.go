@@ -63,13 +63,8 @@ func CreateTLSCertPath(dir, name string) string {
 	return filepath.Join(dir, tlsDir, name+".crt")
 }
 
-// CreateTLSOCSPRespPath returns TLS OCSP response file path.
-func CreateTLSOCSPRespPath(dir, name string) string {
-	return filepath.Join(dir, tlsDir, name+".ocsp-resp")
-}
-
-// CreateTLSCred creates TLSCred for given private key and certificate.  ocspResp is optional, and could be nil.
-func CreateTLSCred(dir, name string, cert, key, ocspResp []byte) *TLSCred {
+// CreateTLSCred creates TLSCred for given private key and certificate.
+func CreateTLSCred(dir, name string, cert, key []byte) *TLSCred {
 	keyChecksum := Checksum(key)
 	certChecksum := Checksum(cert)
 
@@ -85,16 +80,6 @@ func CreateTLSCred(dir, name string, cert, key, ocspResp []byte) *TLSCred {
 			Content:  cert,
 			Checksum: certChecksum,
 		},
-	}
-
-	if len(ocspResp) > 0 {
-		ocspRespChecksum := Checksum(ocspResp)
-
-		c.OCSPResp = &ChecksumFile{
-			Path:     CreateTLSOCSPRespPath(dir, hex.EncodeToString(ocspRespChecksum)),
-			Content:  ocspResp,
-			Checksum: ocspRespChecksum,
-		}
 	}
 
 	return c
@@ -121,7 +106,7 @@ func writeTLSKeyCert(ingConfig *IngressConfig) error {
 	return nil
 }
 
-// writeTLSCred writes TLS private key, certificate, and optionally OCSP response to tlsCred in their files.
+// writeTLSCred writes the TLS private key and certificate to the paths specified in tlsCred.
 func writeTLSCred(tlsCred *TLSCred) error {
 	if err := WriteFile(tlsCred.Key.Path, tlsCred.Key.Content); err != nil {
 		return fmt.Errorf("unable to write TLS private key: %w", err)
@@ -131,16 +116,10 @@ func writeTLSCred(tlsCred *TLSCred) error {
 		return fmt.Errorf("unable to write TLS certificate: %w", err)
 	}
 
-	if tlsCred.OCSPResp != nil {
-		if err := WriteFile(tlsCred.OCSPResp.Path, tlsCred.OCSPResp.Content); err != nil {
-			return fmt.Errorf("unable to write TLS OCSP response: %w", err)
-		}
-	}
-
 	return nil
 }
 
-// TLSCredShareSamePaths returns if a and b share the same Key.Path, Cert.path, and OCSPResp.Path.
+// TLSCredShareSamePaths returns if a and b share the same Key.Path and Cert.Path.
 func TLSCredShareSamePaths(a, b *TLSCred) bool {
 	return TLSCredCompare(a, b) == 0
 }
@@ -149,17 +128,16 @@ func TLSCredCompare(a, b *TLSCred) int {
 	return cmp.Or(
 		cmp.Compare(a.Key.Path, b.Key.Path),
 		cmp.Compare(a.Cert.Path, b.Cert.Path),
-		cmp.Compare(a.OCSPResp.GetPath(), b.OCSPResp.GetPath()),
 	)
 }
 
-// SortTLSCred sorts creds in ascending order of Key.Path, Cert.Path, and OCSPResp.Path.
+// SortTLSCred sorts creds in ascending order of Key.Path and Cert.Path.
 func SortTLSCred(creds []*TLSCred) {
 	slices.SortFunc(creds, TLSCredCompare)
 }
 
-// RemoveDuplicateTLSCred removes duplicates from creds, which share the same Key.Path, Cert.Path, and OCSPResp.Path.  It assumes that creds
-// are sorted by SortTLSCred.
+// RemoveDuplicateTLSCred removes duplicates from creds, which share the same Key.Path and Cert.Path.  It assumes that creds are sorted by
+// SortTLSCred.
 func RemoveDuplicateTLSCred(creds []*TLSCred) []*TLSCred {
 	return slices.CompactFunc(creds, TLSCredShareSamePaths)
 }

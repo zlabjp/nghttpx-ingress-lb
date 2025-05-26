@@ -157,8 +157,6 @@ type LoadBalancerController struct {
 	watchNamespace                          string
 	ingressClassController                  string
 	allowInternalIP                         bool
-	ocspRespKey                             string
-	fetchOCSPRespFromSecret                 bool
 	proxyProto                              bool
 	noDefaultBackendOverride                bool
 	deferredShutdownPeriod                  time.Duration
@@ -217,10 +215,8 @@ type Config struct {
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret *types.NamespacedName
 	// IngressClassController is the name of IngressClass controller for this controller.
-	IngressClassController  string
-	AllowInternalIP         bool
-	OCSPRespKey             string
-	FetchOCSPRespFromSecret bool
+	IngressClassController string
+	AllowInternalIP        bool
 	// ProxyProto toggles the use of PROXY protocol for all public-facing frontends.
 	ProxyProto bool
 	// PublishService is a namespace/name of Service whose addresses are written in Ingress resource instead of addresses of Ingress
@@ -294,8 +290,6 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		watchNamespace:                          config.WatchNamespace,
 		ingressClassController:                  config.IngressClassController,
 		allowInternalIP:                         config.AllowInternalIP,
-		ocspRespKey:                             config.OCSPRespKey,
-		fetchOCSPRespFromSecret:                 config.FetchOCSPRespFromSecret,
 		proxyProto:                              config.ProxyProto,
 		publishService:                          config.PublishService,
 		noDefaultBackendOverride:                config.NoDefaultBackendOverride,
@@ -860,7 +854,6 @@ func (lbc *LoadBalancerController) createConfig(ctx context.Context) (*nghttpx.I
 		Workers:                          lbc.nghttpxWorkers,
 		WorkerProcessGraceShutdownPeriod: lbc.nghttpxWorkerProcessGraceShutdownPeriod,
 		MaxWorkerProcesses:               lbc.nghttpxMaxWorkerProcesses,
-		FetchOCSPRespFromSecret:          lbc.fetchOCSPRespFromSecret,
 		ProxyProto:                       lbc.proxyProto,
 		HTTP3:                            lbc.http3,
 		ShareTLSTicketKey:                lbc.shareTLSTicketKey,
@@ -1462,8 +1455,7 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(ctx context.Context, 
 		return nil, err
 	}
 
-	// OCSP response in TLS secret is optional feature.
-	return nghttpx.CreateTLSCred(lbc.nghttpxConfDir, strings.Join([]string{secret.Namespace, secret.Name}, "/"), cert, key, secret.Data[lbc.ocspRespKey]), nil
+	return nghttpx.CreateTLSCred(lbc.nghttpxConfDir, strings.Join([]string{secret.Namespace, secret.Name}, "/"), cert, key), nil
 }
 
 type certificateCacheEntry struct {

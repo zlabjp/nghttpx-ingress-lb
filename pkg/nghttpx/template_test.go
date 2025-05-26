@@ -67,8 +67,6 @@ frontend=127.0.0.1,0;healthmon;no-tls
 workers=8
 worker-process-grace-shutdown-period=30
 max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -118,8 +116,6 @@ frontend=127.0.0.1,0;healthmon;no-tls
 workers=8
 worker-process-grace-shutdown-period=30
 max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -185,8 +181,6 @@ frontend=127.0.0.1,0;healthmon;no-tls
 workers=8
 worker-process-grace-shutdown-period=30
 max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -280,8 +274,6 @@ frontend=127.0.0.1,0;healthmon;no-tls
 workers=8
 worker-process-grace-shutdown-period=30
 max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -336,8 +328,6 @@ max-worker-processes=111
 # ExtraConfig
 log-level=INFO
 foo=bar
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -395,60 +385,6 @@ max-worker-processes=111
 # mruby file
 # checksum: a3b3c8e58869776c6ab92b545454eea9e8db3b460bc1b6b9684323e3bb70a005
 mruby-file=/mruby.rb
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
-`,
-			wantBackendConfig: `# foo
-backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
-backend=192.168.0.2,80;example.com/;proto=h2;affinity=none
-`,
-		},
-		{
-			desc: "With FetchOCSPRespFromSecret",
-			ingConfig: &IngressConfig{
-				HTTPPort:                80,
-				HTTPSPort:               443,
-				FetchOCSPRespFromSecret: true,
-				Upstreams: []*Upstream{
-					{
-						Name:     "foo",
-						Host:     "example.com",
-						Path:     "/",
-						Affinity: AffinityNone,
-						Backends: []Backend{
-							{
-								Address:  "192.168.0.1",
-								Port:     "8080",
-								Protocol: ProtocolH2,
-							},
-							{
-								Address:  "192.168.0.2",
-								Port:     "80",
-								Protocol: ProtocolH2,
-							},
-						},
-					},
-				},
-				Workers:                          8,
-				WorkerProcessGraceShutdownPeriod: 30 * time.Second,
-				MaxWorkerProcesses:               111,
-			},
-			wantMainConfig: `accesslog-file=/dev/stdout
-include=/nghttpx-backend.conf
-# HTTP port
-frontend=*,80;no-tls
-# API endpoint
-frontend=127.0.0.1,0;api;no-tls
-# just listen 443 to gain port 443, so that we can always bind that address.
-frontend=*,443;no-tls
-# for health check
-frontend=127.0.0.1,0;healthmon;no-tls
-# default configuration by controller
-workers=8
-worker-process-grace-shutdown-period=30
-max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/cat-ocsp-resp
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -528,8 +464,6 @@ frontend=127.0.0.1,0;healthmon;no-tls
 workers=8
 worker-process-grace-shutdown-period=30
 max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -602,8 +536,6 @@ frontend=127.0.0.1,0;healthmon;no-tls
 workers=8
 worker-process-grace-shutdown-period=30
 max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -652,8 +584,6 @@ frontend=127.0.0.1,0;healthmon;no-tls
 workers=8
 worker-process-grace-shutdown-period=30
 max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;affinity=none
@@ -717,8 +647,6 @@ frontend=127.0.0.1,0;healthmon;no-tls
 workers=8
 worker-process-grace-shutdown-period=30
 max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 `,
 			wantBackendConfig: `# foo
 backend=192.168.0.1,8080;example.com/;proto=h2;tls;sni=foo.example.com;dns;group=group1;group-weight=100;affinity=cookie;affinity-cookie-name=sticky;affinity-cookie-path=/;affinity-cookie-secure=auto;affinity-cookie-stickiness=strict;redirect-if-not-tls;mruby=/mruby.rb;read-timeout=180;write-timeout=300;dnf
@@ -799,8 +727,6 @@ frontend=127.0.0.1,0;healthmon;no-tls
 workers=8
 worker-process-grace-shutdown-period=30
 max-worker-processes=111
-# OCSP
-fetch-ocsp-response-file=/fetch-ocsp-response
 # TLS ticket key
 tls-ticket-key-cipher=aes-128-cbc
 `,

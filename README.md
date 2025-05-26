@@ -152,28 +152,6 @@ HTTP, those requests are redirected to HTTPS URI.  If
 redirected to https URI.  This behaviour is configurable using
 [path-config](#ingresszlabcojppath-config-annotation) annotation.
 
-## TLS OCSP stapling
-
-By default, nghttpx performs OCSP request to OCSP responder for each
-certificate.  This requires that the controller pod is allowed to make
-outbound connections to the server.  If there are several Ingress
-controllers, this method is not efficient since each controller
-performs OCSP request.
-
-With `--fetch-ocsp-resp-from-secret` flag, the controller fetches OCSP
-response from TLS Secret described above.  Although we have to store
-OCSP response to these Secrets in a separate step, and update
-regularly, they are shared among all controllers, and therefore it is
-efficient for large deployment.
-
-Note that currently the controller has no facility to store and update
-OCSP response to TLS Secret.  The controller just fetches OCSP
-response from TLS Secret.
-
-The key for OCSP response in TLS Secret is `tls.ocsp-resp` by default.
-It can be changed by `--ocsp-resp-key` flag.  The value of OCSP
-response in TLS Secret must be DER encoded.
-
 ## Sharing TLS ticket keys
 
 By default, each nghttpx encrypts TLS ticket by its own key.  This

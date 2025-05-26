@@ -67,8 +67,6 @@ type IngressConfig struct {
 	HTTPPort int32
 	// HTTPSPort is the port to listen to for HTTPS (TLS) request.
 	HTTPSPort int32
-	// FetchOCSPRespFromSecret is true if OCSP response is fetched from TLS secret.
-	FetchOCSPRespFromSecret bool
 	// ProxyProto toggles the use of PROXY protocol for all public-facing frontends.
 	ProxyProto bool
 	// HTTP3 enables HTTP/3.
@@ -161,13 +159,11 @@ type Backend struct {
 	Weight   uint32
 }
 
-// TLSCred stores TLS server private key, certificate file path, and optionally OCSP response.  OCSP response must be DER encoded byte
-// string.
+// TLSCred stores TLS server private key and certificate file path.
 type TLSCred struct {
-	Name     string
-	Key      PrivateChecksumFile
-	Cert     ChecksumFile
-	OCSPResp *ChecksumFile
+	Name string
+	Key  PrivateChecksumFile
+	Cert ChecksumFile
 }
 
 // NewDefaultBackend return a Backend to be use as default server that returns 503.
