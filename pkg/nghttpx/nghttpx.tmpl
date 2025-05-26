@@ -49,12 +49,6 @@ max-worker-processes={{ .MaxWorkerProcesses }}
 # checksum: {{ encodeHex .MrubyFile.Checksum }}
 mruby-file={{ .MrubyFile.Path }}
 {{ end -}}
-# OCSP
-{{ if .FetchOCSPRespFromSecret -}}
-fetch-ocsp-response-file=/cat-ocsp-resp
-{{ else -}}
-fetch-ocsp-response-file=/fetch-ocsp-response
-{{ end -}}
 {{ if and .ShareTLSTicketKey .HTTPSPort .TLS -}}
 # TLS ticket key
 tls-ticket-key-cipher=aes-128-cbc

@@ -15,10 +15,6 @@ controller:
 	CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo -ldflags \
 		"-w -X main.version=${VERSION} -X main.gitRepo=${REPO_INFO}" \
 		github.com/zlabjp/nghttpx-ingress-lb/cmd/nghttpx-ingress-controller/...
-	CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo \
-		github.com/zlabjp/nghttpx-ingress-lb/cmd/fetch-ocsp-response/...
-	CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo \
-		github.com/zlabjp/nghttpx-ingress-lb/cmd/cat-ocsp-resp/...
 
 .PHONY: container
 container: export GOARCH = amd64
@@ -32,8 +28,6 @@ push: container
 .PHONY: clean
 clean:
 	rm -f nghttpx-ingress-controller
-	rm -f fetch-ocsp-response
-	rm -f cat-ocsp-resp
 
 .PHONY: vet
 vet:

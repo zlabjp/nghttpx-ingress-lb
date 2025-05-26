@@ -46,7 +46,6 @@ func TestCreateTLSCred(t *testing.T) {
 	// openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/tls.key -out /tmp/tls.crt -subj "/CN=echoheaders/O=echoheaders"
 	tlsCrt := "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURhakNDQWxLZ0F3SUJBZ0lKQUxHUXR5VVBKTFhYTUEwR0NTcUdTSWIzRFFFQkJRVUFNQ3d4RkRBU0JnTlYKQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3RWdZRFZRUUtFd3RsWTJodmFHVmhaR1Z5Y3pBZUZ3MHhOakF6TXpFeQpNekU1TkRoYUZ3MHhOekF6TXpFeU16RTVORGhhTUN3eEZEQVNCZ05WQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3CkVnWURWUVFLRXd0bFkyaHZhR1ZoWkdWeWN6Q0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0MKZ2dFQkFONzVmS0N5RWwxanFpMjUxTlNabDYzeGQweG5HMHZTVjdYL0xxTHJveVNraW5nbnI0NDZZWlE4UEJWOAo5TUZzdW5RRGt1QVoyZzA3NHM1YWhLSm9BRGJOMzhld053RXNsVDJkRzhRTUw0TktrTUNxL1hWbzRQMDFlWG1PCmkxR2txZFA1ZUExUHlPZCtHM3gzZmxPN2xOdmtJdHVHYXFyc0tvMEhtMHhqTDVtRUpwWUlOa0tGSVhsWWVLZS8KeHRDR25CU2tLVHFMTG0yeExKSGFFcnJpaDZRdkx4NXF5U2gzZTU2QVpEcTlkTERvcWdmVHV3Z2IzekhQekc2NwppZ0E0dkYrc2FRNHpZUE1NMHQyU1NiVkx1M2pScWNvL3lxZysrOVJBTTV4bjRubnorL0hUWFhHKzZ0RDBaeGI1CmVVRDNQakVhTnlXaUV2dTN6UFJmdysyNURMY0NBd0VBQWFPQmpqQ0JpekFkQmdOVkhRNEVGZ1FVcktMZFhHeUUKNUlEOGRvd2lZNkdzK3dNMHFKc3dYQVlEVlIwakJGVXdVNEFVcktMZFhHeUU1SUQ4ZG93aVk2R3Mrd00wcUp1aApNS1F1TUN3eEZEQVNCZ05WQkFNVEMyVmphRzlvWldGa1pYSnpNUlF3RWdZRFZRUUtFd3RsWTJodmFHVmhaR1Z5CmM0SUpBTEdRdHlVUEpMWFhNQXdHQTFVZEV3UUZNQU1CQWY4d0RRWUpLb1pJaHZjTkFRRUZCUUFEZ2dFQkFNZVMKMHFia3VZa3Z1enlSWmtBeE1PdUFaSDJCK0Evb3N4ODhFRHB1ckV0ZWN5RXVxdnRvMmpCSVdCZ2RkR3VBYU5jVQorUUZDRm9NakJOUDVWVUxIWVhTQ3VaczN2Y25WRDU4N3NHNlBaLzhzbXJuYUhTUjg1ZVpZVS80bmFyNUErdWErClIvMHJrSkZnOTlQSmNJd3JmcWlYOHdRcWdJVVlLNE9nWEJZcUJRL0VZS2YvdXl6UFN3UVZYRnVJTTZTeDBXcTYKTUNML3d2RlhLS0FaWDBqb3J4cHRjcldkUXNCcmYzWVRnYmx4TE1sN20zL2VuR1drcEhDUHdYeVRCOC9rRkw3SApLL2ZHTU1NWGswUkVSbGFPM1hTSUhrZUQ2SXJiRnRNV3R1RlJwZms2ZFA2TXlMOHRmTmZ6a3VvUHVEWUFaWllWCnR1NnZ0c0FRS0xWb0pGaGV0b1k9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
 	tlsKey := "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBM3ZsOG9MSVNYV09xTGJuVTFKbVhyZkYzVEdjYlM5Slh0Zjh1b3V1akpLU0tlQ2V2CmpqcGhsRHc4Rlh6MHdXeTZkQU9TNEJuYURUdml6bHFFb21nQU5zM2Z4N0EzQVN5VlBaMGJ4QXd2ZzBxUXdLcjkKZFdqZy9UVjVlWTZMVWFTcDAvbDREVS9JNTM0YmZIZCtVN3VVMitRaTI0WnFxdXdxalFlYlRHTXZtWVFtbGdnMgpRb1VoZVZoNHA3L0cwSWFjRktRcE9vc3ViYkVza2RvU3V1S0hwQzh2SG1ySktIZDdub0JrT3IxMHNPaXFCOU83CkNCdmZNYy9NYnJ1S0FEaThYNnhwRGpOZzh3elMzWkpKdFV1N2VOR3B5ai9LcUQ3NzFFQXpuR2ZpZWZQNzhkTmQKY2I3cTBQUm5Gdmw1UVBjK01SbzNKYUlTKzdmTTlGL0Q3YmtNdHdJREFRQUJBb0lCQUViNmFEL0hMNjFtMG45bgp6bVkyMWwvYW83MUFmU0h2dlZnRCtWYUhhQkY4QjFBa1lmQUdpWlZrYjBQdjJRSFJtTERoaWxtb0lROWhadHVGCldQOVIxKythTFlnbGdmenZzanBBenR2amZTUndFaEFpM2pnSHdNY1p4S2Q3UnNJZ2hxY2huS093S0NYNHNNczQKUnBCbEFBZlhZWGs4R3F4NkxUbGptSDRDZk42QzZHM1EwTTlLMUxBN2lsck1Na3hwcngxMnBlVTNkczZMVmNpOQptOFdBL21YZ2I0c3pEbVNaWVpYRmNZMEhYNTgyS3JKRHpQWEVJdGQwZk5wd3I0eFIybzdzMEwvK2RnZCtqWERjCkh2SDBKZ3NqODJJaTIxWGZGM2tST3FxR3BKNmhVcncxTUZzVWRyZ29GL3pFck0vNWZKMDdVNEhodGFlalVzWTIKMFJuNXdpRUNnWUVBKzVUTVRiV084Wkg5K2pIdVQwc0NhZFBYcW50WTZYdTZmYU04Tm5CZWNoeTFoWGdlQVN5agpSWERlZGFWM1c0SjU5eWxIQ3FoOVdseVh4cDVTWWtyQU41RnQ3elFGYi91YmorUFIyWWhMTWZpYlBSYlYvZW1MCm5YaGF6MmtlNUUxT1JLY0x6QUVwSmpuZGQwZlZMZjdmQzFHeStnS2YyK3hTY1hjMHJqRE5iNGtDZ1lFQTR1UVEKQk91TlJQS3FKcDZUZS9zUzZrZitHbEpjQSs3RmVOMVlxM0E2WEVZVm9ydXhnZXQ4a2E2ZEo1QjZDOWtITGtNcQpwdnFwMzkxeTN3YW5uWC9ONC9KQlU2M2RxZEcyd1BWRUQ0REduaE54Qm1oaWZpQ1I0R0c2ZnE4MUV6ZE1vcTZ4CklTNHA2RVJaQnZkb1RqNk9pTHl6aUJMckpxeUhIMWR6c0hGRlNqOENnWUVBOWlSSEgyQ2JVazU4SnVYak8wRXcKUTBvNG4xdS9TZkQ4TFNBZ01VTVBwS1hpRTR2S0Qyd1U4a1BUNDFiWXlIZUh6UUpkdDFmU0RTNjZjR0ZHU1ZUSgphNVNsOG5yN051ejg3bkwvUmMzTGhFQ3Y0YjBOOFRjbW1oSy9CbDdiRXBOd0dFczNoNGs3TVdNOEF4QU15c3VxCmZmQ1pJM0tkNVJYNk0zbGwyV2QyRjhFQ2dZQlQ5RU9oTG0vVmhWMUVjUVR0cVZlMGJQTXZWaTVLSGozZm5UZkUKS0FEUVIvYVZncElLR3RLN0xUdGxlbVpPbi8yeU5wUS91UnpHZ3pDUUtldzNzU1RFSmMzYVlzbFVudzdhazJhZAp2ZTdBYXowMU84YkdHTk1oamNmdVBIS05LN2Nsc3pKRHJzcys4SnRvb245c0JHWEZYdDJuaWlpTTVPWVN5TTg4CkNJMjFEUUtCZ0hEQVRZbE84UWlDVWFBQlVqOFBsb1BtMDhwa3cyc1VmQW0xMzJCY00wQk9BN1hqYjhtNm1ManQKOUlteU5kZ2ZiM080UjlKVUxTb1pZSTc1dUxIL3k2SDhQOVlpWHZOdzMrTXl6VFU2b2d1YU8xSTNya2pna29NeAo5cU5pYlJFeGswS1A5MVZkckVLSEdHZEFwT05ES1N4VzF3ektvbUxHdmtYSTVKV05KRXFkCi0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg=="
-	tlsOCSPResp := "sample-ocsp-response"
 
 	dCrt, err := base64.StdEncoding.DecodeString(tlsCrt)
 	require.NoError(t, err)
@@ -54,12 +53,11 @@ func TestCreateTLSCred(t *testing.T) {
 	dKey, err := base64.StdEncoding.DecodeString(tlsKey)
 	require.NoError(t, err)
 
-	tlsCred := CreateTLSCred(defaultConfDir, "tls", dCrt, dKey, []byte(tlsOCSPResp))
+	tlsCred := CreateTLSCred(defaultConfDir, "tls", dCrt, dKey)
 
 	assert.Equal(t, "tls", tlsCred.Name)
 	assert.Equal(t, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dKey))+".key"), tlsCred.Key.Path)
 	assert.Equal(t, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum(dCrt))+".crt"), tlsCred.Cert.Path)
-	assert.Equal(t, filepath.Join(defaultConfDir, tlsDir, hex.EncodeToString(Checksum([]byte(tlsOCSPResp)))+".ocsp-resp"), tlsCred.OCSPResp.Path)
 
 	_, err = tls.X509KeyPair(dCrt, dKey)
 	require.NoError(t, err)
@@ -81,15 +79,12 @@ func TestSortTLSCred(t *testing.T) {
 				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
 				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
 				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0011"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
 				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
 				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0020"}},
 				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
 				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
 			},
 			out: []*TLSCred{
 				{Key: PrivateChecksumFile{Path: "alpha"}, Cert: ChecksumFile{Path: "0010"}},
@@ -99,9 +94,6 @@ func TestSortTLSCred(t *testing.T) {
 				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
 				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 			},
@@ -145,8 +137,6 @@ func TestRemoveDuplicateTLSCred(t *testing.T) {
 				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
 				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 			},
 			out: []*TLSCred{
@@ -155,8 +145,6 @@ func TestRemoveDuplicateTLSCred(t *testing.T) {
 				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0020"}},
 				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
 				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 			},
 		},
@@ -170,9 +158,6 @@ func TestRemoveDuplicateTLSCred(t *testing.T) {
 				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
 				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 			},
@@ -182,8 +167,6 @@ func TestRemoveDuplicateTLSCred(t *testing.T) {
 				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0020"}},
 				{Key: PrivateChecksumFile{Path: "bravo"}, Cert: ChecksumFile{Path: "0021"}},
 				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00A0"}},
-				{Key: PrivateChecksumFile{Path: "charlie"}, Cert: ChecksumFile{Path: "0030"}, OCSPResp: &ChecksumFile{Path: "00B0"}},
 				{Key: PrivateChecksumFile{Path: "delta"}, Cert: ChecksumFile{Path: "0040"}},
 			},
 		},

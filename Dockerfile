@@ -91,7 +91,7 @@ COPY --from=build --link /usr/local/bin/nghttpx /usr/local/bin/
 COPY --from=build --link /usr/local/lib/nghttp2/reuseport_kern.o \
     /usr/local/lib/nghttp2/
 COPY --link image/var/log/nghttpx /var/log/nghttpx
-COPY --link nghttpx-ingress-controller fetch-ocsp-response cat-ocsp-resp /
+COPY --link nghttpx-ingress-controller /
 
 WORKDIR /
 
