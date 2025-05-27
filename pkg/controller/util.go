@@ -116,9 +116,9 @@ func podLabelSelector(labelSet map[string]string) labels.Selector {
 	// Remove labels which represent pod template hash, revision, or generation.
 	for k, v := range labelSet {
 		switch k {
-		case appsv1.ControllerRevisionHashLabelKey:
-		case "pod-template-generation": // Used by DaemonSet
-		case appsv1.DefaultDeploymentUniqueLabelKey:
+		case appsv1.ControllerRevisionHashLabelKey,
+			"pod-template-generation", // Used by DaemonSet
+			appsv1.DefaultDeploymentUniqueLabelKey:
 			continue
 		}
 
