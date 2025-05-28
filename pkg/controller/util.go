@@ -110,8 +110,9 @@ func podFindPort(pod *corev1.Pod, svcPort *corev1.ServicePort) (int32, error) {
 	return 0, fmt.Errorf("no suitable port for manifest: %s", pod.UID)
 }
 
-// podLabelSelector returns labels.Selector from labelSet.
-func podLabelSelector(labelSet map[string]string) labels.Selector {
+// podLabelSelector returns label selector labelSet by removing labels that are used by Deployment or DaemonSet exclusively for its
+// management purposes.
+func podLabelSelector(labelSet map[string]string) labels.ValidatedSetSelector {
 	l := make(map[string]string)
 	// Remove labels which represent pod template hash, revision, or generation.
 	for k, v := range labelSet {

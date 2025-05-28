@@ -1680,8 +1680,8 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(ctx context.Con
 	return backends, nil
 }
 
-func newEndpointSliceSelector(svc *corev1.Service) labels.Selector {
-	return labels.SelectorFromSet(labels.Set{
+func newEndpointSliceSelector(svc *corev1.Service) labels.ValidatedSetSelector {
+	return labels.ValidatedSetSelector(labels.Set{
 		discoveryv1.LabelServiceName: svc.Name,
 	})
 }
