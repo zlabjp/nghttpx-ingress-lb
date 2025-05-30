@@ -211,13 +211,7 @@ func NormalizePEM(data []byte) ([]byte, error) {
 }
 
 func NewTLSTicketKey() ([]byte, error) {
-	key := make([]byte, TLSTicketKeySize)
-
-	if err := GenerateCryptoKey(key, []byte("tls ticket key")); err != nil {
-		return nil, err
-	}
-
-	return key, nil
+	return GenerateCryptoKey("tls ticket key", TLSTicketKeySize)
 }
 
 func NewInitialTLSTicketKey() ([]byte, error) {

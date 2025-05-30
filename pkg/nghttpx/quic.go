@@ -91,13 +91,7 @@ func VerifyQUICKeyingMaterials(km []byte) error {
 
 // NewQUICKeyingMaterial returns new QUIC keying material.
 func NewQUICKeyingMaterial() ([]byte, error) {
-	b := make([]byte, QUICKeyingMaterialsSize)
-
-	if err := GenerateCryptoKey(b, []byte("quic key")); err != nil {
-		return nil, err
-	}
-
-	return b, nil
+	return GenerateCryptoKey("quic key", QUICKeyingMaterialsSize)
 }
 
 func NewInitialQUICKeyingMaterials() ([]byte, error) {

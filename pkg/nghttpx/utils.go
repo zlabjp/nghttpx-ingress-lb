@@ -27,10 +27,10 @@ package nghttpx
 import (
 	"bytes"
 	"context"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -38,7 +38,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"golang.org/x/crypto/hkdf"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -299,27 +298,22 @@ func nghttpxDuration(d time.Duration) string {
 	return strconv.FormatInt(msec, 10) + "ms"
 }
 
-// GenerateCryptoKey generates cryptographic key of length len(out) in out.  info is an optional context information.
-func GenerateCryptoKey(out, info []byte) error {
-	if len(out) == 0 {
-		return nil
+// GenerateCryptoKey generates cryptographic key of length keyLength. SHA-256 is used as a hash function.  info is an optional context
+// information.  IKM (Input Keying Material) and salt are generated from crypto/rand.Read.
+func GenerateCryptoKey(info string, keyLength int) ([]byte, error) {
+	if keyLength == 0 {
+		return nil, nil
 	}
 
 	const ikmLen = 8
 
 	ikmSalt := make([]byte, ikmLen+sha256.Size)
 	if _, err := rand.Read(ikmSalt); err != nil {
-		return err
+		return nil, err
 	}
 
 	ikm := ikmSalt[:ikmLen]
 	salt := ikmSalt[ikmLen:]
 
-	r := hkdf.New(sha256.New, ikm, salt, info)
-
-	if _, err := io.ReadFull(r, out); err != nil {
-		return err
-	}
-
-	return nil
+	return hkdf.Key(sha256.New, ikm, salt, info, keyLength)
 }
