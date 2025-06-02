@@ -10,10 +10,8 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
 
@@ -44,7 +42,7 @@ func (ia ingressAnnotation) NewBackendConfigMapper(ctx context.Context) *nghttpx
 	// the first key specifies service name, and secondary key specifies port name.
 	var config nghttpx.BackendConfigMapping
 	if data != "" {
-		if err := unmarshal(ctx, []byte(data), &config); err != nil {
+		if err := unmarshal(data, &config); err != nil {
 			log.Error(err, "Unexpected error while reading annotation", "annotation", backendConfigKey)
 			return nghttpx.NewBackendConfigMapper(nil, nil)
 		}
@@ -63,7 +61,7 @@ func (ia ingressAnnotation) NewBackendConfigMapper(ctx context.Context) *nghttpx
 	}
 
 	var defaultConfig nghttpx.BackendConfig
-	if err := unmarshal(ctx, []byte(data), &defaultConfig); err != nil {
+	if err := unmarshal(data, &defaultConfig); err != nil {
 		log.Error(err, "Unexpected error while reading annotation", "annotation", defaultBackendConfigKey)
 		return nghttpx.NewBackendConfigMapper(nil, nil)
 	}
@@ -88,7 +86,7 @@ func (ia ingressAnnotation) NewPathConfigMapper(ctx context.Context) *nghttpx.Pa
 
 	var config nghttpx.PathConfigMapping
 	if data != "" {
-		if err := unmarshal(ctx, []byte(data), &config); err != nil {
+		if err := unmarshal(data, &config); err != nil {
 			log.Error(err, "Unexpected error while reading annotation", "annotation", pathConfigKey)
 			return nghttpx.NewPathConfigMapper(nil, nil)
 		}
@@ -107,7 +105,7 @@ func (ia ingressAnnotation) NewPathConfigMapper(ctx context.Context) *nghttpx.Pa
 	}
 
 	var defaultConfig nghttpx.PathConfig
-	if err := unmarshal(ctx, []byte(data), &defaultConfig); err != nil {
+	if err := unmarshal(data, &defaultConfig); err != nil {
 		log.Error(err, "Unexpected error while reading annotation", "annotation", defaultPathConfigKey)
 		return nghttpx.NewPathConfigMapper(nil, nil)
 	}
@@ -140,20 +138,7 @@ func normalizePathKey(src map[string]*nghttpx.PathConfig) map[string]*nghttpx.Pa
 	return dst
 }
 
-// unmarshal deserializes data into dest.  This function first tries YAML and then JSON.
-func unmarshal(ctx context.Context, data []byte, dest any) error {
-	log := klog.FromContext(ctx)
-
-	err := yaml.Unmarshal(data, dest)
-	if err == nil {
-		return nil
-	}
-
-	log.Error(err, "Unable to unmarshal YAML string; fall back to JSON")
-
-	if err := json.Unmarshal(data, dest); err != nil {
-		return fmt.Errorf("unable to unmarshal JSON string: %w", err)
-	}
-
-	return nil
+// unmarshal deserializes YAML or JSON data into dest.
+func unmarshal(data string, dest any) error {
+	return yaml.NewYAMLOrJSONDecoder(strings.NewReader(data), 4096).Decode(dest)
 }
