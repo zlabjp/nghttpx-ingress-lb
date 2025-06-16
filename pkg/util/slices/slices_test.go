@@ -1,6 +1,7 @@
 package slices
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -127,6 +128,69 @@ func TestEqualPtrFunc(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			assert.Equal(t, tt.want, EqualPtrFunc(tt.a, tt.b, tt.pred))
+		})
+	}
+}
+
+func TestTransform(t *testing.T) {
+	tests := []struct {
+		desc string
+		src  []int
+		want []string
+	}{
+		{
+			desc: "empty src",
+		},
+		{
+			desc: "non-empty src",
+			src:  []int{0, 1, 2, 3, 4, 999},
+			want: []string{"0", "1", "2", "3", "4", "999"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			assert.Equal(t, tt.want, Transform(tt.src, func(a int) string {
+				return strconv.Itoa(a)
+			}))
+		})
+	}
+}
+
+func TestTransformTo(t *testing.T) {
+	tests := []struct {
+		desc string
+		src  []int
+		dst  []string
+		want []string
+	}{
+		{
+			desc: "empty src",
+		},
+		{
+			desc: "non-empty src",
+			src:  []int{0, 1, 2, 3, 4, 999},
+			want: []string{"0", "1", "2", "3", "4", "999"},
+		},
+		{
+			desc: "non-empty dst",
+			src:  []int{0, 1, 2},
+			dst:  []string{"a", "b"},
+			want: []string{"a", "b", "0", "1", "2"},
+		},
+		{
+			desc: "allocated dst",
+			src:  []int{0, 1, 2},
+			dst:  make([]string, 0, 3),
+			want: []string{"0", "1", "2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			assert.Equal(t, tt.want, TransformTo(tt.dst, tt.src, func(a int) string {
+				return strconv.Itoa(a)
+			}))
 		})
 	}
 }
