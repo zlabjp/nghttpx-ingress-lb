@@ -32,6 +32,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"slices"
 	"strconv"
@@ -1493,11 +1494,10 @@ func (lbc *LoadBalancerController) garbageCollectCertificate(ctx context.Context
 
 		lbc.certCacheMu.Lock()
 
-		for key := range lbc.certCache {
-			if _, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name); err != nil && apierrors.IsNotFound(err) {
-				delete(lbc.certCache, key)
-			}
-		}
+		maps.DeleteFunc(lbc.certCache, func(key types.NamespacedName, _ *certificateCacheEntry) bool {
+			_, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
+			return apierrors.IsNotFound(err)
+		})
 
 		lbc.certCacheMu.Unlock()
 	}

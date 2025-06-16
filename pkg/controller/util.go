@@ -213,25 +213,20 @@ func validateHTTPRouteGatewayClass(ctx context.Context, httpRoute *gatewayv1.HTT
 
 	log = klog.LoggerWithValues(log, "httpRoute", klog.KObj(httpRoute))
 
-	for i := range httpRoute.Spec.ParentRefs {
-		paRef := &httpRoute.Spec.ParentRefs[i]
+	return slicesutil.ContainsPtrFunc(httpRoute.Spec.ParentRefs,
+		func(paRef *gatewayv1.ParentReference) bool {
+			if !parentGateway(paRef, httpRoute.Namespace) {
+				return false
+			}
 
-		if !parentGateway(paRef, httpRoute.Namespace) {
-			continue
-		}
+			gtw, err := gatewayLister.Gateways(httpRoute.Namespace).Get(string(paRef.Name))
+			if err != nil {
+				log.Error(err, "Unable to get Gateway")
+				return false
+			}
 
-		gtw, err := gatewayLister.Gateways(httpRoute.Namespace).Get(string(paRef.Name))
-		if err != nil {
-			log.Error(err, "Unable to get Gateway")
-			continue
-		}
-
-		if validateGatewayGatewayClass(ctx, gtw, gatewayClassController, gatewayClassLister) {
-			return true
-		}
-	}
-
-	return false
+			return validateGatewayGatewayClass(ctx, gtw, gatewayClassController, gatewayClassLister)
+		})
 }
 
 func ingressLoadBalancerIngressFromService(svc *corev1.Service) []networkingv1.IngressLoadBalancerIngress {
@@ -240,44 +235,35 @@ func ingressLoadBalancerIngressFromService(svc *corev1.Service) []networkingv1.I
 		return nil
 	}
 
-	lbIngs := make([]networkingv1.IngressLoadBalancerIngress, l)
+	lbIngs := slicesutil.TransformTo(
+		make([]networkingv1.IngressLoadBalancerIngress, 0, l),
+		svc.Status.LoadBalancer.Ingress,
+		func(src corev1.LoadBalancerIngress) networkingv1.IngressLoadBalancerIngress {
+			return networkingv1.IngressLoadBalancerIngress{
+				IP:       src.IP,
+				Hostname: src.Hostname,
+				Ports:    ingressPortStatusFromPortStatus(src.Ports),
+			}
+		})
 
-	for i := range svc.Status.LoadBalancer.Ingress {
-		dst := &lbIngs[i]
-		src := &svc.Status.LoadBalancer.Ingress[i]
-
-		dst.IP = src.IP
-		dst.Hostname = src.Hostname
-		dst.Ports = ingressPortStatusFromPortStatus(src.Ports)
-	}
-
-	i := len(svc.Status.LoadBalancer.Ingress)
-
-	for _, ip := range svc.Spec.ExternalIPs {
-		lbIngs[i].IP = ip
-		i++
-	}
-
-	return lbIngs
+	return slicesutil.TransformTo(
+		lbIngs,
+		svc.Spec.ExternalIPs,
+		func(src string) networkingv1.IngressLoadBalancerIngress {
+			return networkingv1.IngressLoadBalancerIngress{
+				IP: src,
+			}
+		})
 }
 
 func ingressPortStatusFromPortStatus(ports []corev1.PortStatus) []networkingv1.IngressPortStatus {
-	if len(ports) == 0 {
-		return nil
-	}
-
-	ingPorts := make([]networkingv1.IngressPortStatus, len(ports))
-
-	for i := range ports {
-		dst := &ingPorts[i]
-		src := &ports[i]
-
-		dst.Port = src.Port
-		dst.Protocol = src.Protocol
-		dst.Error = src.Error
-	}
-
-	return ingPorts
+	return slicesutil.Transform(ports, func(src corev1.PortStatus) networkingv1.IngressPortStatus {
+		return networkingv1.IngressPortStatus{
+			Port:     src.Port,
+			Protocol: src.Protocol,
+			Error:    src.Error,
+		}
+	})
 }
 
 func createCertCacheKey(s *corev1.Secret) types.NamespacedName {
