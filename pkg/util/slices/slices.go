@@ -1,5 +1,9 @@
 package slices
 
+import (
+	"slices"
+)
+
 // IndexPtrFunc behaves like slices.IndexFunc in the standard library, but f takes pointer to an element to save extra copying.
 func IndexPtrFunc[S ~[]E, E any](s S, f func(*E) bool) int {
 	for i := range s {
@@ -52,8 +56,12 @@ func TransformTo[S ~[]E1, E1, E2 any](dst []E2, s S, f func(E1) E2) []E2 {
 		return dst
 	}
 
+	off := len(dst)
+	dst = slices.Grow(dst, len(s))[:off+len(s)]
+	p := dst[off:]
+
 	for i := range s {
-		dst = append(dst, f(s[i]))
+		p[i] = f(s[i])
 	}
 
 	return dst
