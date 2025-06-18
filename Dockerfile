@@ -24,52 +24,54 @@ COPY --link patches/extra-mrbgem.patch /
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        git clang gcc make binutils autoconf automake autotools-dev libtool pkg-config cmake cmake-data \
+        git clang-19 make binutils autoconf automake autotools-dev libtool pkg-config cmake cmake-data \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison libelf-dev patch libbrotli-dev
 
-RUN git clone --depth 1 -b v1.46.1 https://github.com/aws/aws-lc && \
+RUN git clone --depth 1 -b v1.52.0 https://github.com/aws/aws-lc && \
     cd aws-lc && \
+    export CC=clang-19 CXX=clang++-19 && \
     cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DDISABLE_GO=ON && \
     make -j$(nproc) -C build && \
     cmake --install build && \
     cd .. && \
     rm -rf aws-lc
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.8.0 https://github.com/ngtcp2/nghttp3 && \
+RUN git clone --recursive --shallow-submodules --depth 1 -b v1.10.1 https://github.com/ngtcp2/nghttp3 && \
     cd nghttp3 && \
     autoreconf -i && \
-    ./configure --enable-lib-only && \
+    ./configure --enable-lib-only CC=clang-19 CXX=clang++-19 && \
     make -j$(nproc) && \
     make install-strip && \
     cd .. && \
     rm -rf nghttp3
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.11.0 https://github.com/ngtcp2/ngtcp2 && \
+RUN git clone --recursive --shallow-submodules --depth 1 -b v1.13.0 https://github.com/ngtcp2/ngtcp2 && \
     cd ngtcp2 && \
     autoreconf -i && \
     ./configure --enable-lib-only --with-boringssl \
         LIBTOOL_LDFLAGS="-static-libtool-libs" \
         BORINGSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
-        PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" && \
+        PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" \
+        CC=clang-19 CXX=clang++-19 && \
     make -j$(nproc) && \
     make install-strip && \
     cd .. && \
     rm -rf ngtcp2
 
-RUN git clone --depth 1 -b v1.5.0 https://github.com/libbpf/libbpf && \
+RUN git clone --depth 1 -b v1.5.1 https://github.com/libbpf/libbpf && \
     cd libbpf && \
-    PREFIX=/usr/local make -C src install && \
+    PREFIX=/usr/local CC=clang-19 CXX=clang++-19 make -C src install && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.65.0 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --recursive --shallow-submodules --depth 1 -b v1.66.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --with-mruby \
         --enable-http3 --with-libbpf \
         --with-libbrotlienc --with-libbrotlidec \
-        CC=clang CXX=clang++ \
+        CC=clang-19 CXX=clang++-19 \
         LDFLAGS="-static-libgcc -static-libstdc++" \
         LIBTOOL_LDFLAGS="-static-libtool-libs" \
         JEMALLOC_LIBS="-l:libjemalloc.a" \
