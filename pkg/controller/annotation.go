@@ -49,7 +49,12 @@ func (ia ingressAnnotation) NewBackendConfigMapper(ctx context.Context) *nghttpx
 	}
 
 	for _, v := range config {
-		for _, vv := range v {
+		for kk, vv := range v {
+			if vv == nil {
+				delete(v, kk)
+				continue
+			}
+
 			nghttpx.FixupBackendConfig(ctx, vv)
 		}
 	}
