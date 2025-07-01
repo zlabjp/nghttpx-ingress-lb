@@ -79,6 +79,19 @@ svc:
 				},
 			},
 		},
+		{
+			desc:             "Delete null value",
+			annotationConfig: `{"svc": {"443": null, "80": {"proto": "h2"}}}`,
+			wantConfig: nghttpx.BackendConfigMapping{
+				"svc": {
+					"80": func() *nghttpx.BackendConfig {
+						a := &nghttpx.BackendConfig{}
+						a.SetProto(nghttpx.ProtocolH2)
+						return a
+					}(),
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
