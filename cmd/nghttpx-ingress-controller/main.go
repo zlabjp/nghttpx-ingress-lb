@@ -47,7 +47,6 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/component-base/cli"
@@ -61,6 +60,7 @@ import (
 
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/controller"
 	"github.com/zlabjp/nghttpx-ingress-lb/pkg/nghttpx"
+	flagsutil "github.com/zlabjp/nghttpx-ingress-lb/pkg/util/flags"
 )
 
 var (
@@ -69,8 +69,8 @@ var (
 	gitRepo = ""
 
 	// Command-line flags
-	defaultSvc               string
-	ngxConfigMap             string
+	defaultSvc               types.NamespacedName
+	ngxConfigMap             types.NamespacedName
 	kubeconfig               string
 	watchNamespace           = metav1.NamespaceAll
 	healthzPort              = int32(11249)
@@ -78,7 +78,7 @@ var (
 	nghttpxAPIPort           = int32(10902)
 	profiling                = true
 	allowInternalIP          = false
-	defaultTLSSecret         string
+	defaultTLSSecret         types.NamespacedName
 	ingressClassController   = "zlab.co.jp/nghttpx"
 	nghttpxConfDir           = "/etc/nghttpx"
 	nghttpxExecPath          = "/usr/local/bin/nghttpx"
@@ -87,7 +87,7 @@ var (
 	fetchOCSPRespFromSecret  = false
 	proxyProto               = false
 	ocspRespKey              = "tls.ocsp-resp"
-	publishSvc               string
+	publishSvc               types.NamespacedName
 	reloadRate               = 1.0
 	reloadBurst              = 1
 	noDefaultBackendOverride = false
@@ -139,10 +139,10 @@ func main() {
 	rootCmd.Flags().AddGoFlagSet(flag.CommandLine)
 	clientcmd.BindOverrideFlags(&configOverrides, rootCmd.Flags(), clientcmd.RecommendedConfigOverrideFlags(""))
 
-	rootCmd.Flags().StringVar(&defaultSvc, "default-backend-service", defaultSvc,
+	rootCmd.Flags().Var(((*flagsutil.NamespacedName)(&defaultSvc)), "default-backend-service",
 		`Service used to serve a 404 page for the default backend.  Takes the form namespace/name.  The controller uses the first port of this Service for the default backend.  This flag must be specified unless --internal-default-backend is given.`)
 
-	rootCmd.Flags().StringVar(&ngxConfigMap, "nghttpx-configmap", ngxConfigMap,
+	rootCmd.Flags().Var((*flagsutil.NamespacedName)(&ngxConfigMap), "nghttpx-configmap",
 		`Namespace/name of the ConfigMap that contains the custom nghttpx configuration to use.  Takes the form namespace/name.`)
 
 	rootCmd.Flags().StringVar(&kubeconfig, "kubeconfig", kubeconfig, `Path to kubeconfig file which overrides in-cluster configuration.`)
@@ -160,7 +160,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&allowInternalIP, "allow-internal-ip", allowInternalIP,
 		`Allow to use address of type NodeInternalIP when fetching external IP address.  This is the workaround for the cluster configuration where NodeExternalIP or NodeLegacyHostIP is not assigned or cannot be used.`)
 
-	rootCmd.Flags().StringVar(&defaultTLSSecret, "default-tls-secret", defaultTLSSecret,
+	rootCmd.Flags().Var((*flagsutil.NamespacedName)(&defaultTLSSecret), "default-tls-secret",
 		`Name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.  The redirection can be turned off per Ingress basis with redirectIfNotTLS=false in ingress.zlab.co.jp/path-config annotation.`)
 
 	rootCmd.Flags().StringVar(&ingressClassController, "ingress-class-controller", ingressClassController,
@@ -183,7 +183,7 @@ func main() {
 	rootCmd.Flags().StringVar(&ocspRespKey, "ocsp-resp-key", ocspRespKey, `A key for OCSP response in TLS secret.`)
 	utilruntime.Must(rootCmd.Flags().MarkDeprecated("ocsp-resp-key", "has been deprecated and has no effect"))
 
-	rootCmd.Flags().StringVar(&publishSvc, "publish-service", publishSvc,
+	rootCmd.Flags().Var((*flagsutil.NamespacedName)(&publishSvc), "publish-service",
 		`Specify namespace/name of Service whose hostnames/IP addresses are set in Ingress resource instead of addresses of Ingress controller Pods.  Takes the form namespace/name.`)
 
 	rootCmd.Flags().Float64Var(&reloadRate, "reload-rate", reloadRate,
@@ -279,60 +279,24 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 	)
 
 	if !internalDefaultBackend {
-		if defaultSvc == "" {
+		if defaultSvc.Name == "" {
 			log.Error(nil, "default-backend-service cannot be empty")
 			os.Exit(1)
 		}
 
-		ns, name, err := cache.SplitMetaNamespaceKey(defaultSvc)
-		if err != nil {
-			log.Error(err, "default-backend-service: Invalid Service identifier", "service", defaultSvc)
-			os.Exit(1)
-		}
-
-		defaultSvcKey = &types.NamespacedName{
-			Namespace: ns,
-			Name:      name,
-		}
+		defaultSvcKey = &defaultSvc
 	}
 
-	if publishSvc != "" {
-		ns, name, err := cache.SplitMetaNamespaceKey(publishSvc)
-		if err != nil {
-			log.Error(err, "publish-service: Invalid Service identifier", "service", publishSvc)
-			os.Exit(1)
-		}
-
-		publishSvcKey = &types.NamespacedName{
-			Namespace: ns,
-			Name:      name,
-		}
+	if publishSvc.Name != "" {
+		publishSvcKey = &publishSvc
 	}
 
-	if ngxConfigMap != "" {
-		ns, name, err := cache.SplitMetaNamespaceKey(ngxConfigMap)
-		if err != nil {
-			log.Error(err, "nghttpx-configmap: Invalid ConfigMap identifier", "service", ngxConfigMap)
-			os.Exit(1)
-		}
-
-		nghttpxConfigMapKey = &types.NamespacedName{
-			Namespace: ns,
-			Name:      name,
-		}
+	if ngxConfigMap.Name != "" {
+		nghttpxConfigMapKey = &ngxConfigMap
 	}
 
-	if defaultTLSSecret != "" {
-		ns, name, err := cache.SplitMetaNamespaceKey(defaultTLSSecret)
-		if err != nil {
-			log.Error(err, "default-tls-secret: Invalid Secret identifier", "service", defaultTLSSecret)
-			os.Exit(1)
-		}
-
-		defaultTLSSecretKey = &types.NamespacedName{
-			Namespace: ns,
-			Name:      name,
-		}
+	if defaultTLSSecret.Name != "" {
+		defaultTLSSecretKey = &defaultTLSSecret
 	}
 
 	var (
