@@ -145,6 +145,7 @@ func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingres
 		if ingClass.Spec.Controller != ingressClassController {
 			log.V(4).Info("Skip Ingress", "ingress", klog.KObj(ing), "ingressClass", klog.KObj(ingClass),
 				"controller", ingClass.Spec.Controller)
+
 			return false
 		}
 
@@ -172,6 +173,7 @@ func validateIngressClass(ctx context.Context, ing *networkingv1.Ingress, ingres
 		if ingClass.Spec.Controller != ingressClassController {
 			log.V(4).Info("Skip Ingress because of default IngressClass", "ingress", klog.KObj(ing),
 				"ingressClass", klog.KObj(ingClass), "controller", ingClass.Spec.Controller)
+
 			return false
 		}
 
