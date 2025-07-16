@@ -609,6 +609,7 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 					if labels.ValidatedSetSelector(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
 						log.V(4).Info("Referenced by Ingress", "pod", klog.KObj(pod),
 							"ingress", klog.KObj(ing), "service", klog.KObj(svc))
+
 						return true
 					}
 				}
@@ -1661,6 +1662,7 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSlice(ctx context.Con
 				if err != nil {
 					log.V(4).Info("Unable to get target port", "pod", klog.KRef(ref.Namespace, ref.Name),
 						"servicePort", klog.Format(svcPort), "endpointPort", klog.Format(epPort), "err", err)
+
 					continue
 				}
 

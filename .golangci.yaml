@@ -20,7 +20,7 @@ linters:
     - unparam
     - usestdlibvars
     - usetesting
-    - wsl
+    - wsl_v5
   settings:
     govet:
       enable:
@@ -29,6 +29,10 @@ linters:
     loggercheck:
       require-string-key: true
       no-printf-like: true
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
   exclusions:
     generated: lax
     presets:
