@@ -47,36 +47,27 @@ func (lb *LoadBalancer) Start(ctx context.Context, path, confPath string) error 
 	log := klog.FromContext(ctx)
 
 	log.Info("Starting nghttpx process", "path", path, "conf", confPath)
-	lb.cmd = exec.Command(path, "--conf", confPath)
+	lb.cmd = exec.CommandContext(ctx, path, "--conf", confPath)
 	lb.cmd.Stdout = os.Stdout
 	lb.cmd.Stderr = os.Stderr
+	lb.cmd.Cancel = func() error {
+		log.Info("Sending QUIT signal to nghttpx process to shut down gracefully", "PID", lb.cmd.Process.Pid)
+
+		if err := lb.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
+			log.Error(err, "Unable to send signal to nghttpx process", "PID", lb.cmd.Process.Pid)
+			return err
+		}
+
+		return os.ErrProcessDone
+	}
 
 	if err := lb.cmd.Start(); err != nil {
 		log.Error(err, "nghttpx did not start successfully")
 		return err
 	}
 
-	waitCtx, cancel := context.WithCancel(context.Background())
-
-	go func() {
-		if err := lb.cmd.Wait(); err != nil {
-			log.Error(err, "nghttpx did not finish successfully")
-		}
-
-		cancel()
-	}()
-
-	select {
-	case <-waitCtx.Done():
-	case <-ctx.Done():
-		log.Info("Sending QUIT signal to nghttpx process to shut down gracefully", "PID", lb.cmd.Process.Pid)
-
-		if err := lb.cmd.Process.Signal(syscall.SIGQUIT); err != nil {
-			log.Error(err, "Unable to send signal to nghttpx process", "PID", lb.cmd.Process.Pid)
-			cancel()
-		}
-
-		<-waitCtx.Done()
+	if err := lb.cmd.Wait(); err != nil {
+		log.Error(err, "nghttpx did not finish successfully")
 	}
 
 	log.Info("nghttpx exited")
