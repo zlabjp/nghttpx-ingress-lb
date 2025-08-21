@@ -130,7 +130,7 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 		log.Info("Change in configuration detected. Reloading")
 
 		if err := lb.cmd.Process.Signal(syscall.SIGHUP); err != nil {
-			return false, fmt.Errorf("unable to send signal to nghttpx process (PID %v): %w", lb.cmd.Process.Pid, err)
+			return false, fmt.Errorf("unable to send signal to nghttpx process (PID %d): %w", lb.cmd.Process.Pid, err)
 		}
 
 		if err := lb.waitUntilConfigRevisionChanges(ctx, oldConfRev); err != nil {
@@ -239,7 +239,7 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 
 	in, err := os.Open(backendConfigPath)
 	if err != nil {
-		return fmt.Errorf("unable to open backend configuration file %v: %w", backendConfigPath, err)
+		return fmt.Errorf("unable to open backend configuration file %s: %w", backendConfigPath, err)
 	}
 
 	defer in.Close()
@@ -262,7 +262,7 @@ func (lb *LoadBalancer) issueBackendReplaceRequest(ctx context.Context, ingConfi
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("backendconfig API endpoint returned unsuccessful status code %v", resp.StatusCode)
+		return fmt.Errorf("backendconfig API endpoint returned unsuccessful status code %d", resp.StatusCode)
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
@@ -308,7 +308,7 @@ func (lb *LoadBalancer) getNghttpxConfigRevision(ctx context.Context) (int64, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("configrevision API endpoint returned unsuccessful status code %v", resp.StatusCode)
+		return 0, fmt.Errorf("configrevision API endpoint returned unsuccessful status code %d", resp.StatusCode)
 	}
 
 	d := kjson.NewDecoderCaseSensitivePreserveInts(resp.Body)

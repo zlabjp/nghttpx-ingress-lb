@@ -1190,7 +1190,7 @@ func validateUpstreamBackendParamsMruby(upstream *nghttpx.Upstream, opts backend
 		return nil
 	}
 
-	return fmt.Errorf("inconsistent mruby path %v: previously it is set to %v", upstream.Mruby.Path, opts.mruby.Path)
+	return fmt.Errorf("inconsistent mruby path %s: previously it is set to %s", upstream.Mruby.Path, opts.mruby.Path)
 }
 
 func validateUpstreamBackendParamsAffinity(upstream *nghttpx.Upstream, opts backendOpts) error {
@@ -1203,7 +1203,7 @@ func validateUpstreamBackendParamsAffinity(upstream *nghttpx.Upstream, opts back
 		return nil
 	}
 
-	return fmt.Errorf("inconsistent affinity type=%v cookieName=%v cookiePath=%v cookieSecure=%v cookieStickiness=%v: previously they are set to type=%v cookieName=%v cookiePath=%v cookieSecure=%v cookieStickiness=%v",
+	return fmt.Errorf("inconsistent affinity type=%s cookieName=%s cookiePath=%s cookieSecure=%s cookieStickiness=%s: previously they are set to type=%s cookieName=%s cookiePath=%s cookieSecure=%s cookieStickiness=%s",
 		upstream.Affinity, upstream.AffinityCookieName, upstream.AffinityCookiePath, upstream.AffinityCookieSecure, upstream.AffinityCookieStickiness,
 		opts.affinity, opts.affinityCookieName, opts.affinityCookiePath, opts.affinityCookieSecure, opts.affinityCookieStickiness)
 }
@@ -1213,7 +1213,7 @@ func validateUpstreamBackendParamsReadTimeout(upstream *nghttpx.Upstream, opts b
 		return nil
 	}
 
-	return fmt.Errorf("inconsistent readTimeout %v: previously it is set to %v", *upstream.ReadTimeout, *opts.readTimeout)
+	return fmt.Errorf("inconsistent readTimeout %s: previously it is set to %s", *upstream.ReadTimeout, *opts.readTimeout)
 }
 
 func validateUpstreamBackendParamsWriteTimeout(upstream *nghttpx.Upstream, opts backendOpts) error {
@@ -1221,7 +1221,7 @@ func validateUpstreamBackendParamsWriteTimeout(upstream *nghttpx.Upstream, opts 
 		return nil
 	}
 
-	return fmt.Errorf("inconsistent writeTimeout %v: previously it is set to %v", *upstream.WriteTimeout, *opts.writeTimeout)
+	return fmt.Errorf("inconsistent writeTimeout %s: previously it is set to %s", *upstream.WriteTimeout, *opts.writeTimeout)
 }
 
 func (lbc *LoadBalancerController) createHealthzMruby() []byte {
@@ -1257,7 +1257,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 	case path == "":
 		normalizedPath = "/"
 	case !strings.HasPrefix(path, "/"):
-		return nil, fmt.Errorf("host %v has Path which does not start /: %v", host, path)
+		return nil, fmt.Errorf("host %s has Path which does not start /: %s", host, path)
 	default:
 		// nghttpx requires ':' to be percent-encoded.  Otherwise, ':' is recognized as pattern separator.
 		normalizedPath = strings.ReplaceAll(path, ":", "%3A")
@@ -1274,7 +1274,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 	pc := pcm.ConfigFor(host, normalizedPath)
 
 	if pc.GetAffinity() == nghttpx.AffinityCookie && pc.GetAffinityCookieName() == "" {
-		return nil, fmt.Errorf("%v %v/%v has empty affinity cookie name", gvk.Kind, obj.GetNamespace(), obj.GetName())
+		return nil, fmt.Errorf("%s %s/%s has empty affinity cookie name", gvk.Kind, obj.GetNamespace(), obj.GetName())
 	}
 
 	// The format of upsName is similar to backend option syntax of nghttpx.
@@ -1299,7 +1299,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 	if mruby := pc.GetMruby(); mruby != "" {
 		ups.Mruby = nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, []byte(mruby))
 	} else if ups.DoNotForward {
-		return nil, fmt.Errorf("%v %v/%v lacks mruby but doNotForward is used", gvk.Kind, obj.GetNamespace(), obj.GetName())
+		return nil, fmt.Errorf("%s %s/%s lacks mruby but doNotForward is used", gvk.Kind, obj.GetNamespace(), obj.GetName())
 	}
 
 	log.V(4).Info("Found rule", "upstream", upsName, "host", ups.Host, "path", ups.Path)
@@ -1313,7 +1313,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 
 	svc, err := lbc.svcLister.Services(obj.GetNamespace()).Get(isb.Name)
 	if err != nil {
-		return nil, fmt.Errorf("error getting Service %v from the cache: %w", svcKey, err)
+		return nil, fmt.Errorf("error getting Service %s from the cache: %w", svcKey, err)
 	}
 
 	log.V(3).Info("Obtaining port information", "service", klog.KObj(svc))
@@ -1345,18 +1345,18 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 	}
 
 	if key == "" {
-		return nil, fmt.Errorf("no backend service port found for Service %v", svcKey)
+		return nil, fmt.Errorf("no backend service port found for Service %s", svcKey)
 	}
 
 	backendConfig := bcm.ConfigFor(ctx, isb.Name, key)
 
 	eps, err := lbc.getEndpoints(ctx, svc, servicePort, backendConfig)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get endpoints for Service %v: %w", svcKey, err)
+		return nil, fmt.Errorf("unable to get endpoints for Service %s: %w", svcKey, err)
 	}
 
 	if len(eps) == 0 {
-		return nil, fmt.Errorf("no active endpoints found for Service %v", svcKey)
+		return nil, fmt.Errorf("no active endpoints found for Service %s", svcKey)
 	}
 
 	ups.Backends = append(ups.Backends, eps...)
@@ -1368,7 +1368,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 func (lbc *LoadBalancerController) getTLSCredFromSecret(ctx context.Context, key *types.NamespacedName) (*nghttpx.TLSCred, error) {
 	secret, err := lbc.secretLister.Secrets(key.Namespace).Get(key.Name)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get TLS secret %v: %w", key, err)
+		return nil, fmt.Errorf("unable to get TLS secret %s: %w", key, err)
 	}
 
 	return lbc.createTLSCredFromSecret(ctx, secret)
@@ -1387,7 +1387,7 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ctx context.Context, in
 
 		secret, err := lbc.secretLister.Secrets(ing.Namespace).Get(tls.SecretName)
 		if err != nil {
-			return nil, fmt.Errorf("unable to retrieve Secret %v/%v for Ingress %v/%v: %w", ing.Namespace, tls.SecretName, ing.Namespace, ing.Name, err)
+			return nil, fmt.Errorf("unable to retrieve Secret %s/%s for Ingress %s/%s: %w", ing.Namespace, tls.SecretName, ing.Namespace, ing.Name, err)
 		}
 
 		tlsCred, err := lbc.createTLSCredFromSecret(ctx, secret)
@@ -1405,12 +1405,12 @@ func (lbc *LoadBalancerController) getTLSCredFromIngress(ctx context.Context, in
 func (lbc *LoadBalancerController) createTLSCredFromSecret(ctx context.Context, secret *corev1.Secret) (*nghttpx.TLSCred, error) {
 	cert, ok := secret.Data[corev1.TLSCertKey]
 	if !ok {
-		return nil, fmt.Errorf("secret %v/%v has no certificate", secret.Namespace, secret.Name)
+		return nil, fmt.Errorf("secret %s/%s has no certificate", secret.Namespace, secret.Name)
 	}
 
 	key, ok := secret.Data[corev1.TLSPrivateKeyKey]
 	if !ok {
-		return nil, fmt.Errorf("secret %v/%v has no private key", secret.Namespace, secret.Name)
+		return nil, fmt.Errorf("secret %s/%s has no private key", secret.Namespace, secret.Name)
 	}
 
 	cacheKey := createCertCacheKey(secret)
@@ -1428,12 +1428,12 @@ func (lbc *LoadBalancerController) createTLSCredFromSecret(ctx context.Context, 
 
 		cert, err = nghttpx.NormalizePEM(cert)
 		if err != nil {
-			return nil, fmt.Errorf("unable to normalize certificate in Secret %v/%v: %w", secret.Namespace, secret.Name, err)
+			return nil, fmt.Errorf("unable to normalize certificate in Secret %s/%s: %w", secret.Namespace, secret.Name, err)
 		}
 
 		key, err = nghttpx.NormalizePEM(key)
 		if err != nil {
-			return nil, fmt.Errorf("unable to normalize private key in Secret %v/%v: %w", secret.Namespace, secret.Name, err)
+			return nil, fmt.Errorf("unable to normalize private key in Secret %s/%s: %w", secret.Namespace, secret.Name, err)
 		}
 
 		if _, err := tls.X509KeyPair(cert, key); err != nil {
@@ -1534,7 +1534,7 @@ func (lbc *LoadBalancerController) getEndpoints(ctx context.Context, svc *corev1
 	log := klog.FromContext(ctx)
 
 	if svcPort.Protocol != "" && svcPort.Protocol != corev1.ProtocolTCP {
-		return nil, fmt.Errorf("service %v/%v has unsupported protocol %v", svc.Namespace, svc.Name, svcPort.Protocol)
+		return nil, fmt.Errorf("service %s/%s has unsupported protocol %s", svc.Namespace, svc.Name, svcPort.Protocol)
 	}
 
 	log.V(3).Info("Getting endpoints",
@@ -1560,7 +1560,7 @@ func (lbc *LoadBalancerController) getEndpointsFromEndpointSliceWithoutServiceSe
 	case svcPort.TargetPort.StrVal == "":
 		targetPort = svcPort.Port
 	default:
-		return nil, fmt.Errorf("service %v/%v must have integer target port if specified: %v", svc.Namespace, svc.Name, svcPort.TargetPort)
+		return nil, fmt.Errorf("service %s/%s must have integer target port if specified: %s", svc.Namespace, svc.Name, svcPort.TargetPort.String())
 	}
 
 	ess, err := lbc.epSliceLister.EndpointSlices(svc.Namespace).List(newEndpointSliceSelector(svc))
@@ -1722,7 +1722,7 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *corev1.ServicePort
 	case svcPort.TargetPort.StrVal != "":
 		port, err := lbc.getNamedPortFromPod(ref, svcPort)
 		if err != nil {
-			return 0, fmt.Errorf("unable to find named port %v in Pod spec: %w", svcPort.TargetPort.String(), err)
+			return 0, fmt.Errorf("unable to find named port %s in Pod spec: %w", svcPort.TargetPort.String(), err)
 		}
 
 		if *epPort.Port == port {
@@ -1742,12 +1742,12 @@ func (lbc *LoadBalancerController) resolveTargetPort(svcPort *corev1.ServicePort
 func (lbc *LoadBalancerController) getNamedPortFromPod(ref *corev1.ObjectReference, servicePort *corev1.ServicePort) (int32, error) {
 	pod, err := lbc.podLister.Pods(ref.Namespace).Get(ref.Name)
 	if err != nil {
-		return 0, fmt.Errorf("unable to get Pod %v/%v: %w", ref.Namespace, ref.Name, err)
+		return 0, fmt.Errorf("unable to get Pod %s/%s: %w", ref.Namespace, ref.Name, err)
 	}
 
 	port, err := podFindPort(pod, servicePort)
 	if err != nil {
-		return 0, fmt.Errorf("unable to find port %v from Pod %v/%v: %w", servicePort.TargetPort.String(), pod.Namespace, pod.Name, err)
+		return 0, fmt.Errorf("unable to find port %s from Pod %s/%s: %w", servicePort.TargetPort.String(), pod.Namespace, pod.Name, err)
 	}
 
 	return port, nil
@@ -2243,7 +2243,7 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 	for _, f := range allInformers {
 		for v, ok := range f.WaitForCacheSync(ctx.Done()) {
 			if !ok {
-				return fmt.Errorf("unable to sync cache %v", v)
+				return fmt.Errorf("unable to sync cache %s", v)
 			}
 		}
 	}
@@ -2251,7 +2251,7 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 	if lc.gatewayInformers != nil {
 		for v, ok := range lc.gatewayInformers.WaitForCacheSync(ctx.Done()) {
 			if !ok {
-				return fmt.Errorf("unable to sync cache: %v", v)
+				return fmt.Errorf("unable to sync cache: %s", v)
 			}
 		}
 	}
@@ -2766,7 +2766,7 @@ func (lc *LeaderController) getLoadBalancerIngressSelector(ctx context.Context, 
 
 	pods, err := lc.podLister.List(selector)
 	if err != nil {
-		return nil, fmt.Errorf("unable to list Pods with label %v", selector)
+		return nil, fmt.Errorf("unable to list Pods with label %s", selector)
 	}
 
 	if len(pods) == 0 {
@@ -2811,7 +2811,7 @@ func (lc *LeaderController) getLoadBalancerIngressSelector(ctx context.Context, 
 func (lc *LeaderController) getPodNodeAddress(pod *corev1.Pod) (string, error) {
 	node, err := lc.nodeLister.Get(pod.Spec.NodeName)
 	if err != nil {
-		return "", fmt.Errorf("unable to get Node %v for Pod %v/%v from lister: %w", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
+		return "", fmt.Errorf("unable to get Node %s for Pod %s/%s from lister: %w", pod.Spec.NodeName, pod.Namespace, pod.Name, err)
 	}
 
 	var externalIP string
@@ -2832,7 +2832,7 @@ func (lc *LeaderController) getPodNodeAddress(pod *corev1.Pod) (string, error) {
 	}
 
 	if externalIP == "" {
-		return "", fmt.Errorf("node %v has no external IP", node.Name)
+		return "", fmt.Errorf("node %s has no external IP", node.Name)
 	}
 
 	return externalIP, nil
