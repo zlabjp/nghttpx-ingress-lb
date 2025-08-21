@@ -159,7 +159,7 @@ func VerifyCertificate(ctx context.Context, cert *x509.Certificate, currentTime 
 
 	switch cert.SignatureAlgorithm {
 	case x509.MD2WithRSA, x509.MD5WithRSA, x509.SHA1WithRSA, x509.DSAWithSHA1, x509.ECDSAWithSHA1:
-		return fmt.Errorf("unsupported signature algorithm: %v", cert.SignatureAlgorithm)
+		return fmt.Errorf("unsupported signature algorithm: %s", cert.SignatureAlgorithm)
 	}
 
 	log.V(4).Info("Certificate validity period", "notBefore", cert.NotBefore, "notAfter", cert.NotAfter)

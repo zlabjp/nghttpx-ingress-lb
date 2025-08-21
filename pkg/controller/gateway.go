@@ -466,22 +466,22 @@ func (lc *LeaderController) syncGateway(ctx context.Context, key types.Namespace
 		switch l.Protocol {
 		case gatewayv1.HTTPProtocolType:
 			if l.TLS != nil {
-				return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%v].tls must not be set", i))
+				return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%d].tls must not be set", i))
 			}
 		case gatewayv1.HTTPSProtocolType:
 			if l.TLS == nil {
-				return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%v].tls is required", i))
+				return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%d].tls is required", i))
 			}
 
 			if ptr.Deref(l.TLS.Mode, gatewayv1.TLSModeTerminate) != gatewayv1.TLSModeTerminate {
-				return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%v].tls.mode must be Terminate", i))
+				return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%d].tls.mode must be Terminate", i))
 			}
 
 			if len(l.TLS.CertificateRefs) == 0 {
-				return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%v].tls.certificateRefs must contain at least one reference", i))
+				return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%d].tls.certificateRefs must contain at least one reference", i))
 			}
 		default:
-			return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%v].protocol is not supported: %v", i, l.Protocol))
+			return lc.updateGatewayStatusWithError(ctx, gtw, fmt.Errorf(".spec.listeners[%d].protocol is not supported: %s", i, l.Protocol))
 		}
 	}
 

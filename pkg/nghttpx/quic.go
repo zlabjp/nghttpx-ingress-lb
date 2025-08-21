@@ -60,7 +60,7 @@ func VerifyQUICKeyingMaterials(km []byte) error {
 		}
 
 		if ln := len(l); ln != QUICKeyingMaterialsEncodedSize {
-			return fmt.Errorf("each line of QUIC keying materials must be %v bytes long: %v", QUICKeyingMaterialsEncodedSize, ln)
+			return fmt.Errorf("each line of QUIC keying materials must be %d bytes long: %d", QUICKeyingMaterialsEncodedSize, ln)
 		}
 
 		b, err := hex.DecodeString(l)
@@ -83,7 +83,7 @@ func VerifyQUICKeyingMaterials(km []byte) error {
 	}
 
 	if n := bits.OnesCount8(idBits); n < 2 {
-		return fmt.Errorf("requires at least 2 keys: %v keys found", n)
+		return fmt.Errorf("requires at least 2 keys: %d keys found", n)
 	}
 
 	return nil
@@ -141,7 +141,7 @@ func UpdateQUICKeyingMaterialsFunc(km []byte, newKeyingMaterialFunc func() ([]by
 		}
 
 		if len(l) != QUICKeyingMaterialsEncodedSize {
-			return nil, fmt.Errorf("not %v bytes long", QUICKeyingMaterialsEncodedSize)
+			return nil, fmt.Errorf("not %d bytes long", QUICKeyingMaterialsEncodedSize)
 		}
 
 		if _, err := hex.DecodeString(l); err != nil {
@@ -152,7 +152,7 @@ func UpdateQUICKeyingMaterialsFunc(km []byte, newKeyingMaterialFunc func() ([]by
 	}
 
 	if len(keys) < 2 {
-		return nil, fmt.Errorf("requires at least 2 keys: %v keys found", len(keys))
+		return nil, fmt.Errorf("requires at least 2 keys: %d keys found", len(keys))
 	}
 
 	// The last key is the new key generated in the last update.

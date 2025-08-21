@@ -128,7 +128,7 @@ func main() {
 		Use: "nghttpx-ingress-controller",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := logsapiv1.ValidateAndApply(loggingConf, featureGate); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
+				fmt.Fprintf(os.Stderr, "%s\n", err)
 				os.Exit(1)
 			}
 
@@ -490,7 +490,7 @@ func registerHandlers(ctx context.Context, cancel context.CancelFunc) {
 
 	http.HandleFunc("/build", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "build: %v - %v", gitRepo, version)
+		fmt.Fprintf(w, "build: %s - %s", gitRepo, version)
 	})
 
 	http.HandleFunc("/stop", func(http.ResponseWriter, *http.Request) {
