@@ -70,6 +70,7 @@ func TestApplyDefaultBackendConfig(t *testing.T) {
 			defaultConf: func() *BackendConfig {
 				a := &BackendConfig{}
 				a.SetProto(ProtocolH2)
+
 				return a
 			}(),
 		},
@@ -78,6 +79,7 @@ func TestApplyDefaultBackendConfig(t *testing.T) {
 			defaultConf: func() *BackendConfig {
 				a := &BackendConfig{}
 				a.SetTLS(true)
+
 				return a
 			}(),
 		},
@@ -86,6 +88,7 @@ func TestApplyDefaultBackendConfig(t *testing.T) {
 			defaultConf: func() *BackendConfig {
 				a := &BackendConfig{}
 				a.SetSNI("example.com")
+
 				return a
 			}(),
 		},
@@ -94,6 +97,7 @@ func TestApplyDefaultBackendConfig(t *testing.T) {
 			defaultConf: func() *BackendConfig {
 				a := &BackendConfig{}
 				a.SetDNS(true)
+
 				return a
 			}(),
 		},
@@ -175,6 +179,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetMruby("hello mruby")
+
 				return a
 			}(),
 		},
@@ -183,6 +188,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetAffinity(AffinityIP)
+
 				return a
 			}(),
 		},
@@ -191,6 +197,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetAffinityCookieName("lb-cookie")
+
 				return a
 			}(),
 		},
@@ -199,6 +206,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetAffinityCookiePath("/path")
+
 				return a
 			}(),
 		},
@@ -207,6 +215,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetAffinityCookieSecure(AffinityCookieSecureNo)
+
 				return a
 			}(),
 		},
@@ -215,6 +224,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetAffinityCookieStickiness(AffinityCookieStickinessStrict)
+
 				return a
 			}(),
 		},
@@ -223,6 +233,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetReadTimeout(metav1.Duration{Duration: 5 * time.Minute})
+
 				return a
 			}(),
 		},
@@ -231,6 +242,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetWriteTimeout(metav1.Duration{Duration: 10 * time.Second})
+
 				return a
 			}(),
 		},
@@ -239,6 +251,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetRedirectIfNotTLS(false)
+
 				return a
 			}(),
 		},
@@ -247,6 +260,7 @@ func TestApplyDefaultPathConfig(t *testing.T) {
 			defaultConf: func() *PathConfig {
 				a := &PathConfig{}
 				a.SetDoNotForward(true)
+
 				return a
 			}(),
 		},

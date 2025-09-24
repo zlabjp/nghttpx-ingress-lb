@@ -28,6 +28,7 @@ func TestIngressAnnotationNewBackendConfigMapper(t *testing.T) {
 					"80": func() *nghttpx.BackendConfig {
 						a := &nghttpx.BackendConfig{}
 						a.SetProto(nghttpx.ProtocolH2)
+
 						return a
 					}(),
 				},
@@ -39,6 +40,7 @@ func TestIngressAnnotationNewBackendConfigMapper(t *testing.T) {
 			wantDefaultConfig: func() *nghttpx.BackendConfig {
 				a := &nghttpx.BackendConfig{}
 				a.SetSNI("example.com")
+
 				return a
 			}(),
 		},
@@ -49,6 +51,7 @@ func TestIngressAnnotationNewBackendConfigMapper(t *testing.T) {
 			wantDefaultConfig: func() *nghttpx.BackendConfig {
 				a := &nghttpx.BackendConfig{}
 				a.SetSNI("example.com")
+
 				return a
 			}(),
 			wantConfig: nghttpx.BackendConfigMapping{
@@ -57,6 +60,7 @@ func TestIngressAnnotationNewBackendConfigMapper(t *testing.T) {
 						a := &nghttpx.BackendConfig{}
 						a.SetProto(nghttpx.ProtocolH2)
 						a.SetSNI("example.com")
+
 						return a
 					}(),
 				},
@@ -74,6 +78,7 @@ svc:
 					"80": func() *nghttpx.BackendConfig {
 						a := &nghttpx.BackendConfig{}
 						a.SetProto(nghttpx.ProtocolH2)
+
 						return a
 					}(),
 				},
@@ -87,6 +92,7 @@ svc:
 					"80": func() *nghttpx.BackendConfig {
 						a := &nghttpx.BackendConfig{}
 						a.SetProto(nghttpx.ProtocolH2)
+
 						return a
 					}(),
 				},
