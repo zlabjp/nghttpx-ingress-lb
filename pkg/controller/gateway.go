@@ -83,7 +83,7 @@ func (lbc *LoadBalancerController) createGatewayUpstreams(ctx context.Context, h
 		}
 	}
 
-	return
+	return upstreams
 }
 
 func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRoute *gatewayv1.HTTPRoute) (accepted, requireTLS bool, hostnames []gatewayv1.Hostname) {

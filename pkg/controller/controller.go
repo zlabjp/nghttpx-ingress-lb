@@ -632,6 +632,7 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 					if labels.ValidatedSetSelector(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
 						log.V(4).Info("Referenced by Ingress", "pod", klog.KObj(pod),
 							"ingress", klog.KObj(ing), "service", klog.KObj(svc))
+
 						return true
 					}
 
@@ -1048,7 +1049,7 @@ func (lbc *LoadBalancerController) createIngressUpstreams(ctx context.Context, i
 		}
 	}
 
-	return
+	return upstreams, defaultUpstream, creds
 }
 
 type backendOpts struct {
