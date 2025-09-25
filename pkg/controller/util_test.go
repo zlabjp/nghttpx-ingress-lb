@@ -28,13 +28,13 @@ func TestSortLoadBalancerIngress(t *testing.T) {
 		{IP: "delta", Hostname: "alpha"},
 		{IP: "alpha", Hostname: "delta"},
 		{IP: "alpha", Hostname: "charlie"},
-		{IP: "bravo", Hostname: ""},
+		{IP: "bravo"},
 	}
 
 	ans := []networkingv1.IngressLoadBalancerIngress{
 		{IP: "alpha", Hostname: "charlie"},
 		{IP: "alpha", Hostname: "delta"},
-		{IP: "bravo", Hostname: ""},
+		{IP: "bravo"},
 		{IP: "delta", Hostname: "alpha"},
 	}
 
@@ -59,13 +59,13 @@ func TestUniqLoadBalancerIngress(t *testing.T) {
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "bravo", Hostname: "alpha"},
-				{IP: "delta", Hostname: ""},
-				{IP: "delta", Hostname: ""},
+				{IP: "delta"},
+				{IP: "delta"},
 			},
 			ans: []networkingv1.IngressLoadBalancerIngress{
 				{IP: "alpha", Hostname: "bravo"},
 				{IP: "bravo", Hostname: "alpha"},
-				{IP: "delta", Hostname: ""},
+				{IP: "delta"},
 			},
 		},
 	}

@@ -64,7 +64,6 @@ func TestContainsPtrFunc(t *testing.T) {
 		{
 			desc: "Not contain",
 			s:    []int{1, 2, 5, 3, 4},
-			t:    0,
 		},
 	}
 
