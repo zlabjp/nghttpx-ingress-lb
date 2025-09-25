@@ -294,7 +294,6 @@ func TestNghttpxDuration(t *testing.T) {
 	}{
 		{
 			desc: "Zero",
-			d:    0,
 			want: "0",
 		},
 		{
