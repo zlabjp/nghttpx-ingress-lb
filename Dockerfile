@@ -39,7 +39,7 @@ RUN git clone --depth 1 -b v1.60.0 https://github.com/aws/aws-lc && \
 RUN git clone --recursive --shallow-submodules --depth 1 -b v1.11.0 https://github.com/ngtcp2/nghttp3 && \
     cd nghttp3 && \
     autoreconf -i && \
-    ./configure --enable-lib-only CC=clang-19 CXX=clang++-19 && \
+    ./configure --enable-lib-only CC=clang-19 CXX=clang++-19 CPPFLAGS="-flto=thin" LDFLAGS="-flto=thin" && \
     make -j$(nproc) && \
     make install-strip && \
     cd .. && \
@@ -49,6 +49,8 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.15.1 https://gith
     cd ngtcp2 && \
     autoreconf -i && \
     ./configure --enable-lib-only --with-boringssl \
+        CPPFLAGS="-flto=thin" \
+        LDFLAGS="-flto=thin" \
         LIBTOOL_LDFLAGS="-static-libtool-libs" \
         BORINGSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
         PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" \
@@ -72,7 +74,8 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.67.1 https://gith
         --enable-http3 --with-libbpf \
         --with-libbrotlienc --with-libbrotlidec \
         CC=clang-19 CXX=clang++-19 \
-        LDFLAGS="-static-libgcc -static-libstdc++" \
+        CPPFLAGS="-flto=thin" \
+        LDFLAGS="-static-libgcc -static-libstdc++ -flto=thin" \
         LIBTOOL_LDFLAGS="-static-libtool-libs" \
         JEMALLOC_LIBS="-l:libjemalloc.a" \
         LIBEV_LIBS="-l:libev.a" \
