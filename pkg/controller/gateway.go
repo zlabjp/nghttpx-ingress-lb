@@ -229,7 +229,7 @@ func (lbc *LoadBalancerController) createHTTPRouteBackends(httpRoute *gatewayv1.
 		isbs[i] = networkingv1.IngressServiceBackend{
 			Name: string(bkRef.Name),
 			Port: networkingv1.ServiceBackendPort{
-				Number: int32(*bkRef.Port),
+				Number: *bkRef.Port,
 			},
 		}
 	}

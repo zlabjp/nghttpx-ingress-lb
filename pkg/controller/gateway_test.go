@@ -260,7 +260,7 @@ func TestSyncGateway(t *testing.T) {
 					Listeners: []gatewayv1.Listener{
 						{
 							Protocol: gatewayv1.HTTPProtocolType,
-							TLS:      &gatewayv1.GatewayTLSConfig{},
+							TLS:      &gatewayv1.ListenerTLSConfig{},
 						},
 					},
 				},
@@ -331,7 +331,7 @@ func TestSyncGateway(t *testing.T) {
 					Listeners: []gatewayv1.Listener{
 						{
 							Protocol: gatewayv1.HTTPSProtocolType,
-							TLS: &gatewayv1.GatewayTLSConfig{
+							TLS: &gatewayv1.ListenerTLSConfig{
 								Mode: ptr.To(gatewayv1.TLSModeTerminate),
 								CertificateRefs: []gatewayv1.SecretObjectReference{
 									{
@@ -373,7 +373,7 @@ func TestSyncGateway(t *testing.T) {
 					Listeners: []gatewayv1.Listener{
 						{
 							Protocol: gatewayv1.HTTPSProtocolType,
-							TLS:      &gatewayv1.GatewayTLSConfig{},
+							TLS:      &gatewayv1.ListenerTLSConfig{},
 						},
 					},
 				},
@@ -446,7 +446,7 @@ func TestSyncGateway(t *testing.T) {
 					Listeners: []gatewayv1.Listener{
 						{
 							Protocol: gatewayv1.HTTPSProtocolType,
-							TLS: &gatewayv1.GatewayTLSConfig{
+							TLS: &gatewayv1.ListenerTLSConfig{
 								Mode: ptr.To(gatewayv1.TLSModePassthrough),
 								CertificateRefs: []gatewayv1.SecretObjectReference{
 									{
@@ -1456,7 +1456,7 @@ func TestCreateGatewayUpstream(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName("cert"),
@@ -1514,7 +1514,7 @@ func TestCreateGatewayUpstream(t *testing.T) {
 										BackendRef: gatewayv1.BackendRef{
 											BackendObjectReference: gatewayv1.BackendObjectReference{
 												Name: gatewayv1.ObjectName(bs1.Name),
-												Port: ptr.To(gatewayv1.PortNumber(bs1.Spec.Ports[0].Port)),
+												Port: ptr.To(bs1.Spec.Ports[0].Port),
 											},
 										},
 									},
@@ -1752,7 +1752,7 @@ func TestHTTPRouteAccepted(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName("cert"),
@@ -1824,7 +1824,7 @@ func TestHTTPRouteAccepted(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName("cert"),
@@ -1893,7 +1893,7 @@ func TestHTTPRouteAccepted(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName("cert"),
@@ -1985,7 +1985,7 @@ func TestHTTPRouteAccepted(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName("cert"),
@@ -3182,7 +3182,7 @@ func TestCreateGatewayCredentials(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName(cert1.Name),
@@ -3248,7 +3248,7 @@ func TestCreateGatewayCredentials(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Kind: ptr.To(gatewayv1.Kind("ConfigMap")),
@@ -3302,7 +3302,7 @@ func TestCreateGatewayCredentials(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name:      gatewayv1.ObjectName(cert1.Name),
@@ -3356,7 +3356,7 @@ func TestCreateGatewayCredentials(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName(cert1.Name),
@@ -3386,7 +3386,7 @@ func TestCreateGatewayCredentials(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName(cert2.Name),
@@ -3436,7 +3436,7 @@ func TestCreateGatewayCredentials(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName(cert1.Name),
@@ -3466,7 +3466,7 @@ func TestCreateGatewayCredentials(t *testing.T) {
 							{
 								Name:     "https",
 								Protocol: gatewayv1.HTTPSProtocolType,
-								TLS: &gatewayv1.GatewayTLSConfig{
+								TLS: &gatewayv1.ListenerTLSConfig{
 									CertificateRefs: []gatewayv1.SecretObjectReference{
 										{
 											Name: gatewayv1.ObjectName(cert2.Name),
