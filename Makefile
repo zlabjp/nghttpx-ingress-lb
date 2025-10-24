@@ -19,10 +19,10 @@ controller:
 .PHONY: container
 container: export GOARCH = amd64
 container: export PLATFORM = --platform=linux/${GOARCH}
-container: controller container-platform
+container: container-platform
 
 .PHONY: container-platform
-container-platform:
+container-platform: controller
 	docker buildx build ${PLATFORM} -t "${PREFIX}:${TAG}" .
 
 .PHONY: push
