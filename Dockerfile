@@ -27,7 +27,7 @@ RUN apt-get update && \
         git clang-19 make binutils autoconf automake autotools-dev libtool pkg-config cmake cmake-data \
         zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison libelf-dev patch libbrotli-dev
 
-RUN git clone --depth 1 -b v1.60.0 https://github.com/aws/aws-lc && \
+RUN git clone --depth 1 -b v1.62.0 https://github.com/aws/aws-lc && \
     cd aws-lc && \
     export CC=clang-19 CXX=clang++-19 && \
     cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DDISABLE_GO=ON && \
@@ -36,7 +36,7 @@ RUN git clone --depth 1 -b v1.60.0 https://github.com/aws/aws-lc && \
     cd .. && \
     rm -rf aws-lc
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.11.0 https://github.com/ngtcp2/nghttp3 && \
+RUN git clone --recursive --shallow-submodules --depth 1 -b v1.12.0 https://github.com/ngtcp2/nghttp3 && \
     cd nghttp3 && \
     autoreconf -i && \
     ./configure --enable-lib-only CC=clang-19 CXX=clang++-19 CPPFLAGS="-flto=thin" LDFLAGS="-flto=thin" && \
@@ -45,7 +45,7 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.11.0 https://gith
     cd .. && \
     rm -rf nghttp3
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.15.1 https://github.com/ngtcp2/ngtcp2 && \
+RUN git clone --recursive --shallow-submodules --depth 1 -b v1.17.0 https://github.com/ngtcp2/ngtcp2 && \
     cd ngtcp2 && \
     autoreconf -i && \
     ./configure --enable-lib-only --with-boringssl \
@@ -66,7 +66,7 @@ RUN git clone --depth 1 -b v1.6.2 https://github.com/libbpf/libbpf && \
     cd .. && \
     rm -rf libbpf
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.67.1 https://github.com/nghttp2/nghttp2.git && \
+RUN git clone --recursive --shallow-submodules --depth 1 -b v1.68.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
     autoreconf -i && \
