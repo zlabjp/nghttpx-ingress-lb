@@ -149,7 +149,7 @@ spec:
 If TLS is configured for a service, and it is accessed via cleartext
 HTTP, those requests are redirected to HTTPS URI.  If
 `--default-tls-secret` flag is used, all cleartext HTTP requests are
-redirected to https URI.  This behaviour is configurable using
+redirected to https URI.  This behavior is configurable using
 [path-config](#ingresszlabcojppath-config-annotation) annotation.
 
 ## Sharing TLS ticket keys
@@ -241,7 +241,7 @@ runs this controller:
   verbs: ["update"]
 ```
 
-Here it the current implementation status:
+Here is the current implementation status:
 
 * GatewayClass
   * spec
@@ -252,7 +252,7 @@ Here it the current implementation status:
 
 * Gateway
   * spec
-    * listeners: Due to the limitation of nghttpx, the abilities of listener are limit hostnames allowed in HTTPRoute and add TLS certificates.  It does not configure load balancer in any other way.
+    * listeners: Due to the limitation of nghttpx, the abilities of listener are limited to hostnames allowed in HTTPRoute and adding TLS certificates.  It does not configure load balancer in any other way.
       * hostname: It is only used by filtering hostnames of HTTPRoute.  It is not used to match SNI or HTTP request host.
       * port: Not supported
       * protocol: Only HTTP and HTTPS are supported
@@ -289,7 +289,7 @@ No cross-namespace references are allowed.
 
 ## PROXY protocol support - preserving ClientIP addresses
 
-In case you are running nghttpx-ingress-lb behind a LoadBalancer you might
+In case you are running nghttpx-ingress-lb behind a LoadBalancer you might want
 to preserve the ClientIP addresses accessing your Kubernetes cluster.
 
 As an example we are using a deployment on a Kubernetes on AWS.
@@ -345,7 +345,7 @@ deployment or use:
 
 ```sh
 # Deploy nghttpx-ingress-lb behind LoadBalancer with PROXY protocol and RBAC enabled.
-kubctl apply -f examples/proxyproto/
+kubectl apply -f examples/proxyproto/
 ```
 
 ## Default backend
@@ -505,7 +505,7 @@ The final backend-config becomes like so:
 {"proto": "h2", "sni": "www.example.com"}
 ```
 
-A values which specified explicitly in an individual backend-config
+A value which is specified explicitly in an individual backend-config
 always takes precedence.
 
 Note that Ingress allows regular expression in
@@ -605,7 +605,7 @@ spec:
       - path: /pub/foo
         pathType: ImplementationSpecific
         backend:
-          service
+          service:
             name: bar
             port:
               number: 80
@@ -618,7 +618,7 @@ the same Ingress resource.  It can contain single dictionary which
 contains the same key/value pairs.  It is useful if same configuration
 is shared by lots of patterns.
 
-A values which specified explicitly in an individual path-config
+A value which is specified explicitly in an individual path-config
 always takes precedence.
 
 ## Custom nghttpx configuration
@@ -642,7 +642,7 @@ data:
 ```
 
 nghttpx historically strips an incoming X-Forwarded-Proto header
-field, and adds its own one.  To change this behaviour, use the
+field, and adds its own one.  To change this behavior, use the
 combination of
 [no-add-x-forwarded-proto](https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--no-add-x-forwarded-proto)
 and
