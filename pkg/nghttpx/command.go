@@ -102,11 +102,6 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 
 	switch changed {
 	case mainConfigChanged:
-		oldConfRev, err := lb.getNghttpxConfigRevision(ctx)
-		if err != nil {
-			return false, err
-		}
-
 		if err := writeTLSKeyCert(ingressCfg); err != nil {
 			return false, err
 		}
@@ -128,6 +123,11 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 		}
 
 		log.Info("Change in configuration detected. Reloading")
+
+		oldConfRev, err := lb.getNghttpxConfigRevisionWithRetries(ctx)
+		if err != nil {
+			return false, err
+		}
 
 		if err := lb.cmd.Process.Signal(syscall.SIGHUP); err != nil {
 			return false, fmt.Errorf("unable to send signal to nghttpx process (PID %d): %w", lb.cmd.Process.Pid, err)
@@ -353,4 +353,26 @@ func (lb *LoadBalancer) waitUntilConfigRevisionChanges(ctx context.Context, oldC
 	}
 
 	return nil
+}
+
+func (lb *LoadBalancer) getNghttpxConfigRevisionWithRetries(ctx context.Context) (int64, error) {
+	log := klog.FromContext(ctx)
+
+	var confRev int64
+
+	if err := wait.PollUntilContextTimeout(ctx, time.Second, lb.reloadTimeout, true, func(ctx context.Context) (bool, error) {
+		var err error
+
+		confRev, err = lb.getNghttpxConfigRevision(ctx)
+		if err != nil {
+			log.Error(err, "Unable to get the current configRevision")
+			return false, nil
+		}
+
+		return true, nil
+	}); err != nil {
+		return 0, fmt.Errorf("unable to get the current configRevision: %w", err)
+	}
+
+	return confRev, nil
 }
