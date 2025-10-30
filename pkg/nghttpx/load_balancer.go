@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -70,6 +71,9 @@ type LoadBalancer struct {
 
 	// cmd is nghttpx command.
 	cmd *exec.Cmd
+
+	// reloadCounter is the number of the successful configuration reload.
+	reloadCounter atomic.Uint64
 }
 
 // NewLoadBalancer creates new LoadBalancer.
@@ -98,4 +102,8 @@ func NewLoadBalancer(config LoadBalancerConfig) (*LoadBalancer, error) {
 	}
 
 	return lb, nil
+}
+
+func (lb *LoadBalancer) GetReloadCounter() uint64 {
+	return lb.reloadCounter.Load()
 }

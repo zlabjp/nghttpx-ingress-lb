@@ -426,7 +426,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
 
-	go registerHandlers(ctx, cancel)
+	go registerHandlers(ctx, cancel, lb)
 	go handleSigterm(ctx, cancel)
 
 	lbc.Run(ctx, config)
@@ -483,11 +483,35 @@ func (hc healthzChecker) Check(_ *http.Request) error {
 	return nil
 }
 
-func registerHandlers(ctx context.Context, cancel context.CancelFunc) {
+// readyzChecker checks the readiness of nghttpx.  It verifies that nghttpx has performed at least one configuration reloading.
+type readyzChecker struct {
+	lb *nghttpx.LoadBalancer
+}
+
+func newReadyzChecker(lb *nghttpx.LoadBalancer) *readyzChecker {
+	return &readyzChecker{
+		lb: lb,
+	}
+}
+
+func (rc readyzChecker) Name() string {
+	return "nghttpx-readyz"
+}
+
+func (rc readyzChecker) Check(_ *http.Request) error {
+	if rc.lb.GetReloadCounter() == 0 {
+		return errors.New("nghttpx has not finished the initial reloading")
+	}
+
+	return nil
+}
+
+func registerHandlers(ctx context.Context, cancel context.CancelFunc, lb *nghttpx.LoadBalancer) {
 	log := klog.FromContext(ctx)
 
 	mux := http.NewServeMux()
 	healthz.InstallHandler(mux, newHealthzChecker(nghttpxHealthPort))
+	healthz.InstallReadyzHandler(mux, newReadyzChecker(lb))
 
 	http.HandleFunc("/build", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

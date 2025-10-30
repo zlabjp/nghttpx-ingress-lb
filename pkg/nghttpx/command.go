@@ -93,6 +93,10 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 	}
 
 	if changed == configNotChanged {
+		// No change should still be treated as "reloading" if it is the initial reload to make startup probe succeed without any
+		// Ingress resources.
+		lb.reloadCounter.CompareAndSwap(0, 1)
+
 		return false, nil
 	}
 
@@ -159,6 +163,8 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 			log.Error(err, "Unable to delete stale assets")
 		}
 	}
+
+	lb.reloadCounter.Add(1)
 
 	return true, nil
 }
