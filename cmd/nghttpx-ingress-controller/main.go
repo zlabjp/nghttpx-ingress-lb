@@ -122,6 +122,7 @@ var (
 func main() {
 	featureGate := featuregate.NewFeatureGate()
 	utilruntime.Must(logsapiv1.AddFeatureGates(featureGate))
+
 	loggingConf := logsapiv1.NewLoggingConfiguration()
 
 	rootCmd := &cobra.Command{
