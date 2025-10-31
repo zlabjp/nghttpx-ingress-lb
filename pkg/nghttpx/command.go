@@ -106,26 +106,6 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 
 	switch changed {
 	case mainConfigChanged:
-		if err := writeTLSKeyCert(ingressCfg); err != nil {
-			return false, err
-		}
-
-		if err := writeMrubyFile(ingressCfg); err != nil {
-			return false, err
-		}
-
-		if err := writePerPatternMrubyFile(ingressCfg); err != nil {
-			return false, err
-		}
-
-		if err := writeTLSTicketKeyFiles(ingressCfg); err != nil {
-			return false, err
-		}
-
-		if err := writeQUICSecretFile(ingressCfg); err != nil {
-			return false, err
-		}
-
 		log.Info("Change in configuration detected. Reloading")
 
 		oldConfRev, err := lb.getNghttpxConfigRevisionWithRetries(ctx)
@@ -149,10 +129,6 @@ func (lb *LoadBalancer) CheckAndReload(ctx context.Context, ingressCfg *IngressC
 			log.Error(err, "Unable to delete stale assets")
 		}
 	case backendConfigChanged:
-		if err := writePerPatternMrubyFile(ingressCfg); err != nil {
-			return false, err
-		}
-
 		if err := lb.issueBackendReplaceRequest(ctx, ingressCfg); err != nil {
 			return false, fmt.Errorf("unable to issue backend replace request: %w", err)
 		}
