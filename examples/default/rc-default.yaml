@@ -22,13 +22,27 @@ spec:
       - image: zlabjp/nghttpx-ingress-controller:latest
         name: nghttpx-ingress-lb
         imagePullPolicy: Always
+        startupProbe:
+          httpGet:
+            path: /readyz
+            # when changing this port, also specify it using --healthz-port in nghttpx-ingress-controller args.
+            port: 11249
+            scheme: HTTP
+          failureThreshold: 30
+          timeoutSeconds: 5
         livenessProbe:
           httpGet:
             path: /healthz
             # when changing this port, also specify it using --healthz-port in nghttpx-ingress-controller args.
             port: 11249
             scheme: HTTP
-          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            # when changing this port, also specify it using --healthz-port in nghttpx-ingress-controller args.
+            port: 11249
+            scheme: HTTP
           timeoutSeconds: 5
         # use downward API
         env:
