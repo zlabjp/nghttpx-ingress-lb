@@ -115,10 +115,32 @@ func (lb *LoadBalancer) checkAndWriteCfg(ctx context.Context, ingConfig *Ingress
 		if err := WriteFile(configPath, mainConfig); err != nil {
 			return configNotChanged, err
 		}
+
+		if err := writeTLSKeyCert(ingConfig); err != nil {
+			return configNotChanged, err
+		}
+
+		if err := writeMrubyFile(ingConfig); err != nil {
+			return configNotChanged, err
+		}
+
+		if err := writeTLSTicketKeyFiles(ingConfig); err != nil {
+			return configNotChanged, err
+		}
+
+		if err := writeQUICSecretFile(ingConfig); err != nil {
+			return configNotChanged, err
+		}
 	}
 
 	if backendChanged {
 		if err := WriteFile(backendConfigPath, backendConfig); err != nil {
+			return configNotChanged, err
+		}
+	}
+
+	if mainChanged || backendChanged {
+		if err := writePerPatternMrubyFile(ingConfig); err != nil {
 			return configNotChanged, err
 		}
 	}
