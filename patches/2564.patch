@@ -1,0 +1,106 @@
+From b0f79f18bb8f66f3ba3bd133db491b301d6086e2 Mon Sep 17 00:00:00 2001
+From: Tatsuhiro Tsujikawa <tatsuhiro.t@gmail.com>
+Date: Fri, 14 Nov 2025 18:39:06 +0900
+Subject: [PATCH] nghttpx: Ensure resetting downstream h2 stream
+
+Ensure resetting downstream h2 stream if Http2DownstreamConnection is
+not closed via nghttp2_on_stream_close_callback.
+---
+ src/shrpx_http2_downstream_connection.cc | 34 +++++++++++++++---------
+ src/shrpx_http2_downstream_connection.h  |  5 ++++
+ src/shrpx_http2_session.cc               |  2 ++
+ 3 files changed, 29 insertions(+), 12 deletions(-)
+
+diff --git a/src/shrpx_http2_downstream_connection.cc b/src/shrpx_http2_downstream_connection.cc
+index 61d947bece..cdca7ed408 100644
+--- a/src/shrpx_http2_downstream_connection.cc
++++ b/src/shrpx_http2_downstream_connection.cc
+@@ -51,7 +51,8 @@ Http2DownstreamConnection::Http2DownstreamConnection(Http2Session *http2session)
+   : dlnext(nullptr),
+     dlprev(nullptr),
+     http2session_(http2session),
+-    sd_(nullptr) {}
++    sd_(nullptr),
++    stream_closed_(false) {}
+ 
+ Http2DownstreamConnection::~Http2DownstreamConnection() {
+   if (LOG_ENABLED(INFO)) {
+@@ -147,19 +148,24 @@ int Http2DownstreamConnection::submit_rst_stream(Downstream *downstream,
+     switch (downstream->get_response_state()) {
+     case DownstreamState::MSG_RESET:
+     case DownstreamState::MSG_BAD_HEADER:
+-    case DownstreamState::MSG_COMPLETE:
+-      break;
++      return rv;
+     default:
+-      if (LOG_ENABLED(INFO)) {
+-        DCLOG(INFO, this) << "Submit RST_STREAM for DOWNSTREAM:" << downstream
+-                          << ", stream_id="
+-                          << downstream->get_downstream_stream_id()
+-                          << ", error_code=" << error_code;
+-      }
+-      rv = http2session_->submit_rst_stream(
+-        static_cast<int32_t>(downstream->get_downstream_stream_id()),
+-        error_code);
++      break;
++    }
++
++    // If the stream has been closed, no need to submit RESET_STREAM.
++    if (stream_closed_) {
++      return rv;
+     }
++
++    if (LOG_ENABLED(INFO)) {
++      DCLOG(INFO, this) << "Submit RST_STREAM for DOWNSTREAM:" << downstream
++                        << ", stream_id="
++                        << downstream->get_downstream_stream_id()
++                        << ", error_code=" << error_code;
++    }
++    rv = http2session_->submit_rst_stream(
++      static_cast<int32_t>(downstream->get_downstream_stream_id()), error_code);
+   }
+   return rv;
+ }
+@@ -622,4 +628,8 @@ Http2DownstreamConnection::get_downstream_addr_group() const {
+ 
+ DownstreamAddr *Http2DownstreamConnection::get_addr() const { return nullptr; }
+ 
++void Http2DownstreamConnection::set_stream_closed(bool f) {
++  stream_closed_ = f;
++}
++
+ } // namespace shrpx
+diff --git a/src/shrpx_http2_downstream_connection.h b/src/shrpx_http2_downstream_connection.h
+index 9c5c3cc93a..d0fa332f86 100644
+--- a/src/shrpx_http2_downstream_connection.h
++++ b/src/shrpx_http2_downstream_connection.h
+@@ -83,11 +83,16 @@ class Http2DownstreamConnection : public DownstreamConnection {
+   int submit_rst_stream(Downstream *downstream,
+                         uint32_t error_code = NGHTTP2_INTERNAL_ERROR);
+ 
++  void set_stream_closed(bool f);
++
+   Http2DownstreamConnection *dlnext, *dlprev;
+ 
+ private:
+   Http2Session *http2session_;
+   StreamData *sd_;
++  // stream_closed_ is true if the stream is closed (i.e.,
++  // nghttp2_on_stream_close_callback is called).
++  bool stream_closed_;
+ };
+ 
+ } // namespace shrpx
+diff --git a/src/shrpx_http2_session.cc b/src/shrpx_http2_session.cc
+index 69854be890..ca73098e9e 100644
+--- a/src/shrpx_http2_session.cc
++++ b/src/shrpx_http2_session.cc
+@@ -826,6 +826,8 @@ int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
+     auto downstream = dconn->get_downstream();
+     auto upstream = downstream->get_upstream();
+ 
++    dconn->set_stream_closed(true);
++
+     if (downstream->get_downstream_stream_id() % 2 == 0 &&
+         downstream->get_request_state() == DownstreamState::INITIAL) {
+       // Downstream is canceled in backend before it is submitted in
