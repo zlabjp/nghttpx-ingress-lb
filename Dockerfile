@@ -19,7 +19,7 @@
 
 FROM debian:12 AS build
 
-COPY --link patches/extra-mrbgem.patch /
+COPY --link patches/extra-mrbgem.patch patches/2564.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
@@ -69,6 +69,7 @@ RUN git clone --depth 1 -b v1.6.2 https://github.com/libbpf/libbpf && \
 RUN git clone --recursive --shallow-submodules --depth 1 -b v1.68.0 https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     patch -p1 < /extra-mrbgem.patch && \
+    patch -p1 < /2564.patch && \
     autoreconf -i && \
     ./configure --disable-examples --disable-hpack-tools --with-mruby \
         --enable-http3 --with-libbpf \
