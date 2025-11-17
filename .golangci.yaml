@@ -9,6 +9,7 @@ linters:
     - loggercheck
     - mirror
     - misspell
+    - modernize
     - nilnesserr
     - noctx
     - perfsprint
