@@ -6,12 +6,14 @@ linters:
     - errorlint
     - iface
     - importas
+    - intrange
     - loggercheck
     - mirror
     - misspell
     - modernize
     - nilnesserr
     - noctx
+    - nolintlint
     - perfsprint
     - prealloc
     - recvcheck
@@ -21,6 +23,7 @@ linters:
     - unparam
     - usestdlibvars
     - usetesting
+    - wastedassign
     - wsl_v5
   settings:
     govet:
