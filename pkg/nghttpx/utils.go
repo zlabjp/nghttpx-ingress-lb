@@ -260,7 +260,7 @@ func WriteFile(path string, content []byte) error {
 // Checksum calculates and returns checksum of b in hex string.
 func Checksum(b []byte) []byte {
 	h := sha256.New()
-	h.Write(b) // nolint: errcheck
+	h.Write(b)
 
 	return h.Sum(nil)
 }
