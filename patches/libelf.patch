@@ -1,0 +1,12 @@
+--- a/libelf/Makefile.am
++++ b/libelf/Makefile.am
+@@ -122,6 +122,9 @@ libelf.so: $(srcdir)/libelf.map $(libelf_so_LIBS) $(libelf_so_DEPS)
+        @$(textrel_check)
+        $(AM_V_at)ln -fs $@ $@.$(VERSION)
+ 
++libeu_objects = $(shell $(AR) t ../lib/libeu.a)
++libelf_a_LIBADD = $(addprefix ../lib/,$(libeu_objects))
++
+ install: install-am libelf.so
+        $(mkinstalldirs) $(DESTDIR)$(libdir)
+        $(INSTALL_PROGRAM) libelf.so $(DESTDIR)$(libdir)/libelf-$(PACKAGE_VERSION).so
