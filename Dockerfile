@@ -17,7 +17,7 @@
 # For the full copyright and license information, please view the LICENSE
 # file that was distributed with this source code.
 
-FROM debian:12 AS build
+FROM debian:13 AS build
 
 COPY --link patches/extra-mrbgem.patch /
 
@@ -82,7 +82,7 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.68.0 https://gith
         OPENSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
         LIBCARES_LIBS="-l:libcares.a" \
         ZLIB_LIBS="-l:libz.a" \
-        LIBBPF_LIBS="-L/usr/local/lib64 -l:libbpf.a -l:libelf.a" \
+        LIBBPF_LIBS="-L/usr/local/lib64 -l:libbpf.a -l:libelf.a -l:libzstd.a" \
         LIBBROTLIENC_LIBS="-l:libbrotlienc.a -l:libbrotlicommon.a" \
         LIBBROTLIDEC_LIBS="-l:libbrotlidec.a -l:libbrotlicommon.a" \
         PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" && \
@@ -90,7 +90,7 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.68.0 https://gith
     cd .. && \
     rm -rf nghttp2
 
-FROM gcr.io/distroless/base-nossl-debian12:latest
+FROM gcr.io/distroless/base-nossl-debian13:latest
 
 COPY --from=build --link /usr/local/bin/nghttpx /usr/local/bin/
 COPY --from=build --link /usr/local/lib/nghttp2/reuseport_kern.o \
