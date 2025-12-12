@@ -17,15 +17,54 @@
 # For the full copyright and license information, please view the LICENSE
 # file that was distributed with this source code.
 
-FROM debian:12 AS build
+# Rebuild libelf-dev package to fix static linking:
+# - https://bugs-devel.debian.org/cgi-bin/bugreport.cgi?bug=1086675
+# - https://sourceware.org/bugzilla/show_bug.cgi?id=32293
+FROM debian:13 AS libelf
 
+COPY --link patches/libelf.patch /
+
+RUN <<EOF
+    set -e
+
+    cp /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/debian-src.sources
+    sed -i 's|Types: deb|Types: deb-src|' /etc/apt/sources.list.d/debian-src.sources
+
+    apt-get update
+    apt-get install -y --no-install-recommends dpkg-dev
+
+    mkdir elfutils
+    cd elfutils
+
+    apt-get source elfutils
+
+    cd elfutils-*
+    patch -p1 < /libelf.patch
+    apt-get install -y --no-install-recommends build-essential
+    apt-get build-dep -y --no-install-recommends elfutils
+    EDITOR=true dpkg-source --commit . libelf-static-linking
+    dpkg-buildpackage -us -uc
+    apt-get purge -y dpkg-dev build-essential
+    apt-get autoremove --purge -y
+    cd ..
+
+    mv libelf1t64_*.deb libelf-dev_*.deb /
+
+    cd ..
+    rm -rf elfutils
+EOF
+
+FROM debian:13 AS build
+
+COPY --from=libelf /libelf1t64_*.deb /libelf-dev_*.deb /
 COPY --link patches/extra-mrbgem.patch /
 
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         git clang-19 make binutils autoconf automake autotools-dev libtool pkg-config cmake cmake-data \
-        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison libelf-dev patch libbrotli-dev
+        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch libbrotli-dev \
+        /libelf1t64_*.deb /libelf-dev_*.deb
 
 RUN git clone --depth 1 -b v1.62.0 https://github.com/aws/aws-lc && \
     cd aws-lc && \
@@ -82,7 +121,7 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.68.0 https://gith
         OPENSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
         LIBCARES_LIBS="-l:libcares.a" \
         ZLIB_LIBS="-l:libz.a" \
-        LIBBPF_LIBS="-L/usr/local/lib64 -l:libbpf.a -l:libelf.a" \
+        LIBBPF_LIBS="-L/usr/local/lib64 -l:libbpf.a -l:libelf.a -l:libzstd.a" \
         LIBBROTLIENC_LIBS="-l:libbrotlienc.a -l:libbrotlicommon.a" \
         LIBBROTLIDEC_LIBS="-l:libbrotlidec.a -l:libbrotlicommon.a" \
         PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" && \
@@ -90,7 +129,7 @@ RUN git clone --recursive --shallow-submodules --depth 1 -b v1.68.0 https://gith
     cd .. && \
     rm -rf nghttp2
 
-FROM gcr.io/distroless/base-nossl-debian12:latest
+FROM gcr.io/distroless/base-nossl-debian13:latest
 
 COPY --from=build --link /usr/local/bin/nghttpx /usr/local/bin/
 COPY --from=build --link /usr/local/lib/nghttp2/reuseport_kern.o \
