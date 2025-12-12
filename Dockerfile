@@ -25,33 +25,33 @@ FROM debian:13 AS libelf
 COPY --link patches/libelf.patch /
 
 RUN <<EOF
-    set -e
+set -e
 
-    cp /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/debian-src.sources
-    sed -i 's|Types: deb|Types: deb-src|' /etc/apt/sources.list.d/debian-src.sources
+cp /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/debian-src.sources
+sed -i 's|Types: deb|Types: deb-src|' /etc/apt/sources.list.d/debian-src.sources
 
-    apt-get update
-    apt-get install -y --no-install-recommends dpkg-dev
+apt-get update
+apt-get install -y --no-install-recommends dpkg-dev
 
-    mkdir elfutils
-    cd elfutils
+mkdir elfutils
+cd elfutils
 
-    apt-get source elfutils
+apt-get source elfutils
 
-    cd elfutils-*
-    patch -p1 < /libelf.patch
-    apt-get install -y --no-install-recommends build-essential
-    apt-get build-dep -y --no-install-recommends elfutils
-    EDITOR=true dpkg-source --commit . libelf-static-linking
-    dpkg-buildpackage -us -uc
-    apt-get purge -y dpkg-dev build-essential
-    apt-get autoremove --purge -y
-    cd ..
+cd elfutils-*
+patch -p1 < /libelf.patch
+apt-get install -y --no-install-recommends build-essential
+apt-get build-dep -y --no-install-recommends elfutils
+EDITOR=true dpkg-source --commit . libelf-static-linking
+dpkg-buildpackage -us -uc
+apt-get purge -y dpkg-dev build-essential
+apt-get autoremove --purge -y
+cd ..
 
-    mv libelf1t64_*.deb libelf-dev_*.deb /
+mv libelf1t64_*.deb libelf-dev_*.deb /
 
-    cd ..
-    rm -rf elfutils
+cd ..
+rm -rf elfutils
 EOF
 
 FROM debian:13 AS build
@@ -59,75 +59,84 @@ FROM debian:13 AS build
 COPY --from=libelf /libelf1t64_*.deb /libelf-dev_*.deb /
 COPY --link patches/extra-mrbgem.patch /
 
+RUN <<EOF
+set -e
+
 # Inspired by clean-install https://github.com/kubernetes/kubernetes/blob/73641d35c7622ada9910be6fb212d40755cc1f78/build/debian-base/clean-install
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        git clang-19 make binutils autoconf automake autotools-dev libtool pkg-config cmake cmake-data \
-        zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch libbrotli-dev \
-        /libelf1t64_*.deb /libelf-dev_*.deb
+apt-get update
+apt-get install -y --no-install-recommends \
+    git clang-19 make binutils autoconf automake autotools-dev libtool pkg-config cmake cmake-data \
+    zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch libbrotli-dev \
+    /libelf1t64_*.deb /libelf-dev_*.deb
 
-RUN git clone --depth 1 -b v1.62.0 https://github.com/aws/aws-lc && \
-    cd aws-lc && \
-    export CC=clang-19 CXX=clang++-19 && \
-    cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DDISABLE_GO=ON && \
-    make -j$(nproc) -C build && \
-    cmake --install build && \
-    cd .. && \
-    rm -rf aws-lc
+# aws-lc
+git clone --depth 1 -b v1.62.0 https://github.com/aws/aws-lc
+cd aws-lc
+export CC=clang-19 CXX=clang++-19
+cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DDISABLE_GO=ON
+make -j$(nproc) -C build
+cmake --install build
+cd ..
+rm -rf aws-lc
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.12.0 https://github.com/ngtcp2/nghttp3 && \
-    cd nghttp3 && \
-    autoreconf -i && \
-    ./configure --enable-lib-only CC=clang-19 CXX=clang++-19 CPPFLAGS="-flto=thin" LDFLAGS="-flto=thin" && \
-    make -j$(nproc) && \
-    make install-strip && \
-    cd .. && \
-    rm -rf nghttp3
+# nghttp3
+git clone --recursive --shallow-submodules --depth 1 -b v1.12.0 https://github.com/ngtcp2/nghttp3
+cd nghttp3
+autoreconf -i
+./configure --enable-lib-only CC=clang-19 CXX=clang++-19 CPPFLAGS="-flto=thin" LDFLAGS="-flto=thin"
+make -j$(nproc)
+make install-strip
+cd ..
+rm -rf nghttp3
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.17.0 https://github.com/ngtcp2/ngtcp2 && \
-    cd ngtcp2 && \
-    autoreconf -i && \
-    ./configure --enable-lib-only --with-boringssl \
-        CPPFLAGS="-flto=thin" \
-        LDFLAGS="-flto=thin" \
-        LIBTOOL_LDFLAGS="-static-libtool-libs" \
-        BORINGSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
-        PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" \
-        CC=clang-19 CXX=clang++-19 && \
-    make -j$(nproc) && \
-    make install-strip && \
-    cd .. && \
-    rm -rf ngtcp2
+# ngtcp2
+git clone --recursive --shallow-submodules --depth 1 -b v1.17.0 https://github.com/ngtcp2/ngtcp2
+cd ngtcp2
+autoreconf -i
+./configure --enable-lib-only --with-boringssl \
+    CPPFLAGS="-flto=thin" \
+    LDFLAGS="-flto=thin" \
+    LIBTOOL_LDFLAGS="-static-libtool-libs" \
+    BORINGSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
+    PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" \
+    CC=clang-19 CXX=clang++-19
+make -j$(nproc)
+make install-strip
+cd ..
+rm -rf ngtcp2
 
-RUN git clone --depth 1 -b v1.6.2 https://github.com/libbpf/libbpf && \
-    cd libbpf && \
-    PREFIX=/usr/local CC=clang-19 CXX=clang++-19 make -C src install && \
-    cd .. && \
-    rm -rf libbpf
+# libbpf
+git clone --depth 1 -b v1.6.2 https://github.com/libbpf/libbpf
+cd libbpf
+PREFIX=/usr/local CC=clang-19 CXX=clang++-19 make -C src install
+cd ..
+rm -rf libbpf
 
-RUN git clone --recursive --shallow-submodules --depth 1 -b v1.68.0 https://github.com/nghttp2/nghttp2.git && \
-    cd nghttp2 && \
-    patch -p1 < /extra-mrbgem.patch && \
-    autoreconf -i && \
-    ./configure --disable-examples --disable-hpack-tools --with-mruby \
-        --enable-http3 --with-libbpf \
-        --with-libbrotlienc --with-libbrotlidec \
-        CC=clang-19 CXX=clang++-19 \
-        CPPFLAGS="-flto=thin" \
-        LDFLAGS="-static-libgcc -static-libstdc++ -flto=thin" \
-        LIBTOOL_LDFLAGS="-static-libtool-libs" \
-        JEMALLOC_LIBS="-l:libjemalloc.a" \
-        LIBEV_LIBS="-l:libev.a" \
-        OPENSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
-        LIBCARES_LIBS="-l:libcares.a" \
-        ZLIB_LIBS="-l:libz.a" \
-        LIBBPF_LIBS="-L/usr/local/lib64 -l:libbpf.a -l:libelf.a -l:libzstd.a" \
-        LIBBROTLIENC_LIBS="-l:libbrotlienc.a -l:libbrotlicommon.a" \
-        LIBBROTLIDEC_LIBS="-l:libbrotlidec.a -l:libbrotlicommon.a" \
-        PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig" && \
-    make -j$(nproc) install-strip && \
-    cd .. && \
-    rm -rf nghttp2
+# nghttp2
+git clone --recursive --shallow-submodules --depth 1 -b v1.68.0 https://github.com/nghttp2/nghttp2.git
+cd nghttp2
+patch -p1 < /extra-mrbgem.patch
+autoreconf -i
+./configure --disable-examples --disable-hpack-tools --with-mruby \
+    --enable-http3 --with-libbpf \
+    --with-libbrotlienc --with-libbrotlidec \
+    CC=clang-19 CXX=clang++-19 \
+    CPPFLAGS="-flto=thin" \
+    LDFLAGS="-static-libgcc -static-libstdc++ -flto=thin" \
+    LIBTOOL_LDFLAGS="-static-libtool-libs" \
+    JEMALLOC_LIBS="-l:libjemalloc.a" \
+    LIBEV_LIBS="-l:libev.a" \
+    OPENSSL_LIBS="-l:libssl.a -l:libcrypto.a" \
+    LIBCARES_LIBS="-l:libcares.a" \
+    ZLIB_LIBS="-l:libz.a" \
+    LIBBPF_LIBS="-L/usr/local/lib64 -l:libbpf.a -l:libelf.a -l:libzstd.a" \
+    LIBBROTLIENC_LIBS="-l:libbrotlienc.a -l:libbrotlicommon.a" \
+    LIBBROTLIDEC_LIBS="-l:libbrotlidec.a -l:libbrotlicommon.a" \
+    PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig"
+make -j$(nproc) install-strip
+cd ..
+rm -rf nghttp2
+EOF
 
 FROM gcr.io/distroless/base-nossl-debian13:latest
 
