@@ -154,11 +154,13 @@ func (f *fixture) prepare() {
 }
 
 func (f *fixture) preparePod(pod *corev1.Pod) {
-	f.clientset = fake.NewSimpleClientset(f.objects...)
+	f.clientset = fake.NewClientset(f.objects...)
 
 	f.gatewayClientset = gatewayfake.NewSimpleClientset()
 
-	// Needs special handling for Gateway due to https://github.com/kubernetes/client-go/issues/1082
+	// Needs special handling for Gateway due to https://github.com/kubernetes/client-go/issues/1082 (now gone),
+	// https://github.com/kubernetes/kubernetes/issues/116253, and https://github.com/kubernetes/kubernetes/issues/134751.  Because of
+	// this, gatewayfake.NewClientset also does not work.
 	gatewayv1GVR := gatewayv1.SchemeGroupVersion.WithResource("gateways")
 
 	for _, o := range f.gatewayObjects {
