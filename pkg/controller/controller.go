@@ -1797,15 +1797,11 @@ func (lbc *LoadBalancerController) Run(ctx context.Context, kubeconfig *rest.Con
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		if err := lbc.nghttpx.Start(ctrlCtx, lbc.nghttpxExecPath, nghttpx.ConfigPath(lbc.nghttpxConfDir)); err != nil {
 			log.Error(err, "Unable to start nghttpx")
 		}
-	}()
+	})
 
 	allInformers := []informers.SharedInformerFactory{lbc.watchNSInformers, lbc.allNSInformers}
 
@@ -1878,11 +1874,7 @@ func (lbc *LoadBalancerController) Run(ctx context.Context, kubeconfig *rest.Con
 		},
 	}
 
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		for {
 			le, err := leaderelection.NewLeaderElector(lec)
 			if err != nil {
@@ -1900,23 +1892,15 @@ func (lbc *LoadBalancerController) Run(ctx context.Context, kubeconfig *rest.Con
 			default:
 			}
 		}
-	}()
+	})
 
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		lbc.worker(ctrlCtx)
-	}()
+	})
 
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		lbc.garbageCollectCertificate(ctrlCtx)
-	}()
+	})
 
 	go func() {
 		<-ctx.Done()
@@ -2260,46 +2244,26 @@ func (lc *LeaderController) Run(ctx context.Context) error {
 	// Add Secret to queue so that we can create it if missing.
 	lc.secretQueue.Add(lc.lbc.nghttpxSecret)
 
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		lc.secretWorker(ctx)
-	}()
+	})
 
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		lc.ingressWorker(ctx)
-	}()
+	})
 
 	if lc.lbc.gatewayAPI {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			lc.gatewayClassWorker(ctx)
-		}()
+		})
 
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			lc.gatewayWorker(ctx)
-		}()
+		})
 
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			lc.httpRouteWorker(ctx)
-		}()
+		})
 	}
 
 	<-ctx.Done()
