@@ -1015,14 +1015,14 @@ func (lbc *LoadBalancerController) createIngressUpstreams(ctx context.Context, i
 				path := &rule.HTTP.Paths[i]
 
 				reqPath := path.Path
-				if idx := strings.Index(reqPath, "#"); idx != -1 {
+				if before, _, ok := strings.Cut(reqPath, "#"); ok {
 					log.Error(nil, "Path includes fragment", "path", reqPath)
-					reqPath = reqPath[:idx]
+					reqPath = before
 				}
 
-				if idx := strings.Index(reqPath, "?"); idx != -1 {
+				if before, _, ok := strings.Cut(reqPath, "?"); ok {
 					log.Error(nil, "Path includes query", "path", reqPath)
-					reqPath = reqPath[:idx]
+					reqPath = before
 				}
 
 				if lbc.noDefaultBackendOverride && rule.Host == "" && (reqPath == "" || reqPath == "/") {
