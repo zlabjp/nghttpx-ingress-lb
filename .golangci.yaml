@@ -33,6 +33,13 @@ linters:
     loggercheck:
       require-string-key: true
       no-printf-like: true
+    revive:
+      rules:
+        - name: var-naming
+          arguments:
+            - []
+            - []
+            - - skip-package-name-collision-with-go-std: true
     wsl_v5:
       allow-first-in-block: true
       allow-whole-block: false
