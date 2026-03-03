@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -1546,7 +1547,7 @@ func TestCreateGatewayUpstream(t *testing.T) {
 			want: []*nghttpx.Upstream{
 				{
 					Name:             "gateway.networking.k8s.io/v1/HTTPRoute:default/alpha,8281;auth.example.com/login",
-					GroupVersionKind: gatewayv1.SchemeGroupVersion.WithKind("HTTPRoute"),
+					GroupVersionKind: schema.GroupVersion{Group: gatewayv1.GroupVersion.Group, Version: gatewayv1.GroupVersion.Version}.WithKind("HTTPRoute"),
 					Source:           types.NamespacedName{Name: "auth", Namespace: metav1.NamespaceDefault},
 					Host:             "auth.example.com",
 					Path:             "/login",
@@ -1565,7 +1566,7 @@ func TestCreateGatewayUpstream(t *testing.T) {
 				},
 				{
 					Name:             "gateway.networking.k8s.io/v1/HTTPRoute:default/alpha,8281;www.auth.example.com/login",
-					GroupVersionKind: gatewayv1.SchemeGroupVersion.WithKind("HTTPRoute"),
+					GroupVersionKind: schema.GroupVersion{Group: gatewayv1.GroupVersion.Group, Version: gatewayv1.GroupVersion.Version}.WithKind("HTTPRoute"),
 					Source:           types.NamespacedName{Name: "auth", Namespace: metav1.NamespaceDefault},
 					Host:             "www.auth.example.com",
 					Path:             "/login",
@@ -1584,7 +1585,7 @@ func TestCreateGatewayUpstream(t *testing.T) {
 				},
 				{
 					Name:             "gateway.networking.k8s.io/v1/HTTPRoute:default/alpha,8281;auth.example.com/auth",
-					GroupVersionKind: gatewayv1.SchemeGroupVersion.WithKind("HTTPRoute"),
+					GroupVersionKind: schema.GroupVersion{Group: gatewayv1.GroupVersion.Group, Version: gatewayv1.GroupVersion.Version}.WithKind("HTTPRoute"),
 					Source:           types.NamespacedName{Name: "auth", Namespace: metav1.NamespaceDefault},
 					Host:             "auth.example.com",
 					Path:             "/auth",
@@ -1603,7 +1604,7 @@ func TestCreateGatewayUpstream(t *testing.T) {
 				},
 				{
 					Name:             "gateway.networking.k8s.io/v1/HTTPRoute:default/alpha,8281;www.auth.example.com/auth",
-					GroupVersionKind: gatewayv1.SchemeGroupVersion.WithKind("HTTPRoute"),
+					GroupVersionKind: schema.GroupVersion{Group: gatewayv1.GroupVersion.Group, Version: gatewayv1.GroupVersion.Version}.WithKind("HTTPRoute"),
 					Source:           types.NamespacedName{Name: "auth", Namespace: metav1.NamespaceDefault},
 					Host:             "www.auth.example.com",
 					Path:             "/auth",
