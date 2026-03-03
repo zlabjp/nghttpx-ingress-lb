@@ -161,7 +161,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 	// Needs special handling for Gateway due to https://github.com/kubernetes/client-go/issues/1082 (now gone),
 	// https://github.com/kubernetes/kubernetes/issues/116253, and https://github.com/kubernetes/kubernetes/issues/134751.  Because of
 	// this, gatewayfake.NewClientset also does not work.
-	gatewayv1GVR := gatewayv1.SchemeGroupVersion.WithResource("gateways")
+	gatewayv1GVR := schema.GroupVersion{Group: gatewayv1.GroupVersion.Group, Version: gatewayv1.GroupVersion.Version}.WithResource("gateways")
 
 	for _, o := range f.gatewayObjects {
 		if gtw, ok := o.(*gatewayv1.Gateway); ok {
@@ -320,17 +320,17 @@ func (f *fixture) expectUpdateIngAction(ing *networkingv1.Ingress) {
 }
 
 func (f *fixture) expectUpdateStatusGatewayClassAction(gc *gatewayv1.GatewayClass) {
-	gvr := gatewayv1.SchemeGroupVersion.WithResource("gatewayclasses")
+	gvr := schema.GroupVersion{Group: gatewayv1.GroupVersion.Group, Version: gatewayv1.GroupVersion.Version}.WithResource("gatewayclasses")
 	f.gatewayActions = append(f.gatewayActions, core.NewUpdateSubresourceAction(gvr, "status", "", gc))
 }
 
 func (f *fixture) expectUpdateStatusGatewayAction(gtw *gatewayv1.Gateway) {
-	gvr := gatewayv1.SchemeGroupVersion.WithResource("gateways")
+	gvr := schema.GroupVersion{Group: gatewayv1.GroupVersion.Group, Version: gatewayv1.GroupVersion.Version}.WithResource("gateways")
 	f.gatewayActions = append(f.gatewayActions, core.NewUpdateSubresourceAction(gvr, "status", "", gtw))
 }
 
 func (f *fixture) expectUpdateStatusHTTPRouteAction(httpRoute *gatewayv1.HTTPRoute) {
-	gvr := gatewayv1.SchemeGroupVersion.WithResource("httproutes")
+	gvr := schema.GroupVersion{Group: gatewayv1.GroupVersion.Group, Version: gatewayv1.GroupVersion.Version}.WithResource("httproutes")
 	f.gatewayActions = append(f.gatewayActions, core.NewUpdateSubresourceAction(gvr, "status", "", httpRoute))
 }
 

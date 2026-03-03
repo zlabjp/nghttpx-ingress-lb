@@ -55,6 +55,12 @@ linters:
       - third_party$
       - builtin$
       - examples$
+    rules:
+      # fake.NewClientset does not work with CRDs.  See
+      # https://github.com/kubernetes/kubernetes/issues/126850
+      - linters:
+          - staticcheck
+        text: "SA1019: .*\\.NewSimpleClientset is deprecated"
 formatters:
   enable:
     - gci
