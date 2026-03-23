@@ -87,7 +87,7 @@ cd ..
 rm -rf libbpf
 
 # nghttp2
-git clone --recursive --shallow-submodules --depth 1 -b v1.68.0 https://github.com/nghttp2/nghttp2.git
+git clone --recursive --shallow-submodules --depth 1 -b v1.68.1 https://github.com/nghttp2/nghttp2.git
 cd nghttp2
 patch -p1 < /extra-mrbgem.patch
 autoreconf -i
