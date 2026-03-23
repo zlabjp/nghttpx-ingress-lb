@@ -44,7 +44,7 @@ apt-get install -y --no-install-recommends \
 apt-get install -y --no-install-recommends -t trixie-backports libelf-dev
 
 # aws-lc
-git clone --depth 1 -b v1.62.0 https://github.com/aws/aws-lc
+git clone --depth 1 -b v1.71.0 https://github.com/aws/aws-lc
 cd aws-lc
 export CC=clang-19 CXX=clang++-19
 cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DDISABLE_GO=ON
@@ -54,7 +54,7 @@ cd ..
 rm -rf aws-lc
 
 # nghttp3
-git clone --recursive --shallow-submodules --depth 1 -b v1.12.0 https://github.com/ngtcp2/nghttp3
+git clone --recursive --shallow-submodules --depth 1 -b v1.15.0 https://github.com/ngtcp2/nghttp3
 cd nghttp3
 autoreconf -i
 ./configure --enable-lib-only CC=clang-19 CXX=clang++-19 CPPFLAGS="-flto=thin" LDFLAGS="-flto=thin"
@@ -64,7 +64,7 @@ cd ..
 rm -rf nghttp3
 
 # ngtcp2
-git clone --recursive --shallow-submodules --depth 1 -b v1.17.0 https://github.com/ngtcp2/ngtcp2
+git clone --recursive --shallow-submodules --depth 1 -b v1.21.0 https://github.com/ngtcp2/ngtcp2
 cd ngtcp2
 autoreconf -i
 ./configure --enable-lib-only --with-boringssl \
@@ -80,7 +80,7 @@ cd ..
 rm -rf ngtcp2
 
 # libbpf
-git clone --depth 1 -b v1.6.2 https://github.com/libbpf/libbpf
+git clone --depth 1 -b v1.7.0 https://github.com/libbpf/libbpf
 cd libbpf
 PREFIX=/usr/local CC=clang-19 CXX=clang++-19 make -C src install
 cd ..
