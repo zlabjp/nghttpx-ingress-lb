@@ -23,7 +23,7 @@ jobs:
       run: |
         make vet check controller
     - name: Resolve image properties
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       id: imageprops
       with:
         script: |
