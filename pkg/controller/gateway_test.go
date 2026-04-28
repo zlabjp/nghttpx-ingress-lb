@@ -1501,12 +1501,12 @@ func TestCreateGatewayUpstream(t *testing.T) {
 								Matches: []gatewayv1.HTTPRouteMatch{
 									{
 										Path: &gatewayv1.HTTPPathMatch{
-											Value: ptr.To("/login"),
+											Value: new("/login"),
 										},
 									},
 									{
 										Path: &gatewayv1.HTTPPathMatch{
-											Value: ptr.To("/auth"),
+											Value: new("/auth"),
 										},
 									},
 								},
@@ -1515,7 +1515,7 @@ func TestCreateGatewayUpstream(t *testing.T) {
 										BackendRef: gatewayv1.BackendRef{
 											BackendObjectReference: gatewayv1.BackendObjectReference{
 												Name: gatewayv1.ObjectName(bs1.Name),
-												Port: ptr.To(bs1.Spec.Ports[0].Port),
+												Port: new(bs1.Spec.Ports[0].Port),
 											},
 										},
 									},
