@@ -158,7 +158,7 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 			}
 
 			accepted = true
-			requireTLSP = ptr.To(false)
+			requireTLSP = new(false)
 
 			continue
 		}
@@ -196,10 +196,10 @@ func (lbc *LoadBalancerController) httpRouteAccepted(ctx context.Context, httpRo
 
 		if gtw.Spec.Listeners[lidx].Protocol == gatewayv1.HTTPSProtocolType {
 			if requireTLSP == nil {
-				requireTLSP = ptr.To(true)
+				requireTLSP = new(true)
 			}
 		} else {
-			requireTLSP = ptr.To(false)
+			requireTLSP = new(false)
 		}
 	}
 

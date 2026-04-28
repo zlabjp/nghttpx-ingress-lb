@@ -408,10 +408,10 @@ func newDefaultBackend() (*corev1.Service, []*discoveryv1.EndpointSlice) {
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: ptr.To(int32(8081)),
+					Port: new(int32(8081)),
 				},
 				{
-					Port: ptr.To(int32(8080)),
+					Port: new(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -438,10 +438,10 @@ func newDefaultBackend() (*corev1.Service, []*discoveryv1.EndpointSlice) {
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: ptr.To(int32(8081)),
+					Port: new(int32(8081)),
 				},
 				{
-					Port: ptr.To(int32(8080)),
+					Port: new(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -466,10 +466,10 @@ func newDefaultBackend() (*corev1.Service, []*discoveryv1.EndpointSlice) {
 			AddressType: "FQDN",
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: ptr.To(int32(8081)),
+					Port: new(int32(8081)),
 				},
 				{
-					Port: ptr.To(int32(8080)),
+					Port: new(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -525,10 +525,10 @@ func newDefaultBackendWithoutSelectors() (*corev1.Service, []*discoveryv1.Endpoi
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: ptr.To(int32(8081)),
+					Port: new(int32(8081)),
 				},
 				{
-					Port: ptr.To(int32(8080)),
+					Port: new(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -550,10 +550,10 @@ func newDefaultBackendWithoutSelectors() (*corev1.Service, []*discoveryv1.Endpoi
 			AddressType: discoveryv1.AddressTypeIPv4,
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: ptr.To(int32(8081)),
+					Port: new(int32(8081)),
 				},
 				{
-					Port: ptr.To(int32(8080)),
+					Port: new(int32(8080)),
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -603,11 +603,11 @@ func newBackend(name string, addrs []string) (*corev1.Service, *discoveryv1.Endp
 		Ports: []discoveryv1.EndpointPort{
 			{
 				Protocol: ptr.To(corev1.ProtocolTCP),
-				Port:     ptr.To(int32(81)),
+				Port:     new(int32(81)),
 			},
 			{
 				Protocol: ptr.To(corev1.ProtocolTCP),
-				Port:     ptr.To(int32(80)),
+				Port:     new(int32(80)),
 			},
 		},
 	}
@@ -657,11 +657,11 @@ func newBackendWithoutSelectors(name string, addrs []string) (*corev1.Service, *
 		Ports: []discoveryv1.EndpointPort{
 			{
 				Protocol: ptr.To(corev1.ProtocolTCP),
-				Port:     ptr.To(int32(81)),
+				Port:     new(int32(81)),
 			},
 			{
 				Protocol: ptr.To(corev1.ProtocolTCP),
-				Port:     ptr.To(int32(80)),
+				Port:     new(int32(80)),
 			},
 		},
 	}
@@ -773,7 +773,7 @@ func (b *ingressBuilder) WithTLS(tlsSecret string) *ingressBuilder {
 }
 
 func (b *ingressBuilder) WithIngressClass(ingressClass string) *ingressBuilder {
-	b.Spec.IngressClassName = ptr.To(ingressClass)
+	b.Spec.IngressClassName = new(ingressClass)
 
 	return b
 }
