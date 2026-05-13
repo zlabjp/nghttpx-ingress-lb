@@ -1487,11 +1487,14 @@ func (lbc *LoadBalancerController) cacheCertificate(key types.NamespacedName, en
 }
 
 func (lbc *LoadBalancerController) garbageCollectCertificate(ctx context.Context) {
+	ticker := time.NewTicker(certificateGarbageCollectionPeriod)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(certificateGarbageCollectionPeriod):
+		case <-ticker.C:
 		}
 
 		lbc.certCacheMu.Lock()
