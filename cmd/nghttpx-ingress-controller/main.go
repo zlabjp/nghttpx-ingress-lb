@@ -423,11 +423,10 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	ctx, cancel = context.WithCancel(ctx)
-	defer cancel()
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM)
+	defer stop()
 
-	go registerHandlers(ctx, cancel, lb)
-	go handleSigterm(ctx, cancel)
+	go registerHandlers(ctx, stop, lb)
 
 	lbc.Run(ctx, config)
 
@@ -536,15 +535,4 @@ func registerHandlers(ctx context.Context, cancel context.CancelFunc, lb *nghttp
 		log.Error(err, "Internal HTTP server returned error")
 		os.Exit(1)
 	}
-}
-
-func handleSigterm(ctx context.Context, cancel context.CancelFunc) {
-	log := klog.FromContext(ctx)
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGTERM)
-	<-signalChan
-	log.Info("Received SIGTERM, shutting down")
-
-	cancel()
 }
