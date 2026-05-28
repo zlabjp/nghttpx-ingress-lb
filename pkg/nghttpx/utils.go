@@ -282,7 +282,7 @@ func MrubyRbPath(dir string) string {
 
 // MkdirAll creates directory given as path.
 func MkdirAll(path string) error {
-	return os.MkdirAll(path, os.ModeDir)
+	return os.MkdirAll(path, 0o700)
 }
 
 // nghttpxDuration serializes d in nghttpx DURATION format.  Currently, it formats d in milliseconds if it has fraction of a second.
