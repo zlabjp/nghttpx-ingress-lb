@@ -29,7 +29,7 @@ spec:
       terminationGracePeriodSeconds: 60
       hostNetwork: true # disable this if you do not need CNI
       containers:
-      - image: zlabjp/nghttpx-ingress-controller:latest
+      - image: ghcr.io/zlabjp/nghttpx-ingress-controller:latest
         name: nghttpx-ingress-lb
         imagePullPolicy: Always
         startupProbe:
@@ -76,3 +76,24 @@ spec:
         - --nghttpx-configmap=$(POD_NAMESPACE)/nghttpx-ingress-lb-config
         - --healthz-port=11249
         - --proxy-proto=true
+        securityContext:
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+            # The following capabilities are required to load eBPF
+            # program that is used by HTTP/3.  They can be omitted if
+            # the container image is built without HTTP/3 support, by
+            # using --build-arg ENABLE_HTTP3=false.
+            - BPF
+            - PERFMON
+            - SYS_RESOURCE
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+        volumeMounts:
+        - mountPath: /etc/nghttpx
+          name: conf
+      volumes:
+      - emptyDir: {}
+        name: conf

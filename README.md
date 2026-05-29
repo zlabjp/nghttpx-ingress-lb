@@ -14,6 +14,12 @@ The official Docker images since v0.67.0 are available at
 The images for older releases can be found at [Docker
 Hub](https://hub.docker.com/r/zlabjp/nghttpx-ingress-controller/).
 
+Since v0.77.0, the processes inside the container run as non-root user
+(65532:65532 as per distroless nonroot image).  You might need some
+adjustments to your manifests.  Currently, ``allowPrivilegeEscalation:
+false`` does not work due to the limitation of Kubernetes and
+container runtime.
+
 ## Requirements
 
 If `--internal-default-backend` flag is given to false, the default
@@ -188,26 +194,17 @@ and new key is generated in the interval specified by
 > is first placed at the end of the list.  In the next rotation, it is
 > moved to the first, and is used for encryption.
 
-HTTP/3 requires the extra capabilities to load eBPF program.  Add the
-following capabilities to the nghttpx-ingress-controller container:
-
-```yaml
-apiVersion: apps/v1
-kind: DaemonSet
-...
-spec:
-  template:
-    spec:
-      containers:
-      - image: zlabjp/nghttpx-ingress-controller:latest
-        ...
-        securityContext:
-          capabilities:
-            add:
-            - SYS_ADMIN
-            - SYS_RESOURCE
-        ...
-```
+HTTP/3 requires the extra capabilities to load eBPF program, more
+specifically, ``BPF``, ``PERFMON``, and ``SYS_RESOURCE``.  Due to the
+constraints around the Linux capabilities in Kubernetes and the
+underlying container runtime when running Pod as non-root user, we use
+file capabilities to gain these capabilities and it is done in the
+image build time.  Because the container image we publish enables
+HTTP/3, this image requires these capabilities.  Our example manifests
+include them.  If you need to drop these capabilities to adhere Pod
+Security Standards baseline profile, build the image with
+``--build-arg ENABLE_HTTP3=false``.  Then only capability you need is
+``NET_BIND_SERVICE``.
 
 ## Gateway API support (Experimental)
 

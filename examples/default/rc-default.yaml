@@ -19,7 +19,7 @@ spec:
       terminationGracePeriodSeconds: 60
       hostNetwork: true
       containers:
-      - image: zlabjp/nghttpx-ingress-controller:latest
+      - image: ghcr.io/zlabjp/nghttpx-ingress-controller:latest
         name: nghttpx-ingress-lb
         imagePullPolicy: Always
         startupProbe:
@@ -62,3 +62,24 @@ spec:
         args:
         - /nghttpx-ingress-controller
         - --healthz-port=11249
+        securityContext:
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+            # The following capabilities are required to load eBPF
+            # program that is used by HTTP/3.  They can be omitted if
+            # the container image is built without HTTP/3 support, by
+            # using --build-arg ENABLE_HTTP3=false.
+            - BPF
+            - PERFMON
+            - SYS_RESOURCE
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+        volumeMounts:
+        - mountPath: /etc/nghttpx
+          name: conf
+      volumes:
+      - emptyDir: {}
+        name: conf

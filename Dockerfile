@@ -18,6 +18,9 @@
 # file that was distributed with this source code.
 FROM debian:13 AS build
 
+# Set to false to disable HTTP/3.
+ARG ENABLE_HTTP3=true
+
 COPY --link patches/extra-mrbgem.patch /
 
 RUN <<EOF
@@ -40,7 +43,7 @@ EOT
 apt-get update
 apt-get install -y --no-install-recommends \
     git clang-19 make binutils autoconf automake autotools-dev libtool pkg-config cmake cmake-data \
-    zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch libbrotli-dev
+    zlib1g-dev libev-dev libjemalloc-dev ruby-dev libc-ares-dev bison patch libbrotli-dev libcap2-bin
 apt-get install -y --no-install-recommends -t trixie-backports libelf-dev
 
 # aws-lc
@@ -108,11 +111,20 @@ autoreconf -i
     LIBBROTLIDEC_LIBS="-l:libbrotlidec.a -l:libbrotlicommon.a" \
     PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig"
 make -j$(nproc) install-strip
+
+SETCAP=cap_net_bind_service
+
+if [ "$ENABLE_HTTP3" = "true" ]; then
+    SETCAP="$SETCAP,cap_bpf,cap_perfmon,cap_sys_resource"
+fi
+
+setcap "$SETCAP=+ep" /usr/local/bin/nghttpx
+
 cd ..
 rm -rf nghttp2
 EOF
 
-FROM gcr.io/distroless/base-nossl-debian13:latest
+FROM gcr.io/distroless/base-nossl-debian13:nonroot
 
 COPY --from=build --link /usr/local/bin/nghttpx /usr/local/bin/
 COPY --from=build --link /usr/local/lib/nghttp2/reuseport_kern.o \
