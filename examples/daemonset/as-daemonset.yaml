@@ -80,6 +80,10 @@ spec:
         volumeMounts:
         - mountPath: /etc/nghttpx
           name: conf
+        - mountPath: /tmp
+          name: tmp
       volumes:
       - emptyDir: {}
         name: conf
+      - emptyDir: {}
+        name: tmp
