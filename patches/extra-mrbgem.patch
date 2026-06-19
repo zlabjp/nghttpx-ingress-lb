@@ -6,7 +6,7 @@ index 5d003f21..1f0737ab 100644
  
    # Added by nghttp2 project
    conf.gem :core => 'mruby-eval'
-+  conf.gem :github => 'mattn/mruby-onig-regexp'
++  conf.gem :github => 'mattn/mruby-onig-regexp', :checksum_hash => '0b8686146f479c88b5a55f2fc086b480446ced5f'
  end
  
  if ENV['BUILD'] == ENV['HOST'] then
