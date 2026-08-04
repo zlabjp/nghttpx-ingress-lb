@@ -47,7 +47,7 @@ apt-get install -y --no-install-recommends \
 apt-get install -y --no-install-recommends -t trixie-backports libelf-dev
 
 # aws-lc
-git clone --depth 1 -b v1.72.0 https://github.com/aws/aws-lc
+git clone --depth 1 -b v5.4.0 https://github.com/aws/aws-lc
 cd aws-lc
 export CC=clang-19 CXX=clang++-19
 cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DDISABLE_GO=ON
@@ -57,7 +57,7 @@ cd ..
 rm -rf aws-lc
 
 # nghttp3
-git clone --recursive --shallow-submodules --depth 1 -b v1.15.0 https://github.com/ngtcp2/nghttp3
+git clone --recursive --shallow-submodules --depth 1 -b v1.18.0 https://github.com/ngtcp2/nghttp3
 cd nghttp3
 autoreconf -i
 ./configure --enable-lib-only CC=clang-19 CXX=clang++-19 CPPFLAGS="-flto=thin" LDFLAGS="-flto=thin"
@@ -67,7 +67,7 @@ cd ..
 rm -rf nghttp3
 
 # ngtcp2
-git clone --recursive --shallow-submodules --depth 1 -b v1.22.1 https://github.com/ngtcp2/ngtcp2
+git clone --recursive --shallow-submodules --depth 1 -b v1.25.0 https://github.com/ngtcp2/ngtcp2
 cd ngtcp2
 autoreconf -i
 ./configure --enable-lib-only --with-boringssl \
@@ -90,7 +90,7 @@ cd ..
 rm -rf libbpf
 
 # nghttp2
-git clone --recursive --shallow-submodules --depth 1 -b v1.69.0 https://github.com/nghttp2/nghttp2.git
+git clone --recursive --shallow-submodules --depth 1 -b v1.70.0 https://github.com/nghttp2/nghttp2.git
 cd nghttp2
 patch -p1 < /extra-mrbgem.patch
 autoreconf -i
