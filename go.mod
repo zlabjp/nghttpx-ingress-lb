@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/google/go-cmp v0.7.0
 	github.com/spf13/cobra v1.10.2
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.0
 	golang.org/x/time v0.15.0
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
