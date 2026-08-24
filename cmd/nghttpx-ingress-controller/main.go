@@ -140,7 +140,7 @@ func main() {
 	rootCmd.Flags().AddGoFlagSet(flag.CommandLine)
 	clientcmd.BindOverrideFlags(&configOverrides, rootCmd.Flags(), clientcmd.RecommendedConfigOverrideFlags(""))
 
-	rootCmd.Flags().Var(((*flagsutil.NamespacedName)(&defaultSvc)), "default-backend-service",
+	rootCmd.Flags().Var((*flagsutil.NamespacedName)(&defaultSvc), "default-backend-service",
 		`Service used to serve a 404 page for the default backend.  Takes the form namespace/name.  The controller uses the first port of this Service for the default backend.  This flag must be specified unless --internal-default-backend is given.`)
 
 	rootCmd.Flags().Var((*flagsutil.NamespacedName)(&ngxConfigMap), "nghttpx-configmap",
