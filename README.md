@@ -155,7 +155,8 @@ spec:
 If TLS is configured for a service, and it is accessed via cleartext
 HTTP, those requests are redirected to HTTPS URI.  If
 `--default-tls-secret` flag is used, all cleartext HTTP requests are
-redirected to https URI.  This behavior is configurable using
+redirected to https URI unless `--default-https-redirect=false` is
+specified.  This behavior is also configurable per Ingress basis using
 [path-config](#ingresszlabcojppath-config-annotation) annotation.
 
 ## Sharing TLS ticket keys

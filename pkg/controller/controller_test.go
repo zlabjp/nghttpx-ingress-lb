@@ -186,6 +186,7 @@ func (f *fixture) preparePod(pod *corev1.Pod) {
 		ReloadRate:             1.0,
 		ReloadBurst:            1,
 		HTTP3:                  f.http3,
+		DefaultHTTPSRedirect:   true,
 		ShareTLSTicketKey:      f.shareTLSTicketKey,
 		PublishService:         f.publishService,
 		RequireIngressClass:    f.requireIngressClass,
@@ -916,38 +917,56 @@ func TestSyncDefaultTLSSecretNotFound(t *testing.T) {
 
 // TestSyncDefaultSecret verifies that default TLS secret is loaded.
 func TestSyncDefaultSecret(t *testing.T) {
-	f := newFixture(t)
-
-	dCrt := []byte(tlsCrt)
-	dKey := []byte(tlsKey)
-	tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
-	nghttpxSecret := newNghttpxSecret()
-	svc, ess := newDefaultBackend()
-
-	f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
-	f.svcStore = append(f.svcStore, svc)
-	f.epSliceStore = append(f.epSliceStore, ess...)
-
-	f.prepare()
-	f.lbc.defaultTLSSecret = &types.NamespacedName{
-		Namespace: tlsSecret.Namespace,
-		Name:      tlsSecret.Name,
+	tests := []struct {
+		desc                 string
+		defaultHTTPSRedirect bool
+	}{
+		{
+			desc:                 "Enable default HTTPS redirect",
+			defaultHTTPSRedirect: true,
+		},
+		{
+			desc: "Disable default HTTPS redirect",
+		},
 	}
-	f.run()
 
-	flb := f.lbc.nghttpx.(*fakeLoadBalancer)
-	ingConfig := flb.ingConfig
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			f := newFixture(t)
 
-	assert.True(t, ingConfig.TLS)
+			dCrt := []byte(tlsCrt)
+			dKey := []byte(tlsKey)
+			tlsSecret := newTLSSecret("kube-system", "default-tls", dCrt, dKey)
+			nghttpxSecret := newNghttpxSecret()
+			svc, ess := newDefaultBackend()
 
-	dKeyChecksum := nghttpx.Checksum(dKey)
-	dCrtChecksum := nghttpx.Checksum(dCrt)
+			f.secretStore = append(f.secretStore, tlsSecret, nghttpxSecret)
+			f.svcStore = append(f.svcStore, svc)
+			f.epSliceStore = append(f.epSliceStore, ess...)
 
-	assert.Equal(t, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(dKeyChecksum)), ingConfig.DefaultTLSCred.Key.Path)
-	assert.Equal(t, nghttpx.CreateTLSCertPath(defaultConfDir, hex.EncodeToString(dCrtChecksum)), ingConfig.DefaultTLSCred.Cert.Path)
-	assert.Equal(t, dKeyChecksum, ingConfig.DefaultTLSCred.Key.Checksum)
-	assert.Equal(t, dCrtChecksum, ingConfig.DefaultTLSCred.Cert.Checksum)
-	assert.True(t, ingConfig.Upstreams[0].RedirectIfNotTLS)
+			f.prepare()
+			f.lbc.defaultTLSSecret = &types.NamespacedName{
+				Namespace: tlsSecret.Namespace,
+				Name:      tlsSecret.Name,
+			}
+			f.lbc.defaultHTTPSRedirect = tt.defaultHTTPSRedirect
+			f.run()
+
+			flb := f.lbc.nghttpx.(*fakeLoadBalancer)
+			ingConfig := flb.ingConfig
+
+			assert.True(t, ingConfig.TLS)
+
+			dKeyChecksum := nghttpx.Checksum(dKey)
+			dCrtChecksum := nghttpx.Checksum(dCrt)
+
+			assert.Equal(t, nghttpx.CreateTLSKeyPath(defaultConfDir, hex.EncodeToString(dKeyChecksum)), ingConfig.DefaultTLSCred.Key.Path)
+			assert.Equal(t, nghttpx.CreateTLSCertPath(defaultConfDir, hex.EncodeToString(dCrtChecksum)), ingConfig.DefaultTLSCred.Cert.Path)
+			assert.Equal(t, dKeyChecksum, ingConfig.DefaultTLSCred.Key.Checksum)
+			assert.Equal(t, dCrtChecksum, ingConfig.DefaultTLSCred.Cert.Checksum)
+			assert.Equal(t, tt.defaultHTTPSRedirect, ingConfig.Upstreams[0].RedirectIfNotTLS)
+		})
+	}
 }
 
 // TestSyncDupDefaultSecret verifies that duplicated default TLS secret is removed.

@@ -117,6 +117,7 @@ var (
 	quicSecretPeriod                        = 4 * time.Hour
 	gatewayAPI                              = false
 	gatewayClassController                  = "zlab.co.jp/nghttpx"
+	defaultHTTPSRedirect                    = true
 )
 
 func main() {
@@ -162,7 +163,7 @@ func main() {
 		`Allow to use address of type NodeInternalIP when fetching external IP address.  This is the workaround for the cluster configuration where NodeExternalIP or NodeLegacyHostIP is not assigned or cannot be used.`)
 
 	rootCmd.Flags().Var((*flagsutil.NamespacedName)(&defaultTLSSecret), "default-tls-secret",
-		`Name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.  The redirection can be turned off per Ingress basis with redirectIfNotTLS=false in ingress.zlab.co.jp/path-config annotation.`)
+		`Name of the Secret that contains TLS server certificate and secret key to enable TLS by default.  For those client connections which are not TLS encrypted, they are redirected to https URI permanently.  The redirection can be turned off globally with --default-https-redirect=false or per Ingress basis with redirectIfNotTLS=false in ingress.zlab.co.jp/path-config annotation.`)
 
 	rootCmd.Flags().StringVar(&ingressClassController, "ingress-class-controller", ingressClassController,
 		`The name of IngressClass controller for this controller.  This is the value specified in IngressClass.spec.controller.`)
@@ -259,6 +260,9 @@ func main() {
 
 	rootCmd.Flags().StringVar(&gatewayClassController, "gateway-class-controller", gatewayClassController,
 		`The name of GatewayClass controller for this controller.  This is the value specified in GatewayClass.spec.controllerName.`)
+
+	rootCmd.Flags().BoolVar(&defaultHTTPSRedirect, "default-https-redirect", defaultHTTPSRedirect,
+		`Redirect to HTTPS URI when --default-tls-secret is given.`)
 
 	featureGate.AddFlag(rootCmd.Flags())
 	logsapiv1.AddFlags(loggingConf, rootCmd.Flags())
@@ -378,6 +382,7 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		NghttpxMaxWorkerProcesses:               nghttpxMaxWorkerProcesses,
 		NghttpxSecret:                           types.NamespacedName{Name: nghttpxSecret, Namespace: thisPod.Namespace},
 		DefaultTLSSecret:                        defaultTLSSecretKey,
+		DefaultHTTPSRedirect:                    defaultHTTPSRedirect,
 		IngressClassController:                  ingressClassController,
 		AllowInternalIP:                         allowInternalIP,
 		ProxyProto:                              proxyProto,
