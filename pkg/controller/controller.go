@@ -145,6 +145,7 @@ type LoadBalancerController struct {
 	defaultSvc                              *types.NamespacedName
 	nghttpxConfigMap                        *types.NamespacedName
 	defaultTLSSecret                        *types.NamespacedName
+	defaultHTTPSRedirect                    bool
 	publishService                          *types.NamespacedName
 	nghttpxHealthPort                       int32
 	nghttpxAPIPort                          int32
@@ -215,6 +216,8 @@ type Config struct {
 	NghttpxSecret types.NamespacedName
 	// DefaultTLSSecret is the default TLS Secret to enable TLS by default.
 	DefaultTLSSecret *types.NamespacedName
+	// DefaultHTTPSRedirect, if true, redirects to HTTPS URI when DefaultTLSSecret is set.
+	DefaultHTTPSRedirect bool
 	// IngressClassController is the name of IngressClass controller for this controller.
 	IngressClassController string
 	AllowInternalIP        bool
@@ -288,6 +291,7 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		nghttpxSecret:                           config.NghttpxSecret,
 		defaultSvc:                              config.DefaultBackendService,
 		defaultTLSSecret:                        config.DefaultTLSSecret,
+		defaultHTTPSRedirect:                    config.DefaultHTTPSRedirect,
 		watchNamespace:                          config.WatchNamespace,
 		ingressClassController:                  config.IngressClassController,
 		allowInternalIP:                         config.AllowInternalIP,
@@ -767,6 +771,10 @@ func (lbc *LoadBalancerController) sync(ctx context.Context, key struct{}) error
 	return nil
 }
 
+func (lbc *LoadBalancerController) defaultHTTPSRedirectEnabled() bool {
+	return lbc.defaultTLSSecret != nil && lbc.defaultHTTPSRedirect
+}
+
 func (lbc *LoadBalancerController) getDefaultUpstream(ctx context.Context) *nghttpx.Upstream {
 	log := klog.FromContext(ctx)
 
@@ -792,7 +800,7 @@ App.new
 
 		return &nghttpx.Upstream{
 			Name:             "internal-default-backend",
-			RedirectIfNotTLS: lbc.defaultTLSSecret != nil,
+			RedirectIfNotTLS: lbc.defaultHTTPSRedirectEnabled(),
 			Affinity:         nghttpx.AffinityNone,
 			Mruby:            nghttpx.CreatePerPatternMrubyChecksumFile(lbc.nghttpxConfDir, script),
 			DoNotForward:     true,
@@ -809,7 +817,7 @@ App.new
 	svcKey := lbc.defaultSvc.String()
 	upstream := &nghttpx.Upstream{
 		Name:             svcKey,
-		RedirectIfNotTLS: lbc.defaultTLSSecret != nil,
+		RedirectIfNotTLS: lbc.defaultHTTPSRedirectEnabled(),
 		Affinity:         nghttpx.AffinityNone,
 	}
 
@@ -1286,7 +1294,7 @@ func (lbc *LoadBalancerController) createUpstream(ctx context.Context, gvk schem
 		Source:                   namespacedName(obj),
 		Host:                     host,
 		Path:                     normalizedPath,
-		RedirectIfNotTLS:         pc.GetRedirectIfNotTLS() && (requireTLS || lbc.defaultTLSSecret != nil),
+		RedirectIfNotTLS:         pc.GetRedirectIfNotTLS() && (requireTLS || lbc.defaultHTTPSRedirectEnabled()),
 		DoNotForward:             pc.GetDoNotForward(),
 		Affinity:                 pc.GetAffinity(),
 		AffinityCookieName:       pc.GetAffinityCookieName(),
