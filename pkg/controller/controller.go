@@ -590,7 +590,7 @@ func (lbc *LoadBalancerController) podReferenced(ctx context.Context, pod *corev
 	if !lbc.internalDefaultBackend {
 		if svc, err := lbc.svcLister.Services(lbc.defaultSvc.Namespace).Get(lbc.defaultSvc.Name); err == nil {
 			if labels.ValidatedSetSelector(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
-				log.V(4).Info("Referenced by default Service", "pod", klog.KObj(pod), "service", lbc.defaultSvc)
+				log.V(4).Info("Referenced by default Service", "pod", klog.KObj(pod), "service", lbc.defaultSvc) //nolint:loggercheck
 				return true
 			}
 		}
@@ -694,7 +694,7 @@ func (lbc *LoadBalancerController) getConfigMap(ctx context.Context, cmKey *type
 	cm, err := lbc.cmLister.ConfigMaps(cmKey.Namespace).Get(cmKey.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.V(3).Info("ConfigMap has been deleted", "configMap", cmKey)
+			log.V(3).Info("ConfigMap has been deleted", "configMap", cmKey) //nolint:loggercheck
 			return &corev1.ConfigMap{}, nil
 		}
 
@@ -2724,7 +2724,7 @@ func (lc *LeaderController) getLoadBalancerIngress(ctx context.Context) ([]netwo
 	} else {
 		svc, err := lc.svcLister.Services(lc.lbc.publishService.Namespace).Get(lc.lbc.publishService.Name)
 		if err != nil {
-			log.Error(err, "Unable to get Service", "service", lc.lbc.publishService)
+			log.Error(err, "Unable to get Service", "service", lc.lbc.publishService) //nolint:loggercheck
 			return nil, err
 		}
 
