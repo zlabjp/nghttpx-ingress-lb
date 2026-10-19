@@ -694,7 +694,7 @@ func (lbc *LoadBalancerController) getConfigMap(ctx context.Context, cmKey *type
 	cm, err := lbc.cmLister.ConfigMaps(cmKey.Namespace).Get(cmKey.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.V(3).Info("ConfigMap has been deleted", "configMap", cmKey) //nolint:loggercheck
+			log.V(3).Info("ConfigMap has been deleted", "configMap", cmKey)
 			return &corev1.ConfigMap{}, nil
 		}
 
