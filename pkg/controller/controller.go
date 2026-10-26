@@ -162,7 +162,6 @@ type LoadBalancerController struct {
 	proxyProto                              bool
 	noDefaultBackendOverride                bool
 	deferredShutdownPeriod                  time.Duration
-	healthzPort                             int32
 	internalDefaultBackend                  bool
 	http3                                   bool
 	shareTLSTicketKey                       bool
@@ -234,8 +233,6 @@ type Config struct {
 	NoDefaultBackendOverride bool
 	// DeferredShutdownPeriod is a period before the controller starts shutting down when it receives shutdown signal.
 	DeferredShutdownPeriod time.Duration
-	// HealthzPort is a port for healthz endpoint.
-	HealthzPort int32
 	// InternalDefaultBackend, if true, instructs the controller to use internal default backend instead of an external one.
 	InternalDefaultBackend bool
 	// HTTP3, if true, enables HTTP/3.
@@ -299,7 +296,6 @@ func NewLoadBalancerController(ctx context.Context, clientset clientset.Interfac
 		publishService:                          config.PublishService,
 		noDefaultBackendOverride:                config.NoDefaultBackendOverride,
 		deferredShutdownPeriod:                  config.DeferredShutdownPeriod,
-		healthzPort:                             config.HealthzPort,
 		internalDefaultBackend:                  config.InternalDefaultBackend,
 		http3:                                   config.HTTP3,
 		shareTLSTicketKey:                       config.ShareTLSTicketKey,
