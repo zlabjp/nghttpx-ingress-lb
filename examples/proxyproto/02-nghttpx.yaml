@@ -35,7 +35,7 @@ spec:
         startupProbe:
           httpGet:
             path: /readyz
-            # when changing this port, also specify it using --healthz-port in nghttpx-ingress-controller args.
+            # when changing this port, also specify it using --healthz-endpoint in nghttpx-ingress-controller args.
             port: 11249
             scheme: HTTP
           failureThreshold: 30
@@ -43,14 +43,14 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            # when changing this port, also specify it using --healthz-port in nghttpx-ingress-controller args.
+            # when changing this port, also specify it using --healthz-endpoint in nghttpx-ingress-controller args.
             port: 11249
             scheme: HTTP
           timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /readyz
-            # when changing this port, also specify it using --healthz-port in nghttpx-ingress-controller args.
+            # when changing this port, also specify it using --healthz-endpoint in nghttpx-ingress-controller args.
             port: 11249
             scheme: HTTP
           timeoutSeconds: 5
@@ -74,7 +74,7 @@ spec:
         args:
         - /nghttpx-ingress-controller
         - --nghttpx-configmap=$(POD_NAMESPACE)/nghttpx-ingress-lb-config
-        - --healthz-port=11249
+        - --healthz-endpoint=127.0.0.1:11249
         - --proxy-proto=true
         securityContext:
           capabilities:
