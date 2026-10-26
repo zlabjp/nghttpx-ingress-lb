@@ -29,6 +29,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -74,6 +75,7 @@ var (
 	kubeconfig               string
 	watchNamespace           = metav1.NamespaceAll
 	healthzPort              = int32(11249)
+	healthzEndpoint          = "127.0.0.1:11249"
 	nghttpxHealthPort        = int32(10901)
 	nghttpxAPIPort           = int32(10902)
 	profiling                = true
@@ -152,12 +154,16 @@ func main() {
 	rootCmd.Flags().StringVar(&watchNamespace, "watch-namespace", watchNamespace, `Namespace to watch for Ingress.  Default is to watch all namespaces.`)
 
 	rootCmd.Flags().Int32Var(&healthzPort, "healthz-port", healthzPort, "Port for healthz endpoint.")
+	utilruntime.Must(rootCmd.Flags().MarkDeprecated("healthz-port", "has been deprecated.  Use healthz-endpoint instead"))
+
+	rootCmd.Flags().StringVar(&healthzEndpoint, "healthz-endpoint", healthzEndpoint,
+		`healthz endpoint in the form of  [<address>]:<port>.  <address> is optional and if omitted, listens to all interfaces`)
 
 	rootCmd.Flags().Int32Var(&nghttpxHealthPort, "nghttpx-health-port", nghttpxHealthPort, "Port for nghttpx health monitor endpoint.")
 
 	rootCmd.Flags().Int32Var(&nghttpxAPIPort, "nghttpx-api-port", nghttpxAPIPort, "Port for nghttpx API endpoint.")
 
-	rootCmd.Flags().BoolVar(&profiling, "profiling", profiling, `Enable profiling at the health port.  It exposes /debug/pprof/ endpoint on a port specified by --healthz-port.`)
+	rootCmd.Flags().BoolVar(&profiling, "profiling", profiling, `Enable profiling at the healthz endpoint.  It exposes /debug/pprof/ endpoint on the address specified by --healthz-endpoint.`)
 
 	rootCmd.Flags().BoolVar(&allowInternalIP, "allow-internal-ip", allowInternalIP,
 		`Allow to use address of type NodeInternalIP when fetching external IP address.  This is the workaround for the cluster configuration where NodeExternalIP or NodeLegacyHostIP is not assigned or cannot be used.`)
@@ -271,7 +277,7 @@ func main() {
 	os.Exit(code)
 }
 
-func run(ctx context.Context, _ *cobra.Command, _ []string) {
+func run(ctx context.Context, cmd *cobra.Command, _ []string) {
 	log := klog.FromContext(ctx)
 
 	log.Info("Using build", "repository", gitRepo, "version", version)
@@ -302,6 +308,13 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 
 	if defaultTLSSecret.Name != "" {
 		defaultTLSSecretKey = &defaultTLSSecret
+	}
+
+	if host, _, err := net.SplitHostPort(healthzEndpoint); err != nil {
+		log.Error(err, "healthz-endpoint has invalid value")
+		os.Exit(1)
+	} else if !cmd.Flags().Changed("healthz-endpoint") && cmd.Flags().Changed("healthz-port") {
+		healthzEndpoint = net.JoinHostPort(host, strconv.FormatInt(int64(healthzPort), 10))
 	}
 
 	var (
@@ -391,7 +404,6 @@ func run(ctx context.Context, _ *cobra.Command, _ []string) {
 		ReloadBurst:                             reloadBurst,
 		NoDefaultBackendOverride:                noDefaultBackendOverride,
 		DeferredShutdownPeriod:                  deferredShutdownPeriod,
-		HealthzPort:                             healthzPort,
 		InternalDefaultBackend:                  internalDefaultBackend,
 		HTTP3:                                   http3,
 		ShareTLSTicketKey:                       shareTLSTicketKey,
@@ -534,7 +546,7 @@ func registerHandlers(ctx context.Context, cancel context.CancelFunc, lb *nghttp
 	}
 
 	server := &http.Server{
-		Addr:    ":" + strconv.FormatInt(int64(healthzPort), 10),
+		Addr:    healthzEndpoint,
 		Handler: mux,
 	}
 	if err := server.ListenAndServe(); err != nil {
