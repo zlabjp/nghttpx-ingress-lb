@@ -78,7 +78,7 @@ var (
 	healthzEndpoint          = "127.0.0.1:11249"
 	nghttpxHealthPort        = int32(10901)
 	nghttpxAPIPort           = int32(10902)
-	profiling                = true
+	profiling                = false
 	allowInternalIP          = false
 	defaultTLSSecret         types.NamespacedName
 	ingressClassController   = "zlab.co.jp/nghttpx"
