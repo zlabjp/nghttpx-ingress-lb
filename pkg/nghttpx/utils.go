@@ -35,6 +35,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -89,6 +90,11 @@ func needsReload(ctx context.Context, filename string, newCfg []byte) (bool, err
 	return true, nil
 }
 
+// verifyStringConfigValue verifies string configuration value s.  If there is any invalid character in it, this function returns false.
+func verifyStringConfigValue(s string) bool {
+	return !strings.ContainsAny(s, ";\r\n=")
+}
+
 // FixupBackendConfig validates config, and fixes the invalid values inside it.
 func FixupBackendConfig(ctx context.Context, config *BackendConfig) {
 	log := klog.FromContext(ctx)
@@ -111,6 +117,16 @@ func FixupBackendConfig(ctx context.Context, config *BackendConfig) {
 		case weight > 256:
 			log.Error(nil, "Invalid weight.  It must be [1, 256], inclusive", "weight", weight)
 			config.SetWeight(256)
+		}
+	}
+
+	if config.SNI != nil {
+		sni := config.GetSNI()
+
+		if !verifyStringConfigValue(sni) {
+			log.Error(nil, "Invalid SNI.  It contains an invalid character", "SNI", sni)
+
+			config.SNI = nil
 		}
 	}
 }
@@ -168,6 +184,26 @@ func FixupPathConfig(ctx context.Context, config *PathConfig) {
 	default:
 		log.Error(nil, "Unsupported affinity cookie stickiness", "cookieStickiness", config.GetAffinityCookieStickiness())
 		config.SetAffinityCookieStickiness(AffinityCookieStickinessLoose)
+	}
+
+	if config.AffinityCookieName != nil {
+		cookieName := config.GetAffinityCookieName()
+
+		if !verifyStringConfigValue(cookieName) {
+			log.Error(nil, "Invalid affinityCookieName.  It contains an invalid character", "affinityCookieName", cookieName)
+
+			config.AffinityCookieName = nil
+		}
+	}
+
+	if config.AffinityCookiePath != nil {
+		cookiePath := config.GetAffinityCookiePath()
+
+		if !verifyStringConfigValue(cookiePath) {
+			log.Error(nil, "Invalid affinityCookiePath.  It contains an invalid character", "affinityCookiePath", cookiePath)
+
+			config.AffinityCookiePath = nil
+		}
 	}
 }
 

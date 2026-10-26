@@ -22,8 +22,10 @@ func TestFixupBackendConfig(t *testing.T) {
 		desc      string
 		inProto   Protocol
 		inWeight  uint32
+		inSNI     string
 		outProto  Protocol
 		outWeight uint32
+		outSNI    string
 	}{
 		{
 			desc:      "Fixup incorrect input",
@@ -38,11 +40,19 @@ func TestFixupBackendConfig(t *testing.T) {
 			outProto:  ProtocolH1,
 		},
 		{
+			desc:      "Erase invalid SNI",
+			inSNI:     "example.com\n",
+			outWeight: 1,
+			outProto:  ProtocolH1,
+		},
+		{
 			desc:      "Correct input must be left unchanged.",
 			inProto:   ProtocolH2,
 			inWeight:  256,
+			inSNI:     "example.com",
 			outProto:  ProtocolH2,
 			outWeight: 256,
+			outSNI:    "example.com",
 		},
 	}
 
@@ -51,10 +61,12 @@ func TestFixupBackendConfig(t *testing.T) {
 			c := &BackendConfig{}
 			c.SetProto(tt.inProto)
 			c.SetWeight(tt.inWeight)
+			c.SetSNI(tt.inSNI)
 			FixupBackendConfig(t.Context(), c)
 
 			assert.Equal(t, tt.outProto, c.GetProto())
 			assert.Equal(t, tt.outWeight, c.GetWeight())
+			assert.Equal(t, tt.outSNI, c.GetSNI())
 		})
 	}
 }
@@ -123,15 +135,21 @@ func TestFixupPathConfig(t *testing.T) {
 		inAffinity                  Affinity
 		inAffinityCookieSecure      AffinityCookieSecure
 		inAffinityCookieStickiness  AffinityCookieStickiness
+		inAffinityCookieName        string
+		inAffinityCookiePath        string
 		outAffinity                 Affinity
 		outAffinityCookieSecure     AffinityCookieSecure
 		outAffinityCookieStickiness AffinityCookieStickiness
+		outAffinityCookieName       string
+		outAffinityCookiePath       string
 	}{
 		{
 			desc:                        "Fixup incorrect input",
 			inAffinity:                  "bar",
 			inAffinityCookieSecure:      "buzz",
 			inAffinityCookieStickiness:  "foo",
+			inAffinityCookieName:        "example\r",
+			inAffinityCookiePath:        "example\n",
 			outAffinity:                 AffinityNone,
 			outAffinityCookieSecure:     AffinityCookieSecureAuto,
 			outAffinityCookieStickiness: AffinityCookieStickinessLoose,
@@ -147,9 +165,13 @@ func TestFixupPathConfig(t *testing.T) {
 			inAffinity:                  AffinityIP,
 			inAffinityCookieSecure:      AffinityCookieSecureYes,
 			inAffinityCookieStickiness:  AffinityCookieStickinessStrict,
+			inAffinityCookieName:        "sticky",
+			inAffinityCookiePath:        "/",
 			outAffinity:                 AffinityIP,
 			outAffinityCookieSecure:     AffinityCookieSecureYes,
 			outAffinityCookieStickiness: AffinityCookieStickinessStrict,
+			outAffinityCookieName:       "sticky",
+			outAffinityCookiePath:       "/",
 		},
 	}
 
@@ -159,11 +181,15 @@ func TestFixupPathConfig(t *testing.T) {
 			c.SetAffinity(tt.inAffinity)
 			c.SetAffinityCookieSecure(tt.inAffinityCookieSecure)
 			c.SetAffinityCookieStickiness(tt.inAffinityCookieStickiness)
+			c.SetAffinityCookieName(tt.inAffinityCookieName)
+			c.SetAffinityCookiePath(tt.inAffinityCookiePath)
 			FixupPathConfig(t.Context(), c)
 
 			assert.Equal(t, tt.outAffinity, c.GetAffinity())
 			assert.Equal(t, tt.outAffinityCookieSecure, c.GetAffinityCookieSecure())
 			assert.Equal(t, tt.outAffinityCookieStickiness, c.GetAffinityCookieStickiness())
+			assert.Equal(t, tt.outAffinityCookieName, c.GetAffinityCookieName())
+			assert.Equal(t, tt.outAffinityCookiePath, c.GetAffinityCookiePath())
 		})
 	}
 }
@@ -316,6 +342,46 @@ func TestNghttpxDuration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			assert.Equal(t, tt.want, nghttpxDuration(tt.d))
+		})
+	}
+}
+
+func TestVerifyStringConfigValue(t *testing.T) {
+	tests := []struct {
+		desc string
+		s    string
+		want bool
+	}{
+		{
+			desc: "Empty input",
+			want: true,
+		},
+		{
+			desc: "Good input",
+			s:    "example",
+			want: true,
+		},
+		{
+			desc: "= must be rejected",
+			s:    "=example",
+		},
+		{
+			desc: "\r must be rejected",
+			s:    "\rexample",
+		},
+		{
+			desc: "\n must be rejected",
+			s:    "\nexample",
+		},
+		{
+			desc: "; must be rejected",
+			s:    ";example",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			assert.Equal(t, tt.want, verifyStringConfigValue(tt.s))
 		})
 	}
 }
