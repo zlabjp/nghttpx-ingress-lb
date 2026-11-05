@@ -99,7 +99,12 @@ func (ia ingressAnnotation) NewPathConfigMapper(ctx context.Context) *nghttpx.Pa
 
 	config = normalizePathKey(config)
 
-	for _, v := range config {
+	for k, v := range config {
+		if v == nil {
+			delete(config, k)
+			continue
+		}
+
 		nghttpx.FixupPathConfig(ctx, v)
 	}
 

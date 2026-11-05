@@ -168,6 +168,15 @@ example.com/alpha:
 				},
 			},
 		},
+		{
+			desc:             "Delete null value",
+			annotationConfig: `{"null.example.com": null, "www.example.com": {"readTimeout": "120s"}}`,
+			wantConfig: nghttpx.PathConfigMapping{
+				"www.example.com/": {
+					ReadTimeout: &d120,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
